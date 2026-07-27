@@ -31,6 +31,11 @@ public final class SurfaceSmoother {
     }
 
     public static Material smoothSurfaceMaterial(Dimension dimension, ChunkHeightSnapshot heightSnapshot, int worldX, int worldY, int intHeight, Material surfaceMaterial) {
+        // Deepslate (and cobbled/polished/brick/tile variants) must stay full blocks —
+        // stair/slab smoothing causes export and underwater bugs.
+        if (isDeepslateTerrain(surfaceMaterial)) {
+            return null;
+        }
         final SmoothableBlockFamily family = getFamily(surfaceMaterial);
         if (family == null) {
             return null;
@@ -42,16 +47,58 @@ public final class SurfaceSmoother {
             return null;
         }
         bits = snapToNearestValidVoxel222(bits);
+        // Never replace the surface with air — that leaves dry holes and underwater air pockets.
+        if (bits == 0) {
+            return null;
+        }
         final Material smoothed = createFromVoxel222(bits, family.full(), family.stair(), family.slab());
-        return (smoothed != null) ? smoothed : null;
+        // Never emit air: keep the full block when the pattern cannot be expressed as a stair/slab.
+        if ((smoothed == null) || smoothed.empty) {
+            return null;
+        }
+        return smoothed;
     }
 
     /**
-     * Partial blocks (slabs/stairs) exported underwater should carry water inside the same cell.
+     * Whether this material is a stair/slab from a registered smoothable family (e.g. left by a previous
+     * export/merge with surface smoothing). These are not flagged {@link Material#terrain} in the materials DB.
+     */
+    public static boolean isSmoothedSurfacePartial(Material material) {
+        if ((material == null) || (material.name == null)) {
+            return false;
+        }
+        if (! (material.name.endsWith("_stairs") || material.name.endsWith("_slab"))) {
+            return false;
+        }
+        return getFamily(material) != null;
+    }
+
+    /**
+     * Whether fluid occupies the voxel at {@code blockY} given the column's water level.
+     * Includes the water-surface band ({@code waterLevel == blockY}) so stairs/slabs at sea
+     * level are waterlogged — not only columns where water sits strictly above terrain.
+     */
+    public static boolean fluidOccupiesBlock(int blockY, int waterLevel) {
+        return waterLevel >= blockY;
+    }
+
+    /**
+     * Partial blocks (slabs/stairs) that support {@code waterlogged} should carry water when
+     * fluid occupies that cell (at or below water level).
      */
     public static Material waterlogUnderwater(Material material) {
         if ((material != null) && material.hasProperty(WATERLOGGED)) {
             return material.withProperty(WATERLOGGED, true);
+        }
+        return material;
+    }
+
+    /**
+     * Waterlog a stair/slab when fluid occupies {@code blockY}; otherwise leave the material unchanged.
+     */
+    public static Material waterlogIfFluidOccupies(Material material, int blockY, int waterLevel) {
+        if (fluidOccupiesBlock(blockY, waterLevel)) {
+            return waterlogUnderwater(material);
         }
         return material;
     }
@@ -78,7 +125,13 @@ public final class SurfaceSmoother {
         }
 
         int bits = 0;
-        // Bit order matches Axiom HDVoxelMap: bottom Y half first, then top Y half.
+        // Bit order: bottom Y half first, then top Y half; within each half dz then dx.
+        // Corners: bit8/128=NW, bit4/64=NE, bit2/32=SW, bit1/16=SE
+        // (N=-Z, S=+Z, W=-X, E=+X — Minecraft / WorldPainter axes).
+        //
+        // WorldPainter places the surface at round(height). Bottom half fills for terrain
+        // above intHeight-0.5 (so heights that round up still form a slab, not air).
+        // Top half fills only above intHeight+0.5 so gentle slopes still become stairs.
         final int[] bitValues = {128, 64, 32, 16, 8, 4, 2, 1};
         int bitIndex = 0;
         for (int dy = 0; dy < 2; dy++) {
@@ -88,7 +141,9 @@ public final class SurfaceSmoother {
                     final float v = dz * 0.5f + 0.25f;
                     final float height = bilinear(h00, h10, h01, h11, u, v);
                     final boolean exactIntegerHeight = Math.abs(height - intHeight) < (1f / 256f);
-                    if (exactIntegerHeight || height > intHeight + dy * 0.5f) {
+                    // dy=0 → intHeight-0.5; dy=1 → intHeight+0.5
+                    final float threshold = intHeight - 0.5f + dy;
+                    if (exactIntegerHeight || height > threshold) {
                         bits |= bitValues[bitIndex];
                     }
                     bitIndex++;
@@ -98,13 +153,17 @@ public final class SurfaceSmoother {
         return bits;
     }
 
+    /**
+     * Snap to a terrain-safe slab/stair pattern. Empty (0) and top-only / upside-down
+     * patterns are excluded so the surface never becomes air or a floating top slab.
+     */
     static int snapToNearestValidVoxel222(int bits) {
         if (bits == 0 || bits == 255) {
             return bits;
         }
         int minError = Integer.MAX_VALUE;
         int closestValid = 255;
-        for (int voxel : VALID_VOXEL_222) {
+        for (int voxel : SURFACE_VALID_VOXEL_222) {
             final int different = (bits ^ voxel) & 255;
             int error = Integer.bitCount(different) * 3;
             error *= 16;
@@ -130,48 +189,18 @@ public final class SurfaceSmoother {
             if (upperCount == 0) {
                 return slab.withProperty(TYPE, "bottom");
             } else if (upperCount == 1) {
+                // outer_left + facing puts the single elevated corner correctly:
+                // SE→SOUTH, SW→WEST, NE→EAST, NW→NORTH
                 stair = stair.withProperty(HALF, "bottom").withProperty(SHAPE, "outer_left");
-                final Direction stairFacing;
-                if ((voxel & 1) != 0) {
-                    stairFacing = Direction.SOUTH;
-                } else if ((voxel & 2) != 0) {
-                    stairFacing = Direction.EAST;
-                } else if ((voxel & 4) != 0) {
-                    stairFacing = Direction.WEST;
-                } else {
-                    stairFacing = Direction.NORTH;
-                }
-                return stair.withProperty(FACING, stairFacing);
+                return stair.withProperty(FACING, facingForOuterCorner(voxel & 15));
             } else if (upperCount == 2) {
                 stair = stair.withProperty(HALF, "bottom").withProperty(SHAPE, "straight");
-                Direction stairFacing = null;
-                if ((voxel & 1) != 0) {
-                    if ((voxel & 2) != 0) {
-                        stairFacing = Direction.EAST;
-                    } else if ((voxel & 4) != 0) {
-                        stairFacing = Direction.SOUTH;
-                    }
-                } else if ((voxel & 8) != 0) {
-                    if ((voxel & 2) != 0) {
-                        stairFacing = Direction.NORTH;
-                    } else if ((voxel & 4) != 0) {
-                        stairFacing = Direction.WEST;
-                    }
-                }
+                final Direction stairFacing = facingForStraightHalf(voxel & 15);
                 return (stairFacing != null) ? stair.withProperty(FACING, stairFacing) : null;
             } else if (upperCount == 3) {
+                // inner_left + facing: missing SE→NORTH, SW→EAST, NE→WEST, NW→SOUTH
                 stair = stair.withProperty(HALF, "bottom").withProperty(SHAPE, "inner_left");
-                final Direction stairFacing;
-                if ((voxel & 1) == 0) {
-                    stairFacing = Direction.NORTH;
-                } else if ((voxel & 2) == 0) {
-                    stairFacing = Direction.WEST;
-                } else if ((voxel & 4) == 0) {
-                    stairFacing = Direction.EAST;
-                } else {
-                    stairFacing = Direction.SOUTH;
-                }
-                return stair.withProperty(FACING, stairFacing);
+                return stair.withProperty(FACING, facingForInnerCorner(voxel & 15));
             }
         } else if ((voxel & 15) == 15) {
             final int lowerCount = Integer.bitCount(voxel & 240);
@@ -179,53 +208,21 @@ public final class SurfaceSmoother {
                 return slab.withProperty(TYPE, "top");
             } else if (lowerCount == 1) {
                 stair = stair.withProperty(HALF, "top").withProperty(SHAPE, "outer_left");
-                final Direction stairFacing;
-                if ((voxel & 16) != 0) {
-                    stairFacing = Direction.SOUTH;
-                } else if ((voxel & 32) != 0) {
-                    stairFacing = Direction.EAST;
-                } else if ((voxel & 64) != 0) {
-                    stairFacing = Direction.WEST;
-                } else {
-                    stairFacing = Direction.NORTH;
-                }
-                return stair.withProperty(FACING, stairFacing);
+                // Lower bits 16/32/64/128 map to the same SE/SW/NE/NW corners as 1/2/4/8.
+                return stair.withProperty(FACING, facingForOuterCorner((voxel >> 4) & 15));
             } else if (lowerCount == 2) {
                 stair = stair.withProperty(HALF, "top").withProperty(SHAPE, "straight");
-                Direction stairFacing = null;
-                if ((voxel & 16) != 0) {
-                    if ((voxel & 32) != 0) {
-                        stairFacing = Direction.EAST;
-                    } else if ((voxel & 64) != 0) {
-                        stairFacing = Direction.SOUTH;
-                    }
-                } else if ((voxel & 128) != 0) {
-                    if ((voxel & 32) != 0) {
-                        stairFacing = Direction.NORTH;
-                    } else if ((voxel & 64) != 0) {
-                        stairFacing = Direction.WEST;
-                    }
-                }
+                final Direction stairFacing = facingForStraightHalf((voxel >> 4) & 15);
                 return (stairFacing != null) ? stair.withProperty(FACING, stairFacing) : null;
             } else if (lowerCount == 3) {
                 stair = stair.withProperty(HALF, "top").withProperty(SHAPE, "inner_left");
-                final Direction stairFacing;
-                if ((voxel & 16) == 0) {
-                    stairFacing = Direction.NORTH;
-                } else if ((voxel & 32) == 0) {
-                    stairFacing = Direction.WEST;
-                } else if ((voxel & 64) == 0) {
-                    stairFacing = Direction.EAST;
-                } else {
-                    stairFacing = Direction.SOUTH;
-                }
-                return stair.withProperty(FACING, stairFacing);
+                return stair.withProperty(FACING, facingForInnerCorner((voxel >> 4) & 15));
             }
         }
         return null;
     }
 
-    static SmoothableBlockFamily getFamily(Material material) {
+    public static SmoothableBlockFamily getFamily(Material material) {
         if (material == null) {
             return null;
         }
@@ -242,6 +239,72 @@ public final class SurfaceSmoother {
             }
         }
         return FAMILY_BY_BLOCK_TYPE.get(material.blockType);
+    }
+
+    /**
+     * Deepslate and related terrain full blocks (cobbled / polished / bricks / tiles).
+     * These must not be converted to stairs or slabs during surface smoothing.
+     */
+    static boolean isDeepslateTerrain(Material material) {
+        if ((material == null) || (material.name == null)) {
+            return false;
+        }
+        final String name = material.name;
+        if (! name.contains("deepslate")) {
+            return false;
+        }
+        // Stairs/slabs are partials from older exports — not terrain full blocks to smooth from.
+        return ! (name.endsWith("_stairs") || name.endsWith("_slab"));
+    }
+
+    /**
+     * Facing for {@code outer_left} when exactly one of the four horizontal corners is set.
+     * Corner bits: 1=SE, 2=SW, 4=NE, 8=NW.
+     */
+    private static Direction facingForOuterCorner(int cornerBits) {
+        if ((cornerBits & 1) != 0) {
+            return Direction.SOUTH;
+        } else if ((cornerBits & 2) != 0) {
+            return Direction.WEST;
+        } else if ((cornerBits & 4) != 0) {
+            return Direction.EAST;
+        }
+        return Direction.NORTH;
+    }
+
+    /**
+     * Facing for {@code straight} when two adjacent corners form a cardinal half-block.
+     * Returns {@code null} for diagonal pairs that are not a valid straight stair.
+     */
+    private static Direction facingForStraightHalf(int cornerBits) {
+        if ((cornerBits & 1) != 0) {
+            if ((cornerBits & 2) != 0) {
+                return Direction.SOUTH; // SE+SW
+            } else if ((cornerBits & 4) != 0) {
+                return Direction.EAST; // SE+NE
+            }
+        } else if ((cornerBits & 8) != 0) {
+            if ((cornerBits & 2) != 0) {
+                return Direction.WEST; // NW+SW
+            } else if ((cornerBits & 4) != 0) {
+                return Direction.NORTH; // NW+NE
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Facing for {@code inner_left} when three corners are set (one missing).
+     */
+    private static Direction facingForInnerCorner(int cornerBits) {
+        if ((cornerBits & 1) == 0) {
+            return Direction.NORTH; // missing SE
+        } else if ((cornerBits & 2) == 0) {
+            return Direction.EAST; // missing SW
+        } else if ((cornerBits & 4) == 0) {
+            return Direction.WEST; // missing NE
+        }
+        return Direction.SOUTH; // missing NW
     }
 
     private static boolean isMissingHeight(float height) {
@@ -287,9 +350,18 @@ public final class SurfaceSmoother {
     private static final Map<Integer, SmoothableBlockFamily> FAMILY_BY_BLOCK_TYPE = new HashMap<>();
     private static final Map<Integer, SmoothableBlockFamily> FAMILY_BY_STONE_DATA = new HashMap<>();
 
+    /** All Axiom-style patterns (kept for reference / direct createFromVoxel222 tests). */
     static final int[] VALID_VOXEL_222 = {
             0, 255, 240, 15, 248, 244, 242, 241, 252, 250, 245, 243, 247, 251, 253, 254,
             143, 79, 47, 31, 207, 175, 95, 63, 127, 191, 223, 239
+    };
+
+    /**
+     * Patterns safe for terrain surfaces: full block, bottom slab, and bottom-half stairs.
+     * Excludes empty (air) and top-only / upside-down shapes that leave gaps under water.
+     */
+    static final int[] SURFACE_VALID_VOXEL_222 = {
+            255, 240, 248, 244, 242, 241, 252, 250, 245, 243, 247, 251, 253, 254
     };
 
     static {
@@ -318,6 +390,9 @@ public final class SurfaceSmoother {
         registerFamily(MC_SMOOTH_QUARTZ, MC_QUARTZ_STAIRS, MC_QUARTZ_SLAB);
         registerFamily(MC_PURPUR_BLOCK, MC_PURPUR_STAIRS, MC_PURPUR_SLAB, BLK_PURPUR_BLOCK);
         registerFamily(MC_NETHER_BRICKS, MC_NETHER_BRICK_STAIRS, MC_NETHER_BRICK_SLAB, BLK_NETHER_BRICK);
+        // Deepslate families are registered only so legacy deepslate stairs/slabs are recognized
+        // by isSmoothedSurfacePartial during merge. smoothSurfaceMaterial never creates them
+        // (see isDeepslateTerrain).
         registerFamily(MC_DEEPSLATE, "minecraft:deepslate_stairs", "minecraft:deepslate_slab");
         registerFamily("minecraft:cobbled_deepslate", "minecraft:cobbled_deepslate_stairs", "minecraft:cobbled_deepslate_slab");
         registerFamily("minecraft:polished_deepslate", "minecraft:polished_deepslate_stairs", "minecraft:polished_deepslate_slab");
@@ -333,7 +408,8 @@ public final class SurfaceSmoother {
         registerFamily(MC_GRANITE, "minecraft:granite_stairs", "minecraft:granite_slab");
         registerFamily(MC_POLISHED_GRANITE, "minecraft:polished_granite_stairs", "minecraft:polished_granite_slab");
         registerFamily(MC_TUFF, "minecraft:tuff_stairs", "minecraft:tuff_slab");
-        registerFamily(MC_END_STONE, "minecraft:end_stone_stairs", "minecraft:end_stone_slab", BLK_END_STONE);
+        // Plain end stone has no stair/slab in Minecraft; use brick variants as a safe substitute.
+        registerFamily(MC_END_STONE, "minecraft:end_stone_brick_stairs", "minecraft:end_stone_brick_slab", BLK_END_STONE);
         registerFamily(MC_PRISMARINE, "minecraft:prismarine_stairs", "minecraft:prismarine_slab");
         registerFamily(MC_PRISMARINE_BRICKS, "minecraft:prismarine_brick_stairs", "minecraft:prismarine_brick_slab");
         registerFamily(MC_DARK_PRISMARINE, "minecraft:dark_prismarine_stairs", "minecraft:dark_prismarine_slab");

@@ -1089,35 +1089,24 @@ public enum Terrain {
     GRANITE("Granite", Material.GRANITE, Material.GRANITE, "granite", BIOME_PLAINS),
     DIORITE("Diorite", Material.DIORITE, Material.DIORITE, "diorite", BIOME_PLAINS),
     ANDESITE("Andesite", Material.ANDESITE, Material.ANDESITE, "andesite", BIOME_PLAINS),
-    STONE_MIX("Stone Mix", "stone or deepslate with patches of granite, diorite, andesite and tuff", BIOME_PLAINS) {
+    STONE_MIX("Stone Mix", "stone with patches of granite, diorite and andesite", BIOME_PLAINS) {
         @Override
         public Material getMaterial(Platform platform, long seed, int x, int y, int z, int height) {
             if (graniteNoise.getSeed() != (seed + GRANITE_SEED_OFFSET)) {
                 graniteNoise.setSeed(seed + GRANITE_SEED_OFFSET);
                 dioriteNoise.setSeed(seed + DIORITE_SEED_OFFSET);
                 andesiteNoise.setSeed(seed + ANDESITE_SEED_OFFSET);
-                RANDOM.setSeed(seed);
             }
-            if ((z >= 0) || ((z >= -4) && (z >= -RANDOM.nextInt(5)))) { // TODO this is not stable
-                if (graniteNoise.getPerlinNoise(x / SMALL_BLOBS, y / SMALL_BLOBS, z / SMALL_BLOBS) > GRANITE_CHANCE) {
-                    return Material.GRANITE;
-                } else if (dioriteNoise.getPerlinNoise(x / SMALL_BLOBS, y / SMALL_BLOBS, z / SMALL_BLOBS) > DIORITE_CHANCE) {
-                    return Material.DIORITE;
-                } else if (andesiteNoise.getPerlinNoise(x / SMALL_BLOBS, y / SMALL_BLOBS, z / SMALL_BLOBS) > ANDESITE_CHANCE) {
-                    return Material.ANDESITE;
-                } else {
-                    return Material.STONE;
-                }
+            // Always stone mix at all heights (including below y=0). Deepslate was removed because
+            // deepslate stair/slab surface smoothing causes export bugs.
+            if (graniteNoise.getPerlinNoise(x / SMALL_BLOBS, y / SMALL_BLOBS, z / SMALL_BLOBS) > GRANITE_CHANCE) {
+                return Material.GRANITE;
+            } else if (dioriteNoise.getPerlinNoise(x / SMALL_BLOBS, y / SMALL_BLOBS, z / SMALL_BLOBS) > DIORITE_CHANCE) {
+                return Material.DIORITE;
+            } else if (andesiteNoise.getPerlinNoise(x / SMALL_BLOBS, y / SMALL_BLOBS, z / SMALL_BLOBS) > ANDESITE_CHANCE) {
+                return Material.ANDESITE;
             } else {
-                if (graniteNoise.getPerlinNoise(x / SMALL_BLOBS, y / SMALL_BLOBS, z / SMALL_BLOBS) > GRANITE_CHANCE) {
-                    return Material.TUFF;
-                } else if (dioriteNoise.getPerlinNoise(x / SMALL_BLOBS, y / SMALL_BLOBS, z / SMALL_BLOBS) > DIORITE_CHANCE) {
-                    return Material.DEEPSLATE_X;
-                } else if (andesiteNoise.getPerlinNoise(x / SMALL_BLOBS, y / SMALL_BLOBS, z / SMALL_BLOBS) > ANDESITE_CHANCE) {
-                    return Material.DEEPSLATE_Z;
-                } else {
-                    return Material.DEEPSLATE_Y;
-                }
+                return Material.STONE;
             }
         }
 
@@ -1128,8 +1117,6 @@ public enum Terrain {
         private static final int GRANITE_SEED_OFFSET  = 145827825;
         private static final int DIORITE_SEED_OFFSET  =  59606124;
         private static final int ANDESITE_SEED_OFFSET =  87772192;
-
-        private final Random RANDOM = new Random();
     },
     CUSTOM_25("Custom 25",                                  "custom material twenty-five", BIOME_PLAINS) {
         @Override public Material getMaterial(Platform platform, long seed, int x, int y, int z, int height) {return helper.getMaterial(seed, x, y, z, height);}

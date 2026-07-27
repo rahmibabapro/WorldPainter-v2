@@ -19,12 +19,14 @@ public final class ExportMemoryBudget {
     /** Extra bytes charged only when hollow is enabled (ExteriorGrid + peak chunk edits). */
     private static final long HOLLOW_PARALLEL_EXTRA_BYTES = 360_000_000L;
     private static final long CHUNK_POOL_BYTES_PER_THREAD = 72_000_000L;
-    private static final int MAX_CHUNK_THREADS = 4;
-    private static final int MAX_PLAIN_IN_FLIGHT = 4;
+    /** Plain (non-hollow) export can use more chunk workers; hollow stays conservative. */
+    private static final int MAX_PLAIN_CHUNK_THREADS = 8;
+    private static final int MAX_HOLLOW_CHUNK_THREADS = 4;
+    private static final int MAX_PLAIN_IN_FLIGHT = 6;
     private static final int MAX_HOLLOW_IN_FLIGHT = 2;
     private static final int HEIGHT_REFERENCE = 256;
     /** Leave headroom for GC spikes and JVM overhead beyond the estimate. */
-    private static final float PLAIN_MEMORY_SAFETY_FACTOR = 0.68f;
+    private static final float PLAIN_MEMORY_SAFETY_FACTOR = 0.72f;
     /** Hollow needs extra margin because peak usage often exceeds the per-region estimate. */
     private static final float HOLLOW_MEMORY_SAFETY_FACTOR = 0.48f;
     /** Hollow stays single-region below this heap unless forced low-memory mode is active. */
@@ -112,7 +114,12 @@ public final class ExportMemoryBudget {
      */
     public static ExportMemoryBudget compute(Dimension dimension, int regionCount, WorldExportSettings settings) {
         final Runtime runtime = Runtime.getRuntime();
-        runtime.gc();
+        final boolean hollow = settings != null && settings.isHollowInterior();
+        final boolean turboPlain = WorldExportSettings.isTurboExport(settings) && (! hollow);
+        // Hollow / non-turbo need a fresher heap reading; plain turbo skips a full GC pause.
+        if (! turboPlain) {
+            runtime.gc();
+        }
         final long maxMemory = runtime.maxMemory();
         final long memoryInUse = runtime.totalMemory() - runtime.freeMemory();
         final long worldFootprint = estimateWorldFootprint(dimension);
@@ -124,7 +131,6 @@ public final class ExportMemoryBudget {
         final int heightSpan = Math.max(maxHeight - minHeight, HEIGHT_REFERENCE);
         final float heightFactor = heightSpan / (float) HEIGHT_REFERENCE;
 
-        final boolean hollow = settings != null && settings.isHollowInterior();
         final float safetyFactor = hollow ? HOLLOW_MEMORY_SAFETY_FACTOR : PLAIN_MEMORY_SAFETY_FACTOR;
         final long available = (long) (rawAvailable * safetyFactor);
         final long parallelRegionBytes = parallelRegionBytes(heightFactor, hollow);
@@ -151,11 +157,11 @@ public final class ExportMemoryBudget {
         if (forcedLowMemory) {
             chunkThreads = 1;
         } else if (hollow) {
-            final int desired = Math.min(Math.max(2, processors / 2), MAX_CHUNK_THREADS);
+            final int desired = Math.min(Math.max(2, processors / 2), MAX_HOLLOW_CHUNK_THREADS);
             final long heapAfterOneRegion = Math.max(available - parallelRegionBytes, 0L);
-            chunkThreads = Math.max(1, Math.min(desired, (int) Math.max(Math.min(heapAfterOneRegion / CHUNK_POOL_BYTES_PER_THREAD, MAX_CHUNK_THREADS), 1)));
+            chunkThreads = Math.max(1, Math.min(desired, (int) Math.max(Math.min(heapAfterOneRegion / CHUNK_POOL_BYTES_PER_THREAD, MAX_HOLLOW_CHUNK_THREADS), 1)));
         } else {
-            chunkThreads = Math.max(1, Math.min(processors / 2 + 1, MAX_CHUNK_THREADS));
+            chunkThreads = Math.max(1, Math.min(processors / 2 + 1, MAX_PLAIN_CHUNK_THREADS));
         }
         final long chunkPoolOverhead = chunkThreads * CHUNK_POOL_BYTES_PER_THREAD;
         final long budgetable = Math.max(available - chunkPoolOverhead, 0L);
@@ -200,8 +206,8 @@ public final class ExportMemoryBudget {
     }
 
     /**
-     * Memory charged per concurrently exported region. Turbo skylight runs on the same region buffers and is not
-     * counted here so plain turbo can keep multiple regions in flight on 16 GB systems.
+     * Memory charged per concurrently exported region. Turbo no longer runs a skylight pass, so plain turbo can keep
+     * multiple regions in flight on 16 GB systems without charging extra lighting buffers.
      */
     private static long parallelRegionBytes(float heightFactor, boolean hollow) {
         long bytes = (long) (PLAIN_REGION_PARALLEL_BYTES * heightFactor);

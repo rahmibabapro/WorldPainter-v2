@@ -266,11 +266,22 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
         final Set<Point> selectedTiles = exportAllDimensions ? null : exportSettings.getTilesToExport();
         final int selectedDimension = exportAllDimensions ? DIM_NORMAL : exportSettings.getDimensionsToExport().iterator().next();
 
-        // Check for errors
-        if (! new File(fieldDirectory.getText().trim()).isDirectory()) {
-            fieldDirectory.requestFocusInWindow();
-            beepAndShowError(this, "The selected output directory does not exist or is not a directory.", "Error");
-            return;
+        // Check for errors — auto-heal empty/stale directory from platform default
+        File outDir = new File(fieldDirectory.getText() != null ? fieldDirectory.getText().trim() : "");
+        if (! outDir.isDirectory()) {
+            File fallback = PlatformManager.getInstance().getDefaultExportDir(world.getPlatform());
+            if ((fallback == null) || (! fallback.isDirectory())) {
+                fallback = DesktopUtils.getDocumentsFolder();
+            }
+            if ((fallback != null) && fallback.isDirectory()) {
+                fieldDirectory.setText(fallback.getAbsolutePath());
+                outDir = fallback;
+                logger.info("Export directory was missing; using {}", outDir.getAbsolutePath());
+            } else {
+                fieldDirectory.requestFocusInWindow();
+                beepAndShowError(this, "The selected output directory does not exist or is not a directory.", "Error");
+                return;
+            }
         }
         if (fieldName.getText().trim().isEmpty()) {
             fieldName.requestFocusInWindow();
@@ -393,8 +404,15 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
             return;
         }
 
-        System.gc();
-        checkExportMemoryBudget(exportSettings);
+        // Do not call System.gc() on the EDT here — on large heaps it freezes the UI for many
+        // seconds with no progress dialog yet, which looks like Export does nothing.
+        // ExportMemoryBudget / the exporter already GC when hollow or non-turbo needs it.
+        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+        try {
+            checkExportMemoryBudget(exportSettings);
+        } finally {
+            setCursor(Cursor.getDefaultCursor());
+        }
 
         world.setCreateGoodiesChest(checkBoxGoodies.isSelected());
         world.setGameType((GameType) comboBoxGameType.getSelectedItem());
@@ -435,6 +453,7 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
 
         final Configuration config = Configuration.getInstance();
         config.setExportDirectory(world.getPlatform(), baseDir);
+        config.setSavesDirectory(baseDir);
 
         final ExportProgressDialog dialog = new ExportProgressDialog(this, world, exportSettings, baseDir, name, previouslyAcknowledgedWarnings);
         view.setInhibitUpdates(true);
@@ -529,7 +548,14 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
         fileChooser.setSelectedFile(new File(fieldDirectory.getText().trim()));
         fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         if (doWithoutExceptionReporting(() -> fileChooser.showOpenDialog(this)) == JFileChooser.APPROVE_OPTION) {
-            fieldDirectory.setText(fileChooser.getSelectedFile().getAbsolutePath());
+            final File selected = fileChooser.getSelectedFile();
+            fieldDirectory.setText(selected.getAbsolutePath());
+            final Configuration config = Configuration.getInstance();
+            if (config != null) {
+                config.setExportDirectory(world.getPlatform(), selected);
+                // Keep merge map browser in sync with the last export directory.
+                config.setSavesDirectory(selected);
+            }
         }
     }
     
@@ -704,7 +730,7 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
 
         checkBoxTurboExport = new javax.swing.JCheckBox();
         checkBoxTurboExport.setText("Turbo export (fastest)");
-        checkBoxTurboExport.setToolTipText("<html>Skips caves, ores, lighting and leaves for faster export.<br>Minecraft can finish lighting when you first open the world.</html>");
+        checkBoxTurboExport.setToolTipText("<html>Skips caves, ores, lighting and leaves for faster export.<br>Lighting is fully deferred to Minecraft (including skylight) when you first open the world.</html>");
 
         checkBoxHollowInterior = new javax.swing.JCheckBox();
         checkBoxHollowInterior.setText("Hollow terrain interiors");
@@ -1007,7 +1033,16 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
     }//GEN-LAST:event_buttonCancelActionPerformed
 
     private void buttonExportActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonExportActionPerformed
-        export(EXPORT_EVERYTHING);
+        try {
+            logger.info("Export button pressed (turbo={}, directory=\"{}\", name=\"{}\")",
+                    checkBoxTurboExport.isSelected(), fieldDirectory.getText(), fieldName.getText());
+            export(EXPORT_EVERYTHING);
+        } catch (Throwable t) {
+            logger.error("Export failed before progress dialog", t);
+            setCursor(Cursor.getDefaultCursor());
+            setControlStates();
+            beepAndShowError(this, t.getClass().getSimpleName() + ": " + t.getMessage(), "Export Failed");
+        }
     }//GEN-LAST:event_buttonExportActionPerformed
 
     private void buttonSelectDirectoryActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonSelectDirectoryActionPerformed

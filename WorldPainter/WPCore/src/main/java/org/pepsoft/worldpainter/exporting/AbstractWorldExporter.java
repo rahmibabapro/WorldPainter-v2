@@ -232,7 +232,10 @@ public abstract class AbstractWorldExporter implements WorldExporter {
             }
 
             final Map<Point, List<Fixup>> fixups = new HashMap<>();
-            System.gc();
+            // Hollow needs a clean heap; plain turbo benefits more from skipping a full GC pause.
+            if (worldExportSettings.isHollowInterior() || (! WorldExportSettings.isTurboExport(worldExportSettings))) {
+                System.gc();
+            }
             final ExportMemoryBudget exportBudget = planExport(combined, sortedRegions.size(), worldExportSettings);
             final int exportThreadCount = exportBudget.getExportThreadCount();
             final int chunkThreadCount = chooseChunkThreadCountForExport(exportBudget);
@@ -1055,14 +1058,17 @@ public abstract class AbstractWorldExporter implements WorldExporter {
                     exportResults.stats.timings.put(BLOCK_PROPERTIES, new AtomicLong(System.nanoTime() - start));
                 } else if ((exportSettings instanceof JavaExportSettings javaSettings)
                         && javaSettings.defersChunkLightingToMinecraft()) {
-                    if (platform.capabilities.contains(PRECALCULATED_LIGHT)) {
+                    // Turbo: defer all lighting (including skylight) to Minecraft. Non-turbo "fast" still runs
+                    // skylight-only so underwater columns are not left dark until the player loads the world.
+                    if (WorldExportSettings.isTurboExport(worldExportSettings)
+                            || (! platform.capabilities.contains(PRECALCULATED_LIGHT))) {
+                        applyDeferredMinecraftChunkStatus(minecraftWorld, regionCoords);
+                    } else {
                         start = System.nanoTime();
                         blockPropertiesPass(minecraftWorld, regionCoords, javaSettings.withSkylightOnly(),
                                 withoutSkippingStep(worldExportSettings, LIGHTING),
                                 (progressReceiver != null) ? new SubProgressReceiver(progressReceiver, 0.65f, 0.35f) : null);
                         exportResults.stats.timings.put(BLOCK_PROPERTIES, new AtomicLong(System.nanoTime() - start));
-                    } else {
-                        applyDeferredMinecraftChunkStatus(minecraftWorld, regionCoords);
                     }
                 }
             }
@@ -1258,7 +1264,8 @@ public abstract class AbstractWorldExporter implements WorldExporter {
             @Override
             public synchronized Thread newThread(Runnable r) {
                 Thread thread = new Thread(threadGroup, r, operation.toLowerCase().replaceAll("\\s+", "-") + "-" + nextID++);
-                thread.setPriority(Thread.MIN_PRIORITY);
+                // Slightly below UI priority so the dialog stays responsive while export still gets CPU time.
+                thread.setPriority(Thread.NORM_PRIORITY - 1);
                 return thread;
             }
 

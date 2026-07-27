@@ -1,0 +1,26 @@
+---
+description: Custom tree objects (.bp) default to auto horizontal offset with vertical Y=-1
+globs: "**/layers/bo2/**/*.java"
+alwaysApply: false
+---
+
+# Custom tree object offset
+
+When loading or adjusting Axiom blueprint (`.bp`) / custom tree objects for WorldPainter:
+
+- **Horizontal (X / Z)**: use `guestimateOffset()` auto-centering (`offset.x`, `offset.y`).
+- **Vertical (UI “Y axis”)**: always set `offset.z = -1` so trunks plant 1 block into the terrain.
+
+Implemented in `AxiomBlueprint` constructor. Do not revert to plain `guestimateOffset()` vertical (usually 0) for `.bp` trees.
+
+```java
+final Point3i auto = guestimateOffset();
+final Point3i offset = (auto != null)
+        ? new Point3i(auto.x, auto.y, -1)
+        : new Point3i(0, 0, -1);
+setAttribute(ATTRIBUTE_OFFSET, offset);
+```
+
+In the Offset editor: **Y axis (vertical)** = `Point3i.z`. X = west–east, Z = north–south.
+
+Do **not** force Y=-1 on unrelated formats (rocks, springs, generic `.schem`) unless the user asks for trees specifically.

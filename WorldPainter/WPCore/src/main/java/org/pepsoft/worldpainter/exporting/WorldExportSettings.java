@@ -116,6 +116,21 @@ public class WorldExportSettings implements Serializable {
         return settings;
     }
 
+    /**
+     * Turbo signature: caves, resources and lighting are all skipped (leaves usually too).
+     * Distinct from "fast" export which only defers lighting in {@code JavaExportSettings}.
+     */
+    public static boolean isTurboExport(WorldExportSettings settings) {
+        if (settings == null) {
+            return false;
+        }
+        final Set<Step> skipped = settings.getStepsToSkip();
+        return (skipped != null)
+                && skipped.contains(Step.CAVES)
+                && skipped.contains(Step.RESOURCES)
+                && skipped.contains(Step.LIGHTING);
+    }
+
     private static final long serialVersionUID = 1L;
 
     public enum Step { CAVES, RESOURCES, LIGHTING, LEAVES }

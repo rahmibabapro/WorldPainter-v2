@@ -1,6 +1,6 @@
 //-- get info on delimiter here: https://github.com/Captain-Chaos/WorldPainter/blob/219f7eb1402e49d9c79fed72799c82503385d669/WorldPainter/WPGUI/src/test/resources/descriptortest.js
 
-// script.description=Global terrain operation: paint Stone Mix on slopes above the threshold and grass on slopes below (relative to the vertical/Y axis).
+// script.description=Global terrain operation: paint Stone Mix on slopes above the threshold and grass on slopes below (relative to the vertical/Y axis). Stone Mix uses stone (not deepslate) at all heights including below y=0.
 
 // script.name= Stone Mix / Grass Slope Split
 

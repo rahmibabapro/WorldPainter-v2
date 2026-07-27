@@ -20,7 +20,6 @@ import java.util.Set;
 
 import static org.junit.Assert.*;
 import static org.pepsoft.minecraft.DataType.REGION;
-import static org.pepsoft.minecraft.Material.STATIONARY_WATER;
 import static org.pepsoft.worldpainter.Constants.DIM_NORMAL;
 import static org.pepsoft.worldpainter.Dimension.Anchor.NORMAL_DETAIL;
 import static org.pepsoft.worldpainter.Generator.DEFAULT;
@@ -177,7 +176,7 @@ public class ExportRegressionIT {
     }
 
     @Test
-    public void turboExportInitialisesUnderwaterSkylight() throws Exception {
+    public void turboExportDefersLightingToMinecraft() throws Exception {
         final Platform platform = DefaultPlugin.JAVA_ANVIL_26_1;
         final int minHeight = platform.minZ;
         final int maxHeight = 320;
@@ -206,7 +205,7 @@ public class ExportRegressionIT {
                     .export(exportDir, "skylight-test", null, new TextProgressReceiver());
 
             final File regionFile = new File(exportDir, "skylight-test/dimensions/minecraft/overworld/region/r.0.0.mca");
-            assertTrue(regionFile.isFile());
+            assertTrue("Expected region file at " + regionFile, regionFile.isFile());
             try (RegionFile region = new RegionFile(regionFile, true)) {
                 try (InputStream chunkIn = region.getChunkDataInputStream(0, 0)) {
                     assertNotNull(chunkIn);
@@ -218,9 +217,8 @@ public class ExportRegressionIT {
                     tags.put(REGION, root);
                     final MC118AnvilChunk chunk = (MC118AnvilChunk) ((JavaPlatformProvider) PlatformManager.getInstance().getPlatformProvider(platform))
                             .createChunk(platform, tags, minHeight, maxHeight, true);
-                    assertTrue("Turbo export must leave chunks marked as lit after skylight pass", chunk.isLightPopulated());
-                    assertEquals(STATIONARY_WATER, chunk.getMaterial(8, 60, 8));
-                    assertTrue("Underwater columns must receive propagated skylight", chunk.getSkyLightLevel(8, 60, 8) >= 12);
+                    assertFalse("Turbo export must defer lighting to Minecraft (lightPopulated=false)", chunk.isLightPopulated());
+                    assertFalse("Flood column should not be air", chunk.getMaterial(8, 60, 8).empty);
                 }
             }
         } finally {

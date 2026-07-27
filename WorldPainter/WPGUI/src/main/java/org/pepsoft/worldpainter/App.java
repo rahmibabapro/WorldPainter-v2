@@ -62,12 +62,8 @@ import org.pepsoft.worldpainter.tools.Eyedropper.SelectionListener;
 import org.pepsoft.worldpainter.tools.MapQuickPresetDialog;
 import org.pepsoft.worldpainter.tools.RespawnPlayerDialog;
 import org.pepsoft.worldpainter.tools.RiverTerrainSupport;
-import org.pepsoft.worldpainter.tools.RiverToolsDialog;
-import org.pepsoft.worldpainter.tools.RoadToolsDialog;
 import org.pepsoft.worldpainter.tools.ScriptLibraryActions;
-import org.pepsoft.worldpainter.tools.SnowToolsDialog;
 import org.pepsoft.worldpainter.tools.scripts.BundledScriptCatalog;
-import org.pepsoft.worldpainter.tools.scripts.BundledScriptCatalog.Category;
 import org.pepsoft.worldpainter.tools.scripts.ScriptRunner;
 import org.pepsoft.worldpainter.util.*;
 import org.pepsoft.worldpainter.util.BetterAction;
@@ -708,6 +704,11 @@ public final class App extends JFrame implements BrushControl,
                 // resized docks:
                 view.componentResized(new ComponentEvent(view, COMPONENT_RESIZED));
             }
+
+            // Layout restore can hide/undock dynamically created frames; recreate and show custom docks after it.
+            customLayerController.ensureDefaultCustomLayersPalette();
+            customLayerController.ensurePalettesVisible();
+            ensureCustomTerrainDock(false);
 
             if (! refreshTerrainMode()) {
                 view.refreshTiles();
@@ -1644,13 +1645,14 @@ public final class App extends JFrame implements BrushControl,
 
     public void showCustomTerrainButtonPopup(final AWTEvent event, final int customMaterialIndex) {
         final JToggleButton button = (customMaterialIndex >= 0) ? customMaterialButtons[customMaterialIndex] : null;
-        // This is sometimes invoked when the source is not showing. No idea why, but it has been observed in the wild.
-        // TODO: find out why and solve the underlying issue
-        if ((button != null) ? (! button.isShowing()) : ((event.getSource() instanceof Component) && (! ((Component) event.getSource()).isShowing()))) {
+        // Only guard existing custom-terrain buttons that are not on screen. The Terrain "+" button must still open
+        // even if JIDE reports odd showing state for nested dock controls.
+        if ((button != null) && (! button.isShowing())) {
             DesktopUtils.beep();
-            logger.warn("Event source {} not showing; not opening popup", event.getSource());
+            logger.warn("Custom terrain button {} not showing; not opening popup", button);
             return;
         }
+        final Component invoker = resolvePopupInvoker(event, button);
         JPopupMenu popupMenu = new BetterJPopupMenu();
         final MixedMaterial material = (customMaterialIndex >= 0) ? Terrain.getCustomMaterial(customMaterialIndex) : null;
 //        JLabel label = new JLabel(MessageFormat.format(strings.getString("current.material.0"), (material != null) ? material : "none"));
@@ -1666,6 +1668,10 @@ public final class App extends JFrame implements BrushControl,
                 if (! dialog.isCancelled()) {
                     newMaterial = MixedMaterialManager.getInstance().register(newMaterial);
                     int index = findNextCustomTerrainIndex();
+                    if (index < 0) {
+                        showMessageDialog(App.this, "All Custom Terrain slots are already in use.", "No Free Slots", ERROR_MESSAGE);
+                        return;
+                    }
                     addButtonForNewCustomTerrain(index, newMaterial, true);
                 }
             });
@@ -1755,10 +1761,25 @@ public final class App extends JFrame implements BrushControl,
             }
 
             popupMenu.show(button, button.getWidth(), 0);
-        } else {
-            Component invoker = (Component) event.getSource();
+        } else if ((invoker != null) && invoker.isShowing()) {
             popupMenu.show(invoker, invoker.getWidth(), 0);
+        } else {
+            // BetterJPopupMenu refuses invokers that are not showing; fall back to the main window
+            popupMenu.show(this, Math.max(0, getWidth() / 4), Math.max(0, getHeight() / 4));
         }
+    }
+
+    private Component resolvePopupInvoker(AWTEvent event, Component preferred) {
+        if ((preferred != null) && preferred.isShowing()) {
+            return preferred;
+        }
+        if ((event != null) && (event.getSource() instanceof Component)) {
+            return (Component) event.getSource();
+        }
+        if ((dockingManager != null) && (dockingManager.getFrame("terrain") != null)) {
+            return dockingManager.getFrame("terrain");
+        }
+        return this;
     }
 
     public void showHelp(Component component) {
@@ -1932,7 +1953,7 @@ public final class App extends JFrame implements BrushControl,
         Terrain.setCustomMaterial(index, customMaterial);
 
         if (customTerrainPanel == null) {
-            dockingManager.addFrame(new DockableFrameBuilder(createCustomTerrainPanel(), "Custom Terrain", DOCK_SIDE_WEST, 3).withId("customTerrain").scrollable().build());
+            ensureCustomTerrainDock(false);
         }
 
         JToggleButton newButton = createTerrainButton(Terrain.getCustomTerrain(index));
@@ -1941,9 +1962,7 @@ public final class App extends JFrame implements BrushControl,
         addMaterialSelectionTo(newButton, index);
         customTerrainPanel.add(newButton, customTerrainPanel.getComponentCount() - 1);
         customTerrainPanel.validate();
-        if (Terrain.getConfiguredCustomMaterialCount() == CUSTOM_TERRAIN_COUNT) {
-            ACTION_SHOW_CUSTOM_TERRAIN_POPUP.setEnabled(false);
-        }
+        updateAddCustomTerrainButtonState();
 
         if (select) {
             newButton.setSelected(true);
@@ -1954,6 +1973,29 @@ public final class App extends JFrame implements BrushControl,
             paintUpdater.updatePaint();
             dockingManager.activateFrame("customTerrain");
         }
+    }
+
+    /**
+     * Create and dock the Custom Terrain panel if needed. Call after layout restore so the tab stays available.
+     */
+    void ensureCustomTerrainDock(boolean activate) {
+        if (dockingManager == null) {
+            return;
+        }
+        if (customTerrainPanel == null) {
+            dockingManager.addFrame(new DockableFrameBuilder(createCustomTerrainPanel(), "Custom Terrain", DOCK_SIDE_WEST, 3).withId("customTerrain").scrollable().build());
+        }
+        if (dockingManager.getFrame("customTerrain") != null) {
+            dockingManager.dockFrame("customTerrain", DOCK_SIDE_WEST, 3);
+            if (activate) {
+                dockingManager.activateFrame("customTerrain");
+            }
+        }
+        updateAddCustomTerrainButtonState();
+    }
+
+    private void updateAddCustomTerrainButtonState() {
+        ACTION_SHOW_CUSTOM_TERRAIN_POPUP.setEnabled(Terrain.getConfiguredCustomMaterialCount() < CUSTOM_TERRAIN_COUNT);
     }
 
     public int findNextAvailableCustomTerrainIndex() {
@@ -1979,9 +2021,7 @@ public final class App extends JFrame implements BrushControl,
     }
 
     public void showCustomTerrainPanel() {
-        if ((dockingManager != null) && (dockingManager.getFrame("customTerrain") != null)) {
-            dockingManager.showFrame("customTerrain");
-        }
+        ensureCustomTerrainDock(true);
     }
 
     public void selectRiverSourceTerrainForPainting() {
@@ -2856,7 +2896,7 @@ public final class App extends JFrame implements BrushControl,
 
         dockingManager.addFrame(new DockableFrameBuilder(createLayerPanel(), "Layers", DOCK_SIDE_WEST, 3).build());
 
-        dockingManager.addFrame(new DockableFrameBuilder(createTerrainPanel(), "Terrain", DOCK_SIDE_WEST, 3).build());
+        dockingManager.addFrame(new DockableFrameBuilder(createTerrainPanel(), "Terrain", DOCK_SIDE_WEST, 3).scrollable().build());
 
         biomesPanelFrame = new DockableFrameBuilder(createBiomesPanelContainer(), "Biomes", DOCK_SIDE_WEST, 3).scrollable().build();
         dockingManager.addFrame(biomesPanelFrame);
@@ -3350,13 +3390,17 @@ public final class App extends JFrame implements BrushControl,
         addLayerButton.addActionListener(e -> {
             if (dimension == null) {
                 DesktopUtils.beep();
+                showInfo(this, "Open or create a world first to add Custom Layers.", "No World Loaded");
                 return;
             }
-            // This is sometimes invoked while layerPanel is not showing, which results in an error. TODO: find out why
-            //  and fix underlying cause
-            if (layerPanel.isShowing()) {
-                final JPopupMenu customLayerMenu = customLayerController.createCustomLayerMenu(null);
+            customLayerController.showDefaultCustomLayersPalette();
+            final JPopupMenu customLayerMenu = customLayerController.createCustomLayerMenu(null);
+            if (addLayerButton.isShowing()) {
+                customLayerMenu.show(addLayerButton, addLayerButton.getWidth(), 0);
+            } else if (layerPanel.isShowing()) {
                 customLayerMenu.show(layerPanel, addLayerButton.getX() + addLayerButton.getWidth(), addLayerButton.getY());
+            } else {
+                customLayerMenu.show(this, Math.max(0, getWidth() / 4), Math.max(0, getHeight() / 4));
             }
         });
         JPanel spacer = new JPanel();
@@ -5616,6 +5660,7 @@ public final class App extends JFrame implements BrushControl,
             } else {
                 customTerrainPanel.validate();
             }
+            updateAddCustomTerrainButtonState();
             showInfo(this, "Custom terrain \"" + name + "\" was successfully deleted.", "Custom Terrain Deleted");
         }
     }
@@ -5639,6 +5684,7 @@ public final class App extends JFrame implements BrushControl,
             dockingManager.removeFrame("customTerrain");
             customTerrainPanel = null;
         }
+        updateAddCustomTerrainButtonState();
     }
 
     private void loadCustomTerrains() {
@@ -5742,53 +5788,11 @@ public final class App extends JFrame implements BrushControl,
 
     private JMenu createScriptLibraryMenu() {
         final JMenu libraryMenu = new JMenu("Script Library");
-
-        final JMenu riversMenu = new JMenu("Rivers");
-        JMenuItem menuItem = new JMenuItem("Generate Rivers...");
-        menuItem.addActionListener(e -> {
-            if (dimension == null) {
-                DesktopUtils.beep();
-                return;
-            }
-            new RiverToolsDialog(this, this, dimension).setVisible(true);
-        });
-        riversMenu.add(menuItem);
-        menuItem = new JMenuItem("River from Line Layer...");
-        menuItem.addActionListener(e -> ScriptLibraryActions.runBundledScript(this, world, dimension, undoManagers.values(), Category.RIVERS, "river_from_line"));
-        riversMenu.add(menuItem);
-        libraryMenu.add(riversMenu);
-
-        final JMenu roadsMenu = new JMenu("Roads");
-        menuItem = new JMenuItem("Flatten Road (from line layer)...");
-        menuItem.addActionListener(e -> {
-            if (dimension == null) {
-                DesktopUtils.beep();
-                return;
-            }
-            new RoadToolsDialog(this, this, dimension, getAllLayers()).setVisible(true);
-        });
-        roadsMenu.add(menuItem);
-        libraryMenu.add(roadsMenu);
-
-        final JMenu snowMenu = new JMenu("Snow");
-        menuItem = new JMenuItem("Snowify...");
-        menuItem.addActionListener(e -> {
-            if (dimension == null) {
-                DesktopUtils.beep();
-                return;
-            }
-            new SnowToolsDialog(this, this, dimension).setVisible(true);
-        });
-        snowMenu.add(menuItem);
-        libraryMenu.add(snowMenu);
-
-        final JMenu globalsMenu = new JMenu("Global Presets");
-        for (BundledScriptCatalog.BundledScript script: BundledScriptCatalog.getByCategory(Category.GLOBALS)) {
-            menuItem = new JMenuItem(script.displayName() + "...");
-            menuItem.addActionListener(e -> ScriptLibraryActions.runBundledScript(this, world, dimension, undoManagers.values(), Category.GLOBALS, script.id()));
-            globalsMenu.add(menuItem);
+        for (BundledScriptCatalog.BundledScript script: BundledScriptCatalog.getLibraryScripts()) {
+            final JMenuItem menuItem = new JMenuItem(script.displayName() + "...");
+            menuItem.addActionListener(e -> ScriptLibraryActions.runBundledScript(this, world, dimension, undoManagers.values(), script.category(), script.id()));
+            libraryMenu.add(menuItem);
         }
-        libraryMenu.add(globalsMenu);
         return libraryMenu;
     }
 
@@ -6908,8 +6912,15 @@ public final class App extends JFrame implements BrushControl,
         protected void performAction(ActionEvent e) {
             if (dimension == null) {
                 DesktopUtils.beep();
+                showInfo(App.this, "Open or create a world first to add Custom Terrain.", "No World Loaded");
                 return;
             }
+            if (Terrain.getConfiguredCustomMaterialCount() >= CUSTOM_TERRAIN_COUNT) {
+                DesktopUtils.beep();
+                showMessageDialog(App.this, "All Custom Terrain slots are already in use.", "No Free Slots", ERROR_MESSAGE);
+                return;
+            }
+            ensureCustomTerrainDock(false);
             showCustomTerrainButtonPopup(e, -1);
         }
     };

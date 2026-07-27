@@ -301,6 +301,7 @@ public class CustomLayerController implements PropertyChangeListener {
         addLayerButton.addActionListener(e -> {
             if (app.getDimension() == null) {
                 beep();
+                showInfo(app, "Open or create a world first to add Custom Layers.", "No World Loaded");
                 return;
             }
             // Find out which palette the button is on
@@ -308,14 +309,20 @@ public class CustomLayerController implements PropertyChangeListener {
             while ((parent != null) && (! (parent instanceof DockableFrame))) {
                 parent = parent.getParent();
             }
+            final String paletteName;
             if (parent != null) {
                 final String nameKey = ((DockableFrame) parent).getKey();
-                final String paletteName = nameKey.substring(nameKey.indexOf('.') + 1);
-                final JPopupMenu customLayerMenu = createCustomLayerMenu(paletteName);
+                paletteName = nameKey.substring(nameKey.indexOf('.') + 1);
+            } else {
+                logger.warn("Could not find palette add layer button is on; using default palette");
+                paletteName = DEFAULT_PALETTE_NAME;
+            }
+            final JPopupMenu customLayerMenu = createCustomLayerMenu(paletteName);
+            if (addLayerButton.isShowing()) {
                 customLayerMenu.show(addLayerButton, addLayerButton.getWidth(), 0);
             } else {
-                logger.error("Could not find palette add layer button is on");
-                beep();
+                // BetterJPopupMenu silently skips show() when invoker is not showing
+                customLayerMenu.show(app, Math.max(0, app.getWidth() / 4), Math.max(0, app.getHeight() / 4));
             }
         });
         final List<Component> addLayerButtonPanel = new ArrayList<>(3);
@@ -358,6 +365,44 @@ public class CustomLayerController implements PropertyChangeListener {
         }
     }
 
+    /**
+     * Ensure the default empty "Custom Layers" dock tab exists so users can open it and use its +.
+     * Call after docking layout restore so the layout cannot hide a frame that did not exist yet.
+     */
+    void ensureDefaultCustomLayersPalette() {
+        if (! paletteManager.isEmpty()) {
+            return;
+        }
+        final Palette palette = paletteManager.create(DEFAULT_PALETTE_NAME);
+        app.dockingManager.addFrame(palette.getDockableFrame());
+        app.dockingManager.dockFrame(palette.getDockableFrame().getKey(), DockContext.DOCK_SIDE_WEST, 3);
+        palette.addPropertyChangeListener(this);
+    }
+
+    /**
+     * Re-dock custom layer palettes after {@code loadLayoutFrom}, which can leave dynamically
+     * added frames hidden or undocked. Does not activate them (avoids stealing the current tab).
+     */
+    void ensurePalettesVisible() {
+        for (Palette palette: paletteManager.getPalettes()) {
+            final String key = palette.getDockableFrame().getKey();
+            if (app.dockingManager.getFrame(key) == null) {
+                app.dockingManager.addFrame(palette.getDockableFrame());
+            }
+            app.dockingManager.dockFrame(key, DockContext.DOCK_SIDE_WEST, 3);
+        }
+    }
+
+    void showDefaultCustomLayersPalette() {
+        ensureDefaultCustomLayersPalette();
+        final Palette palette = paletteManager.getPalette(DEFAULT_PALETTE_NAME);
+        if (palette != null) {
+            app.dockingManager.activateFrame(palette.getDockableFrame().getKey());
+        } else if (! paletteManager.isEmpty()) {
+            app.dockingManager.activateFrame(paletteManager.getPalettes().get(0).getDockableFrame().getKey());
+        }
+    }
+
     void unregisterCustomLayer(final CustomLayer layer) {
         // Remove from palette
         Palette palette = paletteManager.unregister(layer);
@@ -365,11 +410,16 @@ public class CustomLayerController implements PropertyChangeListener {
         // Remove tracked GUI components
         app.layerSoloCheckBoxes.remove(layer);
 
-        // If the palette is now empty, remove it too
+        // If the palette is now empty, remove it — but keep a default empty Custom Layers dock
         if (palette.isEmpty()) {
-            palette.removePropertyChangeListener(this);
-            paletteManager.delete(palette);
-            app.dockingManager.removeFrame(palette.getDockableFrame().getKey());
+            final boolean keepDefault = DEFAULT_PALETTE_NAME.equals(palette.getName())
+                    && (paletteManager.getPalettes().size() == 1);
+            if (! keepDefault) {
+                palette.removePropertyChangeListener(this);
+                paletteManager.delete(palette);
+                app.dockingManager.removeFrame(palette.getDockableFrame().getKey());
+                ensureDefaultCustomLayersPalette();
+            }
         }
     }
 
@@ -988,6 +1038,7 @@ public class CustomLayerController implements PropertyChangeListener {
     final PaletteManager paletteManager = new PaletteManager(this);
 
     private static final ResourceBundle strings = ResourceBundle.getBundle("org.pepsoft.worldpainter.resources.strings"); // NOI18N
+    private static final String DEFAULT_PALETTE_NAME = "Custom Layers";
     private static final String EDITING_FLOOR_DIMENSION_KEY_2 = "org.pepsoft.worldpainter.TunnelLayer.editingFloorDimension.2";
     private static final String LAYER_PALETTE_TIP_KEY = "org.pepsoft.worldpainter.layerPaletteTip";
     private static final Icon ADD_CUSTOM_LAYER_BUTTON_ICON = IconUtils.loadScaledIcon("org/pepsoft/worldpainter/icons/plus.png");

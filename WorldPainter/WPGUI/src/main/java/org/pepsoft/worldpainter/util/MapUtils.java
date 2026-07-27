@@ -32,8 +32,21 @@ public final class MapUtils {
      * @return The selected map, or {@code null} if the user cancelled the dialog.
      */
     public static PlatformProvider.MapInfo selectMap(Window parent, File defaultDir) {
-        File mySavesDir = (defaultDir != null) ? defaultDir : Configuration.getInstance().getSavesDirectory();
-        if ((mySavesDir == null) && (MinecraftUtil.findMinecraftDir() != null)) {
+        File mySavesDir = defaultDir;
+        if ((mySavesDir == null) || (! mySavesDir.isDirectory())) {
+            mySavesDir = Configuration.getInstance().getSavesDirectory();
+        }
+        if ((mySavesDir == null) || (! mySavesDir.isDirectory())) {
+            // Fall back to platform default (AstralRinth FO saves when present, else .minecraft/saves).
+            for (org.pepsoft.worldpainter.Platform platform : PlatformManager.getInstance().getAllPlatforms()) {
+                final File platformDefault = PlatformManager.getInstance().getDefaultExportDir(platform);
+                if ((platformDefault != null) && platformDefault.isDirectory()) {
+                    mySavesDir = platformDefault;
+                    break;
+                }
+            }
+        }
+        if (((mySavesDir == null) || (! mySavesDir.isDirectory())) && (MinecraftUtil.findMinecraftDir() != null)) {
             mySavesDir = new File(MinecraftUtil.findMinecraftDir(), "saves");
         }
         final PlatformManager platformManager = PlatformManager.getInstance();

@@ -284,6 +284,9 @@ public class JavaWorldMerger extends JavaWorldExporter { // TODO can this be mad
             // Record start of export
             long start = System.currentTimeMillis();
 
+            // Fail early if Minecraft (or another process) has the map open
+            assertMapNotInUse(worldDir);
+
             // Pre-merge safety backup (in addition to the rename-based backup)
             createPreMergeSafetyBackup(worldDir);
 
@@ -1065,8 +1068,90 @@ public class JavaWorldMerger extends JavaWorldExporter { // TODO can this be mad
         }
         final String timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date());
         final File dest = new File(backupsDir, worldDir.getName() + "-pre-merge-" + timestamp);
-        FileUtils.copyDir(worldDir, dest);
+        try {
+            FileUtils.copyDir(worldDir, dest);
+        } catch (IOException e) {
+            // Best-effort cleanup of a partial copy
+            try {
+                if (dest.exists()) {
+                    FileUtils.deleteDir(dest);
+                }
+            } catch (Exception cleanup) {
+                logger.debug("Could not clean up partial pre-merge backup {}", dest, cleanup);
+            }
+            if (isLikelyFileInUse(e)) {
+                throw new FileInUseException("Could not create pre-merge backup of " + worldDir
+                        + " because the map is in use by another process. Close Minecraft (leave the world) and try again.", e);
+            }
+            throw e;
+        }
         logger.info("Pre-merge safety backup created at {}", dest.getAbsolutePath());
+    }
+
+    /**
+     * Early check that the map directory is not locked by Minecraft or another process.
+     * Prefer {@code session.lock} when present; otherwise try opening {@code level.dat} for write.
+     */
+    private void assertMapNotInUse(File worldDir) throws FileInUseException {
+        final File sessionLockFile = new File(worldDir, "session.lock");
+        final File probeFile = sessionLockFile.isFile() ? sessionLockFile : new File(worldDir, "level.dat");
+        if (! probeFile.isFile()) {
+            return;
+        }
+        try (RandomAccessFile raf = new RandomAccessFile(probeFile, "rw")) {
+            final java.nio.channels.FileLock lock = raf.getChannel().tryLock();
+            if (lock == null) {
+                throw new FileInUseException("Map directory " + worldDir
+                        + " is in use by another process. Close Minecraft (leave the world) and try again.");
+            }
+            lock.release();
+        } catch (FileInUseException e) {
+            throw e;
+        } catch (IOException e) {
+            if (isLikelyFileInUse(e)) {
+                throw new FileInUseException("Map directory " + worldDir
+                        + " is in use by another process. Close Minecraft (leave the world) and try again.", e);
+            }
+            // Non-lock IO errors here are non-fatal; rename/copy will surface them later
+            logger.debug("Could not probe map lock on {}; continuing", probeFile, e);
+        }
+    }
+
+    /**
+     * Detect Windows sharing violations / file-in-use errors, including localized messages
+     * (e.g. Turkish "kilitlediğinden").
+     */
+    static boolean isLikelyFileInUse(Throwable throwable) {
+        for (Throwable t = throwable; t != null; t = t.getCause()) {
+            if (t instanceof FileInUseException) {
+                return true;
+            }
+            final String message = t.getMessage();
+            if (message != null) {
+                final String lower = message.toLowerCase(Locale.ROOT);
+                if (lower.contains("being used by another process")
+                        || lower.contains("another program is using")
+                        || lower.contains("sharing violation")
+                        || lower.contains("process cannot access the file")
+                        || message.contains("kilitledi")
+                        || message.contains("kullan\u0131mda")
+                        || message.contains("kullanimda")) {
+                    return true;
+                }
+            }
+            if (t instanceof java.nio.file.FileSystemException) {
+                final String reason = ((java.nio.file.FileSystemException) t).getReason();
+                if (reason != null) {
+                    final String lower = reason.toLowerCase(Locale.ROOT);
+                    if (lower.contains("used by another")
+                            || lower.contains("sharing")
+                            || reason.contains("kilitledi")) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private void copyWorldFiles(File backupDir, File worldDir, Set<Integer> selectedDimensions, WorldStorageLayout.Layout backupLayout) throws IOException {
@@ -1148,7 +1233,7 @@ public class JavaWorldMerger extends JavaWorldExporter { // TODO can this be mad
                                 || (clearVegetation && existingBlock.vegetation)
                                 || (clearManMadeAboveGround && (! existingBlock.natural))) {
                             clearBlock(existingChunk, x, z, y, existingBlock);
-                        } else if (existingBlock.terrain) {
+                        } else if (existingBlock.terrain || SurfaceSmoother.isSmoothedSurfacePartial(existingBlock)) {
                             aboveGround = false;
                         }
                     }
@@ -1383,7 +1468,10 @@ public class JavaWorldMerger extends JavaWorldExporter { // TODO can this be mad
                     final boolean frost = dimension.getBitLayerValueAt(Frost.INSTANCE, chunkX | x, chunkZ | z);
                     int oldHeight = minHeight - 1;
                     for (int y = oldMaxY; y >= minHeight; y--) {
-                        if (existingChunk.getMaterial(x, y, z).terrain) {
+                        final Material existingMaterial = existingChunk.getMaterial(x, y, z);
+                        // Stairs/slabs from a previous surface-smoothed merge are not flagged .terrain;
+                        // treat them as the surface so re-merge does not think the terrain was raised.
+                        if (existingMaterial.terrain || SurfaceSmoother.isSmoothedSurfacePartial(existingMaterial)) {
                             // Terrain found
                             oldHeight = y;
                             break;
@@ -1392,7 +1480,9 @@ public class JavaWorldMerger extends JavaWorldExporter { // TODO can this be mad
                     final int dy = newHeight - oldHeight;
                     if (dy > 0) {
                         // Terrain has been raised; go from top to bottom to avoid stepping on ourselves
-                        final int mergeLimit = Math.min(newHeight - surfaceMergeDepth, oldHeight);
+                        // Clamp like the lowered/unchanged paths so surface loops never go below minHeight
+                        // (that produced Index -1 in MC118AnvilChunk.getMaterial for minHeight=-64 worlds).
+                        final int mergeLimit = Math.max(Math.min(newHeight - surfaceMergeDepth, oldHeight), minHeight - 1);
                         if (mergeBlocksAboveGround) {
                             // Merge above ground portion from new chunk
                             for (int y = Math.min(Math.max(oldMaxY + dy, newMaxY), maxHeight - 1); y >= newHeight + 1; y--) {
@@ -1523,6 +1613,9 @@ public class JavaWorldMerger extends JavaWorldExporter { // TODO can this be mad
      * @param preserveCaves Whether empty blocks from the existing chunk should be preserved.
      */
     private void mergeSurfaceBlock(final Chunk existingChunk, final Chunk newChunk, final int x, final int y, final int z, final int dy, final int minHeight, final boolean preserveCaves) {
+        if ((y < minHeight) || (y >= existingChunk.getMaxHeight()) || (y >= newChunk.getMaxHeight())) {
+            return;
+        }
         final Material existingMaterial = ((y - dy) >= minHeight) ? existingChunk.getMaterial(x, y - dy, z) : null;
         if ((! preserveCaves) || (existingMaterial == null) || ((! existingMaterial.veryInsubstantial) && existingMaterial.natural)) {
             Material newMaterial = newChunk.getMaterial(x, y, z);

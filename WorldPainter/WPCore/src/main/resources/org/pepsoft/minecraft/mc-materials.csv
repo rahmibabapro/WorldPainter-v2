@@ -324,6 +324,8 @@ minecraft:dead_tube_coral_fan,,waterlogged:b,0,false,false,true,true,false,false
 minecraft:dead_tube_coral_wall_fan,,"facing:e[north;south;west;east],waterlogged:b",0,false,false,true,true,false,false,,false,true,0,true,false,ff766f6b,dead_tube_coral.png
 minecraft:decorated_pot,,"facing:e[north;south;west;east],cracked:b,waterlogged:b",0,false,false,false,false,false,true,minecraft:decorated_pot,false,false,0,false,false,,
 minecraft:deepslate,,axis:e[x;y;z],15,false,true,false,false,false,false,,false,false,0,true,false,ff505052,deepslate.png
+minecraft:deepslate_slab,,"type:e[top;bottom;double],waterlogged:b",15,true,false,false,false,false,false,,false,false,0,false,false,ff505052,deepslate.png
+minecraft:deepslate_stairs,,"facing:e[north;south;west;east],half:e[top;bottom],waterlogged:b,shape:e[straight;inner_left;inner_right;outer_left;outer_right]",15,true,false,false,false,false,false,,false,false,0,false,false,ff505052,deepslate.png
 minecraft:deepslate_brick_slab,,"type:e[top;bottom;double],waterlogged:b",15,true,false,false,false,false,false,,false,false,0,false,false,ff464647,deepslate_bricks.png
 minecraft:deepslate_brick_stairs,,"facing:e[north;south;west;east],half:e[top;bottom],waterlogged:b,shape:e[straight;inner_left;inner_right;outer_left;outer_right]",15,true,false,false,false,false,false,,false,false,0,false,false,ff464647,deepslate_bricks.png
 minecraft:deepslate_brick_wall,,"south:e[none;low;tall],up:b,north:e[none;low;tall],west:e[none;low;tall],east:e[none;low;tall],waterlogged:b",0,false,false,false,false,false,false,,false,false,0,false,false,ff464647,deepslate_bricks.png

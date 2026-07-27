@@ -645,7 +645,7 @@ public class DimensionPropertiesEditor extends javax.swing.JPanel {
             if ((exportSettings == null) && (platformProvider != null)) {
                 exportSettings = platformProvider.getDefaultExportSettings(platform);
             }
-            if (exportSettings != null) {
+            if ((exportSettings != null) && (platformProvider != null)) {
                 try {
                     ExportSettingsEditor editor = platformProvider.getExportSettingsEditor(platform);
                     editor.setExportSettings(exportSettings);
@@ -653,6 +653,8 @@ public class DimensionPropertiesEditor extends javax.swing.JPanel {
                 } catch (RuntimeException e) {
                     logger.warn("Could not initialise post processing tab", e);
                 }
+            } else if ((exportSettings != null) && (platformProvider == null)) {
+                logger.warn("Skipping post processing tab: no PlatformProvider for {}", platform);
             }
         }
     }

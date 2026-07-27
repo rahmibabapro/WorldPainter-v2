@@ -71,19 +71,22 @@ public class MergeWorldDialog extends WorldPainterDialog {
         initComponents();
 
         Configuration config = Configuration.getInstance();
-        if (world.getMergedWith() != null) {
-            fieldSelectedMapDir.setText(world.getMergedWith().getParentFile().getAbsolutePath());
-        } else if (world.getImportedFrom() != null) {
-            fieldSelectedMapDir.setText(world.getImportedFrom().getParentFile().getAbsolutePath());
-        } else if ((config != null) && (config.getSavesDirectory() != null)) {
-            fieldSelectedMapDir.setText(config.getSavesDirectory().getAbsolutePath());
-        } else {
-            File minecraftDir = MinecraftUtil.findMinecraftDir();
-            if (minecraftDir != null) {
-                fieldSelectedMapDir.setText(new File(minecraftDir, "saves").getAbsolutePath());
+        final File rememberedSavesDir = resolveRememberedMergeDirectory(config);
+        File previousMap = resolveExistingMapDir(world.getMergedWith());
+        if (previousMap == null) {
+            previousMap = resolveExistingMapDir(world.getImportedFrom());
+        }
+        if (rememberedSavesDir != null) {
+            // Last merge/export directory wins; only preselect a previous map if it still lives there.
+            if ((previousMap != null) && rememberedSavesDir.equals(previousMap.getParentFile())) {
+                fieldSelectedMapDir.setText(previousMap.getAbsolutePath());
             } else {
-                fieldSelectedMapDir.setText(DesktopUtils.getDocumentsFolder().getAbsolutePath());
+                fieldSelectedMapDir.setText(rememberedSavesDir.getAbsolutePath());
             }
+        } else if (previousMap != null) {
+            fieldSelectedMapDir.setText(previousMap.getAbsolutePath());
+        } else {
+            fieldSelectedMapDir.setText(resolvePreferredMergeDirectory(config).getAbsolutePath());
         }
         ((SpinnerNumberModel) spinnerSurfaceThickness.getModel()).setMaximum(world.getMaxHeight());
         if (selectedTiles != null) {
@@ -285,7 +288,7 @@ public class MergeWorldDialog extends WorldPainterDialog {
         checkBoxBelowMergeBiomes.setEnabled(false);
 
         Configuration config = Configuration.getInstance();
-        config.setSavesDirectory(mapDir.getParentFile());
+        persistMergeDirectory(config, mapDir.getParentFile());
         config.setMessageDisplayed(MERGE_WARNING_KEY);
         world.setMergedWith(new File(mapDir, "level.dat"));
 
@@ -387,10 +390,83 @@ public class MergeWorldDialog extends WorldPainterDialog {
 
     private void selectMap() {
         File file = new File(fieldSelectedMapDir.getText().trim());
-        PlatformProvider.MapInfo selectedMap = MapUtils.selectMap(this, file.isDirectory() ? ((platform != null) ? file.getParentFile() : file) : null);
+        File startDir;
+        if (file.isDirectory()) {
+            // If the field points at a map, open its parent (the saves folder);
+            // otherwise open the directory itself (already a saves folder).
+            startDir = (platform != null) ? file.getParentFile() : file;
+        } else {
+            startDir = resolvePreferredMergeDirectory(Configuration.getInstance());
+        }
+        if ((startDir != null) && (! startDir.isDirectory())) {
+            startDir = resolvePreferredMergeDirectory(Configuration.getInstance());
+        }
+        PlatformProvider.MapInfo selectedMap = MapUtils.selectMap(this, startDir);
         if (selectedMap != null) {
             fieldSelectedMapDir.setText(selectedMap.dir.getAbsolutePath());
+            persistMergeDirectory(Configuration.getInstance(), selectedMap.dir.getParentFile());
         }
+    }
+
+    /**
+     * Last directory the user chose for merge or export, if it still exists.
+     */
+    private File resolveRememberedMergeDirectory(Configuration config) {
+        if (config == null) {
+            return null;
+        }
+        final File savesDir = config.getSavesDirectory();
+        if ((savesDir != null) && savesDir.isDirectory()) {
+            return savesDir;
+        }
+        final File exportDir = config.getExportDirectory(world.getPlatform());
+        if ((exportDir != null) && exportDir.isDirectory()) {
+            return exportDir;
+        }
+        return null;
+    }
+
+    /**
+     * Resolve a remembered or platform-default directory for merge map selection.
+     * Prefers last merge dir, then last export dir, then platform default (AstralRinth / .minecraft).
+     */
+    private File resolvePreferredMergeDirectory(Configuration config) {
+        final File remembered = resolveRememberedMergeDirectory(config);
+        if (remembered != null) {
+            return remembered;
+        }
+        final File defaultDir = PlatformManager.getInstance().getDefaultExportDir(world.getPlatform());
+        if ((defaultDir != null) && defaultDir.isDirectory()) {
+            return defaultDir;
+        }
+        final File minecraftDir = MinecraftUtil.findMinecraftDir();
+        if (minecraftDir != null) {
+            final File minecraftSaves = new File(minecraftDir, "saves");
+            if (minecraftSaves.isDirectory()) {
+                return minecraftSaves;
+            }
+        }
+        return DesktopUtils.getDocumentsFolder();
+    }
+
+    /**
+     * If {@code levelDat} points at an existing map directory, return that map dir; otherwise {@code null}.
+     */
+    private static File resolveExistingMapDir(File levelDat) {
+        if (levelDat == null) {
+            return null;
+        }
+        final File mapDir = levelDat.isDirectory() ? levelDat : levelDat.getParentFile();
+        return ((mapDir != null) && mapDir.isDirectory()) ? mapDir : null;
+    }
+
+    private void persistMergeDirectory(Configuration config, File savesDir) {
+        if ((config == null) || (savesDir == null)) {
+            return;
+        }
+        config.setSavesDirectory(savesDir);
+        // Keep export and merge in sync so whichever the user last set wins.
+        config.setExportDirectory(world.getPlatform(), savesDir);
     }
 
     private void selectTiles() {

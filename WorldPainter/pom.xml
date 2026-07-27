@@ -96,7 +96,7 @@
                 <plugin>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <configuration>
-                        <argLine>-Duser.home=${project.build.directory}</argLine>
+                        <argLine>-Duser.home="${project.build.directory}"</argLine>
                     </configuration>
                 </plugin>
                 <!-- Inhibit regular deploy -->

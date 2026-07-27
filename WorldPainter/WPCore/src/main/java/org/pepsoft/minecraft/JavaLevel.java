@@ -10,7 +10,6 @@ import org.pepsoft.minecraft.datapack.DataPack;
 import org.pepsoft.util.mdc.MDCCapturingRuntimeException;
 import org.pepsoft.worldpainter.AccessDeniedException;
 import org.pepsoft.worldpainter.Platform;
-import org.pepsoft.worldpainter.Version;
 import org.pepsoft.worldpainter.platforms.JavaPlatformProvider;
 import org.pepsoft.worldpainter.plugins.PlatformManager;
 import org.slf4j.Logger;
@@ -48,10 +47,14 @@ public abstract class JavaLevel extends AbstractNBTItem {
         final Integer dataVersion = platform.getAttribute(ATTRIBUTE_EXPORT_DATA_VERSION);
         if (dataVersion != null) {
             setInt(TAG_DATA_VERSION, dataVersion);
+            // Use the real Minecraft version identity so the world list shows e.g. "26.2"
+            // as compatible, not a red custom "WorldPainter" / snapshot label.
+            final String mcVersionName = platform.getAttribute(ATTRIBUTE_MC_VERSION).toString();
             Map<String, Tag> versionTag = new HashMap<>();
             versionTag.put(TAG_ID, new IntTag(TAG_ID, dataVersion));
-            versionTag.put(TAG_NAME, new StringTag(TAG_NAME, "WorldPainter"));
-            versionTag.put(TAG_SNAPSHOT, new ByteTag(TAG_SNAPSHOT, (byte) (Version.isSnapshot() ? 1 : 0)));
+            versionTag.put(TAG_NAME, new StringTag(TAG_NAME, mcVersionName));
+            versionTag.put(TAG_SERIES, new StringTag(TAG_SERIES, "main"));
+            versionTag.put(TAG_SNAPSHOT, new ByteTag(TAG_SNAPSHOT, (byte) 0));
             setMap(TAG_VERSION, versionTag);
         }
     }

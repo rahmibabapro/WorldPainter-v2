@@ -32,7 +32,7 @@ public class JavaExportSettingsEditor extends ExportSettingsEditor {
         add(checkBoxOptimizedExport);
         if (Branding.isV2()) {
             checkBoxTurboExport = new javax.swing.JCheckBox("Turbo export (fastest)");
-            checkBoxTurboExport.setToolTipText("Skips caves, resources, lighting and fluid flow. Minecraft completes these on first load.");
+            checkBoxTurboExport.setToolTipText("Skips caves, resources, lighting and fluid flow. Lighting is fully deferred to Minecraft (faster; world may look dark until first load).");
             checkBoxTurboExport.addActionListener(evt -> setControlStates());
             add(checkBoxTurboExport, 0);
         }

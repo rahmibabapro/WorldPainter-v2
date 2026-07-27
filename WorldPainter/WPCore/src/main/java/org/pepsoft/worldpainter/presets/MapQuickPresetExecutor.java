@@ -62,7 +62,8 @@ public final class MapQuickPresetExecutor {
         applySteepSlopeTerrain(dimension, slopeThreshold, terrain, progressReceiver);
     }
 
-    /** Stone Mix on slopes at or above the threshold; grass on gentler slopes. */
+    /** Stone Mix on slopes at or above the threshold; grass on gentler slopes.
+     * Stone Mix uses stone (not deepslate) below y=0 as well. */
     public static void applyStoneMixGrassSlopeSplit(Dimension dimension, int degreesThreshold, ProgressReceiver progressReceiver) throws OperationCancelled {
         final float slopeThreshold = (float) Math.tan(Math.toRadians(degreesThreshold));
         dimension.visitTilesForEditing().andDo(tile -> {

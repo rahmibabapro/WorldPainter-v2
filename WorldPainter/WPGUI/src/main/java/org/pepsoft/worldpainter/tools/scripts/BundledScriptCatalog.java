@@ -18,38 +18,34 @@ import java.util.jar.JarFile;
 
 /**
  * Catalog of scripts bundled in {@code org/pepsoft/worldpainter/scripts/}.
+ * <p>
+ * Scripts remain registered for internal callers (Map Quick Preset, river/road/snow dialogs).
+ * The Script Library UI only lists entries with {@link BundledScript#inLibrary()}.
  */
 public final class BundledScriptCatalog {
     public enum Category {
-        RIVERS("Rivers"),
-        ROADS("Roads"),
-        SNOW("Snow"),
-        GLOBALS("Global Presets");
-
-        Category(String label) {
-            this.label = label;
-        }
-
-        public final String label;
+        RIVERS,
+        ROADS,
+        SNOW,
+        GLOBALS
     }
 
-    public record BundledScript(Category category, String id, String resourcePath, String fileName) {
-        public String displayName() {
-            return id.replace('_', ' ');
-        }
+    public record BundledScript(Category category, String id, String resourcePath, String fileName, String displayName, boolean inLibrary) {
     }
 
     private static final String PREFIX = "org/pepsoft/worldpainter/scripts/";
     private static final List<BundledScript> SCRIPTS = List.of(
-            new BundledScript(Category.RIVERS, "river_script", PREFIX + "rivers/river_script.js", "river_script.js"),
-            new BundledScript(Category.RIVERS, "river_from_line", PREFIX + "rivers/river_from_line.js", "river_from_line.js"),
-            new BundledScript(Category.ROADS, "road_flatten", PREFIX + "roads/road_flatten.js", "road_flatten.js"),
-            new BundledScript(Category.SNOW, "snowify", PREFIX + "snow/snowify.js", "snowify.js"),
-            new BundledScript(Category.GLOBALS, "stone_grass_slope", PREFIX + "globals/global_ops_stone_grass_45deg.js", "global_ops_stone_grass_45deg.js"),
-            new BundledScript(Category.GLOBALS, "remove_water_ge1", PREFIX + "globals/global_remove_water_ge1.js", "global_remove_water_ge1.js"),
-            new BundledScript(Category.GLOBALS, "set_water_level_0", PREFIX + "globals/global_set_water_level_0.js", "global_set_water_level_0.js"),
-            new BundledScript(Category.GLOBALS, "dry_to_stone", PREFIX + "globals/global_remove_water_ge0_make_stone.js", "global_remove_water_ge0_make_stone.js"),
-            new BundledScript(Category.GLOBALS, "realistic_snow", PREFIX + "globals/global_realistic_snow.js", "global_realistic_snow.js")
+            // Internal only — not shown in Script Library
+            new BundledScript(Category.RIVERS, "river_script", PREFIX + "rivers/river_script.js", "river_script.js", "river script", false),
+            new BundledScript(Category.RIVERS, "river_from_line", PREFIX + "rivers/river_from_line.js", "river_from_line.js", "river from line", false),
+            new BundledScript(Category.ROADS, "road_flatten", PREFIX + "roads/road_flatten.js", "road_flatten.js", "road flatten", false),
+            new BundledScript(Category.SNOW, "snowify", PREFIX + "snow/snowify.js", "snowify.js", "snowify", false),
+            new BundledScript(Category.GLOBALS, "remove_water_ge1", PREFIX + "globals/global_remove_water_ge1.js", "global_remove_water_ge1.js", "remove water ge1", false),
+            new BundledScript(Category.GLOBALS, "set_water_level_0", PREFIX + "globals/global_set_water_level_0.js", "global_set_water_level_0.js", "set water level 0", false),
+            new BundledScript(Category.GLOBALS, "dry_to_stone", PREFIX + "globals/global_remove_water_ge0_make_stone.js", "global_remove_water_ge0_make_stone.js", "dry to stone", false),
+            new BundledScript(Category.GLOBALS, "realistic_snow", PREFIX + "globals/global_realistic_snow.js", "global_realistic_snow.js", "realistic snow", false),
+            // Script Library (flat list)
+            new BundledScript(Category.GLOBALS, "stone_grass_slope", PREFIX + "globals/global_ops_stone_grass_45deg.js", "global_ops_stone_grass_45deg.js", "Taş Çimen", true)
     );
 
     private BundledScriptCatalog() {
@@ -57,6 +53,11 @@ public final class BundledScriptCatalog {
 
     public static List<BundledScript> getAll() {
         return SCRIPTS;
+    }
+
+    /** Scripts shown in the Script Library menu (flat, no categories). */
+    public static List<BundledScript> getLibraryScripts() {
+        return SCRIPTS.stream().filter(BundledScript::inLibrary).toList();
     }
 
     public static List<BundledScript> getByCategory(Category category) {

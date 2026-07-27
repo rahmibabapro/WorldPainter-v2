@@ -10,6 +10,8 @@ import org.pepsoft.worldpainter.plugins.BlockBasedPlatformProvider;
 import org.pepsoft.worldpainter.plugins.PlatformManager;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.pepsoft.minecraft.Constants.BLK_AIR;
 
@@ -259,16 +261,19 @@ public class WorldRegion implements MinecraftWorld {
     public void save(File worldDir, int dimension) {
         try (ChunkStore chunkStore = platformProvider.getChunkStore(platform, worldDir, dimension)) {
             chunkStore.doInTransaction(() -> {
+                // Collect then parallelise: NBT+Deflater run concurrently; RegionFile.write is synchronized.
+                final List<Chunk> toSave = new ArrayList<>(CHUNKS_PER_SIDE * CHUNKS_PER_SIDE);
                 synchronized (chunks) {
                     for (int x = 0; x < CHUNKS_PER_SIDE; x++) {
                         for (int z = 0; z < CHUNKS_PER_SIDE; z++) {
                             final Chunk chunk = chunks[x + 1][z + 1];
                             if (chunk != null) {
-                                chunkStore.saveChunk(chunk);
+                                toSave.add(chunk);
                             }
                         }
                     }
                 }
+                toSave.parallelStream().forEach(chunkStore::saveChunk);
             });
         }
     }

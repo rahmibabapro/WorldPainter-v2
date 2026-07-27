@@ -24,19 +24,30 @@ import static org.pepsoft.minecraft.Material.AIR;
  *
  * <p>Format specification derived from Axiom's {@code BlueprintIo} (magic {@code 0x0AE5BB36},
  * header NBT, PNG thumbnail, gzip-compressed block NBT with {@code BlockRegion} sections).
+ *
+ * <p>Section block data uses Minecraft's {@code PalettedContainer} packing (Y-major index
+ * {@code y*256 + z*16 + x}). WorldPainter's {@link PackedArrayCube} exposes the same index via
+ * {@code getValue(x, z, y)} — matching {@code MC118AnvilChunk} — not {@code getValue(x, y, z)}.
  */
 public final class AxiomBlueprint extends AbstractObject implements Bo2ObjectProvider {
     private static final int MAGIC = 182827830; // 0x0AE5BB36
 
-    private AxiomBlueprint(String name, Map<Point3i, Material> blocks, List<Entity> entities, List<TileEntity> tileEntities) {
+    private AxiomBlueprint(String name, int width, int length, int height, Material[] blocks,
+                           List<Entity> entities, List<TileEntity> tileEntities) {
         this.name = name;
+        this.width = width;
+        this.length = length;
+        this.height = height;
         this.blocks = blocks;
         this.entities = entities;
         this.tileEntities = tileEntities;
-        final Point3i offset = guestimateOffset();
-        if ((offset != null) && ((offset.x != 0) || (offset.y != 0) || (offset.z != 0))) {
-            setAttribute(ATTRIBUTE_OFFSET, offset);
-        }
+        // Keep auto X/Z (horizontal) centering; plant 1 block into the terrain (UI "Y axis" = offset.z).
+        final Point3i auto = guestimateOffset();
+        final Point3i offset = (auto != null)
+                ? new Point3i(auto.x, auto.y, -1)
+                : new Point3i(0, 0, -1);
+        setAttribute(ATTRIBUTE_OFFSET, offset);
+        guessManageWaterlogged();
     }
 
     @Override
@@ -66,28 +77,34 @@ public final class AxiomBlueprint extends AbstractObject implements Bo2ObjectPro
 
     @Override
     public Point3i getDimensions() {
-        int maxX = 0, maxY = 0, maxZ = 0;
-        for (Point3i coord : blocks.keySet()) {
-            maxX = Math.max(maxX, coord.x);
-            maxY = Math.max(maxY, coord.y);
-            maxZ = Math.max(maxZ, coord.z);
-        }
-        return new Point3i(maxX + 1, maxY + 1, maxZ + 1);
+        return new Point3i(width, length, height);
     }
 
     @Override
     public Material getMaterial(int x, int y, int z) {
-        return blocks.get(new Point3i(x, y, z));
+        final Material material = blocks[index(x, y, z)];
+        return (material != null) ? material : AIR;
     }
 
     @Override
     public boolean getMask(int x, int y, int z) {
+        final Material material = blocks[index(x, y, z)];
         if (getAttribute(ATTRIBUTE_IGNORE_AIR)) {
-            final Material material = blocks.get(new Point3i(x, y, z));
             return (material != null) && (material != AIR);
         } else {
-            return blocks.containsKey(new Point3i(x, y, z));
+            return material != null;
         }
+    }
+
+    @Override
+    public Set<Material> getAllMaterials() {
+        final Set<Material> materials = new HashSet<>();
+        for (Material material : blocks) {
+            if (material != null) {
+                materials.add(material);
+            }
+        }
+        return materials;
     }
 
     @Override
@@ -157,6 +174,7 @@ public final class AxiomBlueprint extends AbstractObject implements Bo2ObjectPro
             final CompoundTag headerTag = (CompoundTag) new NBTInputStream(in).readTag();
 
             final int headerVersion = getInt(headerTag, "Version", 0);
+            final boolean containsAir = getBoolean(headerTag, "ContainsAir", false);
             final StringTag nameTag = (StringTag) headerTag.getTag("Name");
             final String objectName = (nameTag != null) ? nameTag.getValue() : fallBackName;
 
@@ -190,11 +208,12 @@ public final class AxiomBlueprint extends AbstractObject implements Bo2ObjectPro
                     continue;
                 }
                 final SectionData section = parseSection(blockStatesTag);
-                for (int localZ = 0; localZ < 16; localZ++) {
-                    for (int localY = 0; localY < 16; localY++) {
+                // Minecraft Y is up. PackedArrayCube args are (x, z, y) — see MC118AnvilChunk.
+                for (int localY = 0; localY < 16; localY++) {
+                    for (int localZ = 0; localZ < 16; localZ++) {
                         for (int localX = 0; localX < 16; localX++) {
-                            final Material material = section.getMaterial(localX, localY, localZ);
-                            if (isEmptyMaterial(material, headerVersion)) {
+                            final Material material = section.getMaterial(localX, localZ, localY);
+                            if (isEmptyMaterial(material, headerVersion, containsAir)) {
                                 continue;
                             }
                             final int mcX = chunkX * 16 + localX;
@@ -217,13 +236,19 @@ public final class AxiomBlueprint extends AbstractObject implements Bo2ObjectPro
             }
 
             // Normalise to WorldPainter coordinates (x, y horizontal; z vertical)
-            final Map<Point3i, Material> blocks = new HashMap<>(absoluteBlocks.size());
+            final int width = maxMcX - minMcX + 1;
+            final int length = maxMcZ - minMcZ + 1;
+            final int height = maxMcY - minMcY + 1;
+            final Material[] blocks = new Material[width * length * height];
             for (Map.Entry<Point3i, Material> entry : absoluteBlocks.entrySet()) {
                 final Point3i mc = entry.getKey();
-                blocks.put(toWpCoord(mc.x, mc.y, mc.z, minMcX, minMcY, minMcZ), entry.getValue());
+                final int x = mc.x - minMcX;
+                final int y = mc.z - minMcZ;
+                final int z = mc.y - minMcY;
+                blocks[x + y * width + z * width * length] = entry.getValue();
             }
 
-            // Block entities
+            // Block entities — keep Minecraft axis order (exporter remaps at export time)
             final List<TileEntity> tileEntities = new ArrayList<>();
             final ListTag<CompoundTag> blockEntitiesTag = (ListTag<CompoundTag>) blockDataTag.getTag("BlockEntities");
             if (blockEntitiesTag != null) {
@@ -243,7 +268,7 @@ public final class AxiomBlueprint extends AbstractObject implements Bo2ObjectPro
                 }
             }
 
-            // Entities
+            // Entities — relative Pos stays in Minecraft axis order
             final List<Entity> entities = new ArrayList<>();
             final ListTag<CompoundTag> entitiesTag = (ListTag<CompoundTag>) blockDataTag.getTag("Entities");
             if (entitiesTag != null) {
@@ -260,14 +285,14 @@ public final class AxiomBlueprint extends AbstractObject implements Bo2ObjectPro
                 }
             }
 
-            return new AxiomBlueprint(objectName, blocks,
+            return new AxiomBlueprint(objectName, width, length, height, blocks,
                     entities.isEmpty() ? null : ImmutableList.copyOf(entities),
                     tileEntities.isEmpty() ? null : ImmutableList.copyOf(tileEntities));
         }
     }
 
-    private static Point3i toWpCoord(int mcX, int mcY, int mcZ, int originMcX, int originMcY, int originMcZ) {
-        return new Point3i(mcX - originMcX, mcZ - originMcZ, mcY - originMcY);
+    private int index(int x, int y, int z) {
+        return x + y * width + z * width * length;
     }
 
     private static CompoundTag copyBlockEntityTag(CompoundTag blockEntityTag) {
@@ -306,9 +331,6 @@ public final class AxiomBlueprint extends AbstractObject implements Bo2ObjectPro
     private static Material decodePaletteEntry(CompoundTag blockSpecTag) {
         final String name = ((StringTag) blockSpecTag.getTag(TAG_NAME)).getValue();
         final CompoundTag propertiesTag = (CompoundTag) blockSpecTag.getTag(TAG_PROPERTIES);
-        if (name.equals(MC_AIR) && propertiesTag == null) {
-            return null;
-        }
         final Map<String, String> properties;
         if (propertiesTag != null) {
             properties = propertiesTag.getValue().entrySet().stream()
@@ -319,14 +341,25 @@ public final class AxiomBlueprint extends AbstractObject implements Bo2ObjectPro
         return Material.get(name, properties);
     }
 
-    private static boolean isEmptyMaterial(Material material, int headerVersion) {
-        if (material == null || material == AIR) {
+    /**
+     * Axiom empty-cell marker is {@code structure_void} (header version ≤ 1) or {@code void_air}
+     * (version ≥ 2). Regular {@code air} is only treated as empty when {@code ContainsAir} is false.
+     */
+    private static boolean isEmptyMaterial(Material material, int headerVersion, boolean containsAir) {
+        if (material == null) {
             return true;
         }
         if (headerVersion <= 1) {
-            return MC_STRUCTURE_VOID.equals(material.name);
+            if (MC_STRUCTURE_VOID.equals(material.name)) {
+                return true;
+            }
+        } else if (MC_VOID_AIR.equals(material.name)) {
+            return true;
         }
-        return MC_VOID_AIR.equals(material.name);
+        if ((material == AIR) || MC_AIR.equals(material.name)) {
+            return ! containsAir;
+        }
+        return false;
     }
 
     private static int getInt(CompoundTag tag, String key, int defaultValue) {
@@ -335,6 +368,14 @@ public final class AxiomBlueprint extends AbstractObject implements Bo2ObjectPro
             return ((IntTag) valueTag).getValue();
         } else if (valueTag instanceof ByteTag) {
             return ((ByteTag) valueTag).intValue();
+        }
+        return defaultValue;
+    }
+
+    private static boolean getBoolean(CompoundTag tag, String key, boolean defaultValue) {
+        final Tag valueTag = tag.getTag(key);
+        if (valueTag instanceof ByteTag) {
+            return ((ByteTag) valueTag).getValue() != 0;
         }
         return defaultValue;
     }
@@ -353,9 +394,14 @@ public final class AxiomBlueprint extends AbstractObject implements Bo2ObjectPro
             this.singleMaterial = singleMaterial;
         }
 
-        Material getMaterial(int x, int y, int z) {
+        /**
+         * @param x Minecraft local X
+         * @param z Minecraft local Z (PackedArrayCube second arg)
+         * @param y Minecraft local Y (PackedArrayCube third arg)
+         */
+        Material getMaterial(int x, int z, int y) {
             if (cube != null) {
-                return cube.getValue(x, y, z);
+                return cube.getValue(x, z, y);
             }
             return singleMaterial;
         }
@@ -363,7 +409,8 @@ public final class AxiomBlueprint extends AbstractObject implements Bo2ObjectPro
 
     private String name;
     private Map<String, Serializable> attributes;
-    private final Map<Point3i, Material> blocks;
+    private final int width, length, height;
+    private final Material[] blocks;
     private final List<Entity> entities;
     private final List<TileEntity> tileEntities;
 

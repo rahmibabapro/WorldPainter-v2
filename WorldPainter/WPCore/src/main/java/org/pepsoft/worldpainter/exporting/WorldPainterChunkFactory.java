@@ -307,7 +307,16 @@ public class WorldPainterChunkFactory implements ChunkFactory {
                     final Material smoothed = SurfaceSmoother.smoothSurfaceMaterial(
                             dimension, heightSnapshot, worldX, worldY, intHeight, material);
                     if (smoothed != null) {
-                        surfaceMaterial = underWater ? SurfaceSmoother.waterlogUnderwater(smoothed) : smoothed;
+                        // Fluid fills the surface cell when waterLevel >= intHeight (includes sea-level
+                        // shoreline). Waterlog stairs/slabs there — underWater alone (>) left dry tops.
+                        final boolean fluidAtSurface = SurfaceSmoother.fluidOccupiesBlock(intHeight, waterLevel);
+                        if (smoothed.empty) {
+                            if (fluidAtSurface) {
+                                surfaceMaterial = floodWithLava ? STATIONARY_LAVA : STATIONARY_WATER;
+                            }
+                        } else {
+                            surfaceMaterial = SurfaceSmoother.waterlogIfFluidOccupies(smoothed, intHeight, waterLevel);
+                        }
                     }
                 }
                 final int blockType = surfaceMaterial.blockType;

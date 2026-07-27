@@ -59,7 +59,7 @@ abstract class AnvilPlatformProvider extends AbstractJavaPlatformProviderImpl {
             case REGION:
             case ENTITIES:
             case POI:
-                return new File(baseDir, dataType.name().toLowerCase());
+                return new File(baseDir, dataType.folderName());
             default:
                 throw new InternalError();
         }

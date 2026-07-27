@@ -368,7 +368,7 @@ public class JavaWorldExporter extends AbstractWorldExporter { // TODO can this 
             final Anchor anchor = dimension.getAnchor();
             final File dimensionDir = platformProvider.getDimensionDir(platform, worldDir, anchor.dim);
             for (DataType dataType: platformProvider.getDataTypes(platform)) {
-                File regionDir = new File(dimensionDir, dataType.name().toLowerCase());
+                File regionDir = new File(dimensionDir, dataType.folderName());
                 if (! regionDir.exists()) {
                     if (! regionDir.mkdirs()) {
                         throw new RuntimeException("Could not create directory " + regionDir);

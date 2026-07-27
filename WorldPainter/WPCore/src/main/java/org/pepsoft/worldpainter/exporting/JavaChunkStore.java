@@ -181,8 +181,14 @@ public class JavaChunkStore implements ChunkStore {
 
     @Override
     public void saveChunk(Chunk chunk) {
+        saveChunk(chunk, ((NBTItem) chunk).toMultipleNBT());
+    }
+
+    /**
+     * Save a chunk using pre-built NBT tags (e.g. after parallel {@link NBTItem#toMultipleNBT()}).
+     */
+    public void saveChunk(Chunk chunk, Map<DataType, ? extends Tag> tags) {
         final int x = chunk.getxPos(), z = chunk.getzPos();
-        final Map<DataType, ? extends Tag> tags = ((NBTItem) chunk).toMultipleNBT();
         platformProvider.getDataTypes(platform).forEach(type -> {
             try {
                 if (tags.containsKey(type)) {

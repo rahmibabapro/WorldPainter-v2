@@ -1,29 +1,59 @@
 # WorldPainter v2
 
-Clean fork of [Captain-Chaos/WorldPainter](https://github.com/Captain-Chaos/WorldPainter) based on **upstream 2.27.x**, with **performance and memory optimizations only**.
+[Captain-Chaos/WorldPainter](https://github.com/Captain-Chaos/WorldPainter) tabanlı fork. Minecraft **26.2** odaklı iyileştirmeler, daha hızlı boyama/export ve pratik düzeltmeler içerir.
 
-Feature forks (surface smoothing, FlatLaf UI, biome packs, script library, etc.) are **not** included. Full previous fork tip is kept locally as branch `worldpainter-v2-legacy`.
+Repo: [rahmibabapro/WorldPainter-v2](https://github.com/rahmibabapro/WorldPainter-v2)
 
-## Optimizations
+## Ne değişti? (özet)
 
-- Turbo / hollow export + heap-aware `ExportMemoryBudget`
-- Export height snapshots / chunk height cache / interior hollower
-- Compartmentalised / incremental `.world` save
-- Idle memory guard + 3D tile render cache
-- Optimized Minecraft game rules on export
-- Separate config: `%APPDATA%\WorldPainter [V2]`
+### Minecraft / export
+- Export varsayılanı **Minecraft 26.2** (eski “unknown format” sorunu giderildi)
+- Varsayılan kayıt klasörü: AstralRinth / Fabulously Optimized saves
+- **Chest of goodies** varsayılan kapalı
+- Export’a basınca donma: arayüzde `System.gc()` kaldırıldı
+- Turbo export ve bellek bütçesi iyileştirmeleri
 
-## Build & run
+### Merge
+- Minecraft açıkken kilitli dosya → anlaşılır uyarı (map’i kapatın)
+- Chunk merge’de `ArrayIndexOutOfBounds` düzeltmesi
+- Aynı map’i tekrar merge edince merdivenlerin üst üste binmesi engellendi
+- Son seçilen merge klasörü hatırlanıyor
 
-See **[BUILDING-V2.md](BUILDING-V2.md)**.
+### Yüzey / su / deepslate
+- Deepslate stairs & slab malzemeleri eklendi
+- Deepslate kenarlarında hava boşluğu oluşması azaltıldı
+- Deniz seviyesindeki stair/slab’ler doğru şekilde waterlogged oluyor
+
+### Custom objects (ağaçlar)
+- **Axiom `.bp`** dosyaları düzgün yükleniyor (önceden yatık/bozuk geliyordu)
+- Yeni eklenen `.bp` ağaçlar: yatayda **auto** ortalama + dikey **Y = -1** (1 blok toprağa gömülür)
+
+### Arayüz / araçlar
+- Ctrl+Z geri alma düzeltildi
+- Fırça intensity / boyama daha hızlı tepki veriyor
+- Custom Layers & Custom Terrain panelleri + **+** butonları düzgün açılıyor
+- Script Library sadeleştirildi (şu an “Taş Çimen” / stone-grass slope)
+
+### Performans / bellek
+- Turbo / hollow export, export bellek bütçesi
+- Idle memory guard, tile cache, optimize game rules
+- Ayrı config: `%APPDATA%\WorldPainter [V2]`
+
+## Derleme / çalıştırma
+
+Ayrıntılar: **[BUILDING-V2.md](BUILDING-V2.md)**
 
 ```powershell
 .\build-v2.ps1
 .\launch-WorldPainter-v2.bat
 ```
 
-Desktop launcher: `WorldPainter v2.bat` → `dist\WorldPainter v2\WorldPainter v2.exe`
+Çıktı: `dist\WorldPainter v2\WorldPainter v2.exe`
 
-## License
+## Katkı
 
-GPL v3 (derived work).
+Collaborator daveti kabul edildikten sonra `worldpainter-v2` dalında çalışabilirsiniz.
+
+## Lisans
+
+GPL v3 (Captain-Chaos/WorldPainter türevi).
