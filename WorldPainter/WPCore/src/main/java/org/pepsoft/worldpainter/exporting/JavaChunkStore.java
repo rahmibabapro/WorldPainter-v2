@@ -43,6 +43,9 @@ public class JavaChunkStore implements ChunkStore {
         this.regionDir = regionDir;
         this.minHeight = minHeight;
         this.maxHeight = maxHeight;
+        if ((! regionDir.exists()) && (! regionDir.mkdirs())) {
+            throw new RuntimeException("Could not create region directory " + regionDir);
+        }
         platformProvider = (JavaPlatformProvider) PlatformManager.getInstance().getPlatformProvider(platform);
         if (! DEFAULT_JAVA_PLATFORMS.contains(platform)) {
             throw new IllegalArgumentException("Unsupported platform " + platform);

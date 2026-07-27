@@ -33,16 +33,18 @@ public final class PlatformUtils {
                 return RESULT_ANVIL_1_15_AND_1_17;
             }
         } else if (chunk instanceof MC118AnvilChunk) {
-            if (((MC118AnvilChunk) chunk).getInputDataVersion() > DATA_VERSION_MC_1_21_11) {
-                return RESULT_ANVIL_26_1;
+            if (((MC118AnvilChunk) chunk).getInputDataVersion() > DATA_VERSION_MC_26_1) {
+                return RESULT_ANVIL_26_2;
+            } else if (((MC118AnvilChunk) chunk).getInputDataVersion() > DATA_VERSION_MC_1_21_11) {
+                return RESULT_ANVIL_26_1_TO_26_2;
             } else if (((MC118AnvilChunk) chunk).getInputDataVersion() > DATA_VERSION_MC_1_21_10) {
-                return RESULT_ANVIL_1_21_11_TO_26_1;
+                return RESULT_ANVIL_1_21_11_TO_26_2;
             } else if (((MC118AnvilChunk) chunk).getInputDataVersion() > DATA_VERSION_MC_1_20_4) {
-                return RESULT_ANVIL_1_20_5_TO_26_1;
+                return RESULT_ANVIL_1_20_5_TO_26_2;
             } else if (((MC118AnvilChunk) chunk).getInputDataVersion() > DATA_VERSION_MC_1_18_2) {
-                return RESULT_ANVIL_1_19_TO_26_1;
+                return RESULT_ANVIL_1_19_TO_26_2;
             } else {
-                return RESULT_ANVIL_1_18_TO_26_1;
+                return RESULT_ANVIL_1_18_TO_26_2;
             }
         } else {
             return null;
@@ -53,9 +55,10 @@ public final class PlatformUtils {
     private static final Set<Platform> RESULT_ANVIL                 = singleton(JAVA_ANVIL);
     private static final Set<Platform> RESULT_ANVIL_1_17            = singleton(JAVA_ANVIL_1_17);
     private static final Set<Platform> RESULT_ANVIL_1_15_AND_1_17   = ImmutableSet.of(JAVA_ANVIL_1_15, JAVA_ANVIL_1_17);
-    private static final Set<Platform> RESULT_ANVIL_1_18_TO_26_1    = ImmutableSet.of(JAVA_ANVIL_1_18, JAVA_ANVIL_1_19, JAVA_ANVIL_1_20_5, JAVA_ANVIL_1_21_11, JAVA_ANVIL_26_1);
-    private static final Set<Platform> RESULT_ANVIL_1_19_TO_26_1    = ImmutableSet.of(JAVA_ANVIL_1_19, JAVA_ANVIL_1_20_5, JAVA_ANVIL_1_21_11, JAVA_ANVIL_26_1);
-    private static final Set<Platform> RESULT_ANVIL_1_20_5_TO_26_1  = ImmutableSet.of(JAVA_ANVIL_1_20_5, JAVA_ANVIL_1_21_11, JAVA_ANVIL_26_1);
-    private static final Set<Platform> RESULT_ANVIL_26_1            = singleton(JAVA_ANVIL_26_1);
-    private static final Set<Platform> RESULT_ANVIL_1_21_11_TO_26_1 = ImmutableSet.of(JAVA_ANVIL_1_21_11, JAVA_ANVIL_26_1);
+    private static final Set<Platform> RESULT_ANVIL_1_18_TO_26_2    = ImmutableSet.of(JAVA_ANVIL_1_18, JAVA_ANVIL_1_19, JAVA_ANVIL_1_20_5, JAVA_ANVIL_1_21_11, JAVA_ANVIL_26_1, JAVA_ANVIL_26_2);
+    private static final Set<Platform> RESULT_ANVIL_1_19_TO_26_2    = ImmutableSet.of(JAVA_ANVIL_1_19, JAVA_ANVIL_1_20_5, JAVA_ANVIL_1_21_11, JAVA_ANVIL_26_1, JAVA_ANVIL_26_2);
+    private static final Set<Platform> RESULT_ANVIL_1_20_5_TO_26_2  = ImmutableSet.of(JAVA_ANVIL_1_20_5, JAVA_ANVIL_1_21_11, JAVA_ANVIL_26_1, JAVA_ANVIL_26_2);
+    private static final Set<Platform> RESULT_ANVIL_26_2            = singleton(JAVA_ANVIL_26_2);
+    private static final Set<Platform> RESULT_ANVIL_26_1_TO_26_2    = ImmutableSet.of(JAVA_ANVIL_26_1, JAVA_ANVIL_26_2);
+    private static final Set<Platform> RESULT_ANVIL_1_21_11_TO_26_2 = ImmutableSet.of(JAVA_ANVIL_1_21_11, JAVA_ANVIL_26_1, JAVA_ANVIL_26_2);
 }

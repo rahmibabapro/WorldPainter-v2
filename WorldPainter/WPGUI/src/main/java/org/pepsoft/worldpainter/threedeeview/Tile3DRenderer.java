@@ -35,10 +35,15 @@ import static org.pepsoft.worldpainter.threedeeview.ThreeDeeView.TILE_NOT_RENDER
 // TODO: adapt for new dynamic maximum level height
 public class Tile3DRenderer {
     public Tile3DRenderer(Dimension dimension, ColourScheme colourScheme, CustomBiomeManager customBiomeManager, int rotation, LayerVisibilityMode layerVisibility, Set<Layer> hiddenLayers) {
+        this(dimension, colourScheme, customBiomeManager, rotation, layerVisibility, hiddenLayers, Tile3DRendererOptions.preview());
+    }
+
+    public Tile3DRenderer(Dimension dimension, ColourScheme colourScheme, CustomBiomeManager customBiomeManager, int rotation, LayerVisibilityMode layerVisibility, Set<Layer> hiddenLayers, Tile3DRendererOptions options) {
         this.dimension = dimension;
         minHeight = dimension.getMinHeight();
         this.colourScheme = colourScheme;
         this.rotation = rotation;
+        this.options = options;
         tileRenderer = new TileRenderer(dimension, colourScheme, customBiomeManager, 0, true, null);
         switch (layerVisibility) {
             case NONE:
@@ -268,6 +273,7 @@ public class Tile3DRenderer {
     private final int minHeight, rotation, stoneColour, waterColour, lavaColour, iceColour;
     private final Platform platform;
     private final boolean hideFrost, hideFluids;
+    private final Tile3DRendererOptions options;
 
     private final BufferedImage tileImgBuffer = new BufferedImage(TILE_SIZE, TILE_SIZE, BufferedImage.TYPE_INT_RGB);
 

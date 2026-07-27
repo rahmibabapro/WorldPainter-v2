@@ -141,17 +141,45 @@ public class PackedArrayCube<T> {
      */
     @SuppressWarnings("unchecked") // Guaranteed by Java library
     public PackedData pack(T nullSubstitute) {
-        // Create the palette. We have to do this first, because otherwise we don't know how many bits the indices will
-        // be and therefore how big to make the data array
-        final Map<T, Integer> reversePalette = new HashMap<>();
-        final List<T> palette = new LinkedList<>();
-        for (T value: values) {
-            if (value == null) {
-                value = nullSubstitute;
+        // Create the palette. For typical terrain sections the palette is small; use a direct array lookup first.
+        final T[] smallPalette = (T[]) Array.newInstance(type, 16);
+        int paletteSize = 0;
+        final int[] valueIndices = new int[arraySize];
+        boolean paletteOverflow = false;
+        for (int i = 0; i < arraySize; i++) {
+            T value = substituteNull(values[i], nullSubstitute);
+            int index = indexOfPaletteEntry(smallPalette, paletteSize, value);
+            if (index < 0) {
+                if (paletteSize >= smallPalette.length) {
+                    paletteOverflow = true;
+                    break;
+                }
+                index = paletteSize;
+                smallPalette[paletteSize++] = value;
             }
-            if (! reversePalette.containsKey(value)) {
-                reversePalette.put(value, palette.size());
-                palette.add(value);
+            valueIndices[i] = index;
+        }
+
+        final Map<T, Integer> reversePalette;
+        final List<T> palette;
+        if (! paletteOverflow) {
+            reversePalette = new HashMap<>(paletteSize * 2);
+            palette = new ArrayList<>(paletteSize);
+            for (int i = 0; i < paletteSize; i++) {
+                reversePalette.put(smallPalette[i], i);
+                palette.add(smallPalette[i]);
+            }
+        } else {
+            reversePalette = new HashMap<>();
+            palette = new LinkedList<>();
+            for (T value: values) {
+                if (value == null) {
+                    value = nullSubstitute;
+                }
+                if (! reversePalette.containsKey(value)) {
+                    reversePalette.put(value, palette.size());
+                    palette.add(value);
+                }
             }
         }
 
@@ -161,31 +189,55 @@ public class PackedArrayCube<T> {
         if ((paletteIndexSize == 4) && ((values.length % 16) == 0)) {
             // Optimised special case
             data = new long[values.length >> 4];
-            for (int i = 0; i < values.length; i += 16) {
-                data[i >> 4] =
-                               reversePalette.get(substituteNull(values[i],      nullSubstitute))
-                    |         (reversePalette.get(substituteNull(values[i +  1], nullSubstitute))  <<  4)
-                    |         (reversePalette.get(substituteNull(values[i +  2], nullSubstitute))  <<  8)
-                    |         (reversePalette.get(substituteNull(values[i +  3], nullSubstitute))  << 12)
-                    |         (reversePalette.get(substituteNull(values[i +  4], nullSubstitute))  << 16)
-                    |         (reversePalette.get(substituteNull(values[i +  5], nullSubstitute))  << 20)
-                    |         (reversePalette.get(substituteNull(values[i +  6], nullSubstitute))  << 24)
-                    | ((long) (reversePalette.get(substituteNull(values[i +  7], nullSubstitute))) << 28)
-                    | ((long) (reversePalette.get(substituteNull(values[i +  8], nullSubstitute))) << 32)
-                    | ((long) (reversePalette.get(substituteNull(values[i +  9], nullSubstitute))) << 36)
-                    | ((long) (reversePalette.get(substituteNull(values[i + 10], nullSubstitute))) << 40)
-                    | ((long) (reversePalette.get(substituteNull(values[i + 11], nullSubstitute))) << 44)
-                    | ((long) (reversePalette.get(substituteNull(values[i + 12], nullSubstitute))) << 48)
-                    | ((long) (reversePalette.get(substituteNull(values[i + 13], nullSubstitute))) << 52)
-                    | ((long) (reversePalette.get(substituteNull(values[i + 14], nullSubstitute))) << 56)
-                    | ((long) (reversePalette.get(substituteNull(values[i + 15], nullSubstitute))) << 60);
+            if (! paletteOverflow) {
+                for (int i = 0; i < values.length; i += 16) {
+                    data[i >> 4] =
+                                   valueIndices[i]
+                        |         (valueIndices[i +  1] <<  4)
+                        |         (valueIndices[i +  2] <<  8)
+                        |         (valueIndices[i +  3] << 12)
+                        |         (valueIndices[i +  4] << 16)
+                        |         (valueIndices[i +  5] << 20)
+                        |         (valueIndices[i +  6] << 24)
+                        | ((long) (valueIndices[i +  7]) << 28)
+                        | ((long) (valueIndices[i +  8]) << 32)
+                        | ((long) (valueIndices[i +  9]) << 36)
+                        | ((long) (valueIndices[i + 10]) << 40)
+                        | ((long) (valueIndices[i + 11]) << 44)
+                        | ((long) (valueIndices[i + 12]) << 48)
+                        | ((long) (valueIndices[i + 13]) << 52)
+                        | ((long) (valueIndices[i + 14]) << 56)
+                        | ((long) (valueIndices[i + 15]) << 60);
+                }
+            } else {
+                for (int i = 0; i < values.length; i += 16) {
+                    data[i >> 4] =
+                                   reversePalette.get(substituteNull(values[i],      nullSubstitute))
+                        |         (reversePalette.get(substituteNull(values[i +  1], nullSubstitute))  <<  4)
+                        |         (reversePalette.get(substituteNull(values[i +  2], nullSubstitute))  <<  8)
+                        |         (reversePalette.get(substituteNull(values[i +  3], nullSubstitute))  << 12)
+                        |         (reversePalette.get(substituteNull(values[i +  4], nullSubstitute))  << 16)
+                        |         (reversePalette.get(substituteNull(values[i +  5], nullSubstitute))  << 20)
+                        |         (reversePalette.get(substituteNull(values[i +  6], nullSubstitute))  << 24)
+                        | ((long) (reversePalette.get(substituteNull(values[i +  7], nullSubstitute))) << 28)
+                        | ((long) (reversePalette.get(substituteNull(values[i +  8], nullSubstitute))) << 32)
+                        | ((long) (reversePalette.get(substituteNull(values[i +  9], nullSubstitute))) << 36)
+                        | ((long) (reversePalette.get(substituteNull(values[i + 10], nullSubstitute))) << 40)
+                        | ((long) (reversePalette.get(substituteNull(values[i + 11], nullSubstitute))) << 44)
+                        | ((long) (reversePalette.get(substituteNull(values[i + 12], nullSubstitute))) << 48)
+                        | ((long) (reversePalette.get(substituteNull(values[i + 13], nullSubstitute))) << 52)
+                        | ((long) (reversePalette.get(substituteNull(values[i + 14], nullSubstitute))) << 56)
+                        | ((long) (reversePalette.get(substituteNull(values[i + 15], nullSubstitute))) << 60);
+                }
             }
         } else {
             if (straddleLongs) {
                 final BitSet dataBits = new BitSet(arraySize * paletteIndexSize);
                 for (int i = 0; i < arraySize; i++) {
                     final int offset = i * paletteIndexSize;
-                    final int index = reversePalette.get(substituteNull(values[i], nullSubstitute));
+                    final int index = paletteOverflow
+                            ? reversePalette.get(substituteNull(values[i], nullSubstitute))
+                            : valueIndices[i];
                     for (int j = 0; j < paletteIndexSize; j++) {
                         if ((index & (1 << j)) != 0) {
                             dataBits.set(offset + j);
@@ -208,7 +260,9 @@ public class PackedArrayCube<T> {
                 final BitSet dataBits = new BitSet(dataSize * 64);
                 for (int i = 0; i < arraySize; i++) {
                     final int offset = (i / wordsPerLong) * 64 + (i % wordsPerLong) * paletteIndexSize;
-                    final int index = reversePalette.get(substituteNull(values[i], nullSubstitute));
+                    final int index = paletteOverflow
+                            ? reversePalette.get(substituteNull(values[i], nullSubstitute))
+                            : valueIndices[i];
                     for (int j = 0; j < paletteIndexSize; j++) {
                         if ((index & (1 << j)) != 0) {
                             dataBits.set(offset + j);
@@ -234,6 +288,15 @@ public class PackedArrayCube<T> {
 
     private T substituteNull(T value, T nullSubstitute) {
         return (value == null) ? nullSubstitute : value;
+    }
+
+    private static <T> int indexOfPaletteEntry(T[] palette, int size, T value) {
+        for (int i = 0; i < size; i++) {
+            if (Objects.equals(palette[i], value)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private final Class<T> type;

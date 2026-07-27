@@ -29,6 +29,9 @@ import org.pepsoft.worldpainter.vo.EventVO;
 
 import java.awt.*;
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.List;
 import java.util.function.Consumer;
@@ -57,6 +60,18 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
     public Configuration() {
         if (logger.isDebugEnabled()) {
             logger.debug("Creating new configuration");
+        }
+        applyOptimizedDefaults();
+    }
+
+    private void applyOptimizedDefaults() {
+        defaultTerrainAndLayerSettings.setBorder(Dimension.Border.ENDLESS_VOID);
+        defaultTerrainAndLayerSettings.setBorderSize(0);
+        if (defaultExportSettings == null) {
+            defaultExportSettings = org.pepsoft.worldpainter.platforms.JavaExportSettings.optimizedExportPreset();
+        }
+        if (Branding.isV2()) {
+            defaultTurboExport = true;
         }
     }
 
@@ -134,6 +149,14 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
 
     public synchronized void setSavesDirectory(File savesDirectory) {
         this.savesDirectory = savesDirectory;
+    }
+
+    public synchronized boolean isDefaultTurboExport() {
+        return defaultTurboExport;
+    }
+
+    public synchronized void setDefaultTurboExport(boolean defaultTurboExport) {
+        this.defaultTurboExport = defaultTurboExport;
     }
 
     public synchronized File getWorldDirectory() {
@@ -679,6 +702,14 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
         this.autosaveInterval = autosaveInterval;
     }
 
+    public synchronized boolean isCompartmentalisedWorldFormat() {
+        return compartmentalisedWorldFormat;
+    }
+
+    public synchronized void setCompartmentalisedWorldFormat(boolean compartmentalisedWorldFormat) {
+        this.compartmentalisedWorldFormat = compartmentalisedWorldFormat;
+    }
+
     public synchronized int getMinimumFreeSpaceForMaps() {
         return minimumFreeSpaceForMaps;
     }
@@ -860,8 +891,27 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
     }
     
     public synchronized void save(File configFile) throws IOException {
-        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(configFile))) {
-            out.writeObject(this);
+        File configDir = configFile.getParentFile();
+        if ((configDir != null) && (! configDir.isDirectory())) {
+            configDir.mkdirs();
+        }
+        Path target = configFile.toPath();
+        Path temp = target.resolveSibling(configFile.getName() + ".tmp");
+        try {
+            try (ObjectOutputStream out = new ObjectOutputStream(Files.newOutputStream(temp))) {
+                out.writeObject(this);
+                out.flush();
+            }
+            if (Files.exists(target)) {
+                Files.copy(target, target.resolveSibling(configFile.getName() + ".old"), StandardCopyOption.REPLACE_EXISTING);
+            }
+            try {
+                Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException atomicMoveFailed) {
+                Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temp);
         }
     }
     
@@ -891,11 +941,11 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
             checkForUpdates = true;
             undoEnabled = true;
             defaultContoursEnabled = true;
-            undoLevels = 100;
+            undoLevels = Branding.defaultUndoLevels();
             defaultGridSize = 128;
             defaultContourSeparation = 10;
-            defaultWidth = 5;
-            defaultHeight = 5;
+            defaultWidth = Branding.defaultNewWorldWidthTiles();
+            defaultHeight = Branding.defaultNewWorldHeightTiles();
             defaultMaxHeight = DEFAULT_MAX_HEIGHT_ANVIL;
         }
         if (defaultTerrainAndLayerSettings == null) {
@@ -1119,6 +1169,26 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
         }
         if (version < CURRENT_VERSION) {
             upgradeDefaultPlatform();
+            if (version < 27) {
+                defaultTerrainAndLayerSettings.setBorder(Dimension.Border.ENDLESS_VOID);
+                defaultTerrainAndLayerSettings.setBorderSize(0);
+                defaultExportSettings = org.pepsoft.worldpainter.platforms.JavaExportSettings.optimizedExportPreset();
+            }
+            if (version < 28 && Branding.isV2() && defaultWidth == 5 && defaultHeight == 5) {
+                defaultWidth = Branding.defaultNewWorldWidthTiles();
+                defaultHeight = Branding.defaultNewWorldHeightTiles();
+            }
+            if (version < 29 && Branding.isV2() && defaultWidth == 4 && defaultHeight == 4) {
+                defaultWidth = Branding.defaultNewWorldWidthTiles();
+                defaultHeight = Branding.defaultNewWorldHeightTiles();
+            }
+            if (version < 30 && Branding.isV2() && defaultWidth == 5 && defaultHeight == 5) {
+                defaultWidth = Branding.defaultNewWorldWidthTiles();
+                defaultHeight = Branding.defaultNewWorldHeightTiles();
+            }
+            if (version < 32 && Branding.isV2()) {
+                defaultTurboExport = true;
+            }
         }
         version = CURRENT_VERSION;
 
@@ -1139,8 +1209,7 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
     }
 
     private void upgradeDefaultPlatform() {
-        final Platform previousLatestPlatform = DEFAULT_JAVA_PLATFORMS.get(DEFAULT_JAVA_PLATFORMS.size() - 2);
-        if (defaultPlatformId.equals(previousLatestPlatform.id)) {
+        if (! DEFAULT_PLATFORM.id.equals(defaultPlatformId)) {
             defaultPlatformId = DEFAULT_PLATFORM.id;
             StartupMessages.addMessage(
                     "The default map format was changed to " + DEFAULT_PLATFORM.displayName + "; if\n" +
@@ -1181,9 +1250,46 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
         }
         if (configFile.isFile()) {
             logger.info("Loading configuration from " + configFile.getAbsolutePath());
-            return load(configFile);
+            try {
+                return load(configFile);
+            } catch (IOException | ClassNotFoundException primaryFailure) {
+                File backupFile = getConfigBackupFile();
+                if (backupFile.isFile()) {
+                    logger.warn("Primary configuration unreadable; trying backup at " + backupFile.getAbsolutePath(), primaryFailure);
+                    try {
+                        Configuration backup = load(backupFile);
+                        logger.info("Loaded configuration from backup file");
+                        return backup;
+                    } catch (IOException | ClassNotFoundException backupFailure) {
+                        primaryFailure.addSuppressed(backupFailure);
+                    }
+                }
+                quarantineCorruptConfig(configFile);
+                throw primaryFailure;
+            }
         } else {
             return null;
+        }
+    }
+
+    public static File getConfigBackupFile() {
+        return new File(getConfigDir(), "config.old");
+    }
+
+    /**
+     * Move an unreadable config aside so the next startup does not retry it forever.
+     */
+    public static void quarantineCorruptConfig(File configFile) {
+        if ((configFile == null) || (! configFile.isFile())) {
+            return;
+        }
+        File quarantine = new File(configFile.getParentFile(), configFile.getName() + ".corrupt." + System.currentTimeMillis());
+        if (! configFile.renameTo(quarantine)) {
+            if (! configFile.delete()) {
+                logger.warn("Could not quarantine corrupt configuration file: {}", configFile.getAbsolutePath());
+            }
+        } else {
+            logger.warn("Quarantined corrupt configuration file to {}", quarantine.getAbsolutePath());
         }
     }
 
@@ -1255,7 +1361,7 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
     }
 
     private Rectangle windowBounds;
-    private boolean maximised, hilly = true, lava, goodies = true, populate, beaches = true;
+    private boolean maximised, hilly = true, lava, goodies = ! Branding.isV2(), populate, beaches = true;
     @Deprecated
     private boolean mergeWarningDisplayed, importWarningDisplayed;
     private int level = 58, waterLevel = DEFAULT_WATER_LEVEL, borderLevel = DEFAULT_WATER_LEVEL;
@@ -1278,7 +1384,7 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
     private UUID uuid = UUID.randomUUID();
     // Default view and world settings
     private boolean checkForUpdates = true, undoEnabled = true, defaultGridEnabled, defaultContoursEnabled = true, defaultViewDistanceEnabled, defaultWalkingDistanceEnabled;
-    private int undoLevels = 100, defaultGridSize = 128, defaultContourSeparation = 10, defaultWidth = 5, defaultHeight = 5, defaultMaxHeight = DEFAULT_PLATFORM.standardMaxHeight;
+    private int undoLevels = Branding.defaultUndoLevels(), defaultGridSize = 128, defaultContourSeparation = 10, defaultWidth = 5, defaultHeight = 5, defaultMaxHeight = DEFAULT_PLATFORM.standardMaxHeight;
     private Dimension defaultTerrainAndLayerSettings = new World2(DEFAULT_PLATFORM, World2.DEFAULT_OCEAN_SEED, TileFactoryFactory.createNoiseTileFactory(new Random().nextLong(), surface, DEFAULT_PLATFORM.minZ, defaultMaxHeight, level, waterLevel, lava, beaches, 20, 1.0)).getDimension(NORMAL_DETAIL);
     private boolean toolbarsLocked;
     private int version = CURRENT_VERSION, worldFileBackups = 3;
@@ -1316,6 +1422,7 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
     @Deprecated
     private Map<Platform, File> exportDirectories;
     private boolean autosaveEnabled = true;
+    private boolean compartmentalisedWorldFormat = true;
     private int autosaveDelay = 60000, autosaveInterval = 600000; // One minute delay; ten minutes interval
     private String defaultPlatformId = DEFAULT_PLATFORM.id;
     private Map<String, File> exportDirectoriesById = new HashMap<>();
@@ -1331,6 +1438,7 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
     private File overlaysDirectory;
     private Integer maxThreadCount;
     private int viewDistance = 192; // 12 chunks (default of Minecraft 1.18.2)
+    private boolean defaultTurboExport;
 
     /**
      * The acceleration type is only stored here at runtime. It is saved to disk
@@ -1347,14 +1455,14 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Configuration.class);
     private static final long serialVersionUID = 2011041801L;
     private static final int CIRCULAR_WORLD = -1;
-    private static final int CURRENT_VERSION = 27;
+    private static final int CURRENT_VERSION = 33;
 
     public static final String ADVANCED_SETTING_PREFIX = "org.pepsoft.worldpainter";
-    public static final Platform DEFAULT_PLATFORM = JAVA_ANVIL_26_1;
+    public static final Platform DEFAULT_PLATFORM = JAVA_ANVIL_26_2;
 
     public enum DonationStatus {DONATED, NO_THANK_YOU}
     
-    public enum LookAndFeel {SYSTEM, METAL, NIMBUS, DARK_METAL, DARK_NIMBUS}
+    public enum LookAndFeel {SYSTEM, METAL, NIMBUS, DARK_METAL, DARK_NIMBUS, FLAT_DARK}
 
     public enum OverlayType {SCALE_ON_LOAD, OPTIMISE_ON_LOAD, SCALE_ON_PAINT}
 

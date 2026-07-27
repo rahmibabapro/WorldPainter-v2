@@ -71,6 +71,8 @@ public interface ChunkFactory {
          */
         TERRAIN_GENERATION("Terrain", "Generating terrain, water and lava"),
 
+        HOLLOW_INTERIOR("Hollow interior", "Hollowing enclosed terrain blocks"),
+
         /**
          * Post-processing the generated chunks (including border and wall chunks).
          */

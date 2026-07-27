@@ -120,6 +120,10 @@ public final class JavaPlatformProvider extends AbstractPlatformProvider impleme
                 packMetaBuilder.minFormat(101.1f);
                 packMetaBuilder.maxFormat(101.1f);
             }
+            case "org.pepsoft.anvil.26.2" -> {
+                packMetaBuilder.minFormat(107.1f);
+                packMetaBuilder.maxFormat(107.1f);
+            }
             default -> packMetaBuilder.packFormat(9);
         };
         datapack.addDescriptor("pack.mcmeta", Meta.builder().pack(packMetaBuilder.build()).build());
@@ -181,6 +185,13 @@ public final class JavaPlatformProvider extends AbstractPlatformProvider impleme
 
     @Override
     public File getDefaultExportDir(Platform platform) {
+        if (Branding.isV2()) {
+            final File astralSaves = new File(System.getenv("APPDATA"),
+                    "AstralRinthApp\\profiles\\Fabulously Optimized (4)\\saves");
+            if (astralSaves.isDirectory()) {
+                return astralSaves;
+            }
+        }
         File minecraftDir = MinecraftUtil.findMinecraftDir();
         return (minecraftDir != null) ? new File(minecraftDir, "saves") : null;
     }
@@ -232,7 +243,7 @@ public final class JavaPlatformProvider extends AbstractPlatformProvider impleme
 
     @Override
     public ExportSettings getDefaultExportSettings(Platform platform) {
-        return new JavaExportSettings();
+        return JavaExportSettings.optimizedExportPreset();
     }
 
     @Override
@@ -264,17 +275,18 @@ public final class JavaPlatformProvider extends AbstractPlatformProvider impleme
         return dir.isDirectory() && (dir.listFiles().length > 0);
     }
 
-    private final Map<Platform, AbstractJavaPlatformProviderImpl> implementations = ImmutableMap.of(
-            JAVA_MCREGION, new MCRegionPlatformProvider(),
-            JAVA_ANVIL, new Anvil1_2PlatformProvider(),
-            JAVA_ANVIL_1_15, new Anvil1_15PlatformProvider(),
-            JAVA_ANVIL_1_17, new Anvil1_17PlatformProvider(),
-            JAVA_ANVIL_1_18, new Anvil1_18PlatformProvider(),
-            JAVA_ANVIL_1_19, new Anvil1_18PlatformProvider(),
-            JAVA_ANVIL_1_20_5, new Anvil1_18PlatformProvider(),
-            JAVA_ANVIL_1_21_11, new Anvil1_18PlatformProvider(),
-            JAVA_ANVIL_26_1, new Anvil1_18PlatformProvider()
-    );
+    private final Map<Platform, AbstractJavaPlatformProviderImpl> implementations = ImmutableMap.<Platform, AbstractJavaPlatformProviderImpl>builder()
+            .put(JAVA_MCREGION, new MCRegionPlatformProvider())
+            .put(JAVA_ANVIL, new Anvil1_2PlatformProvider())
+            .put(JAVA_ANVIL_1_15, new Anvil1_15PlatformProvider())
+            .put(JAVA_ANVIL_1_17, new Anvil1_17PlatformProvider())
+            .put(JAVA_ANVIL_1_18, new Anvil1_18PlatformProvider())
+            .put(JAVA_ANVIL_1_19, new Anvil1_18PlatformProvider())
+            .put(JAVA_ANVIL_1_20_5, new Anvil1_18PlatformProvider())
+            .put(JAVA_ANVIL_1_21_11, new Anvil1_18PlatformProvider())
+            .put(JAVA_ANVIL_26_1, new Anvil1_18PlatformProvider())
+            .put(JAVA_ANVIL_26_2, new Anvil1_18PlatformProvider())
+            .build();
 
     public static final Icon ICON = new ImageIcon(scaleIcon(loadUnscaledImage("org/pepsoft/worldpainter/mapexplorer/maproot.png"), 16));
 

@@ -22,10 +22,15 @@ import java.util.Set;
 public class Background3DTileRenderer extends Thread {
     public Background3DTileRenderer(Dimension dimension, ColourScheme colourScheme, CustomBiomeManager customBiomeManager, int rotation, UniqueJobQueue<Tile3DRenderJob> jobQueue, ThreeDeeRenderManager threeDeeRenderManager,
                                     LayerVisibilityMode layerVisibility, Set<Layer> hiddenLayers) {
+        this(dimension, colourScheme, customBiomeManager, rotation, jobQueue, threeDeeRenderManager, layerVisibility, hiddenLayers, Tile3DRendererOptions.preview());
+    }
+
+    public Background3DTileRenderer(Dimension dimension, ColourScheme colourScheme, CustomBiomeManager customBiomeManager, int rotation, UniqueJobQueue<Tile3DRenderJob> jobQueue, ThreeDeeRenderManager threeDeeRenderManager,
+                                    LayerVisibilityMode layerVisibility, Set<Layer> hiddenLayers, Tile3DRendererOptions options) {
         super("Background 3D renderer");
         this.jobQueue = jobQueue;
         this.threeDeeRenderManager = threeDeeRenderManager;
-        renderer = new Tile3DRenderer(dimension, colourScheme, customBiomeManager, rotation, layerVisibility, hiddenLayers);
+        renderer = new Tile3DRenderer(dimension, colourScheme, customBiomeManager, rotation, layerVisibility, hiddenLayers, options);
         setDaemon(true);
     }
 
@@ -68,7 +73,23 @@ public class Background3DTileRenderer extends Thread {
         if (logger.isTraceEnabled()) {
             logger.trace("Rendering 3D view of tile " + tile);
         }
+        Tile3DRenderCache renderCache = threeDeeRenderManager.getRenderCache();
+        Tile3DRenderCache.CacheKey key = null;
+        if (renderCache != null) {
+            key = Tile3DRenderCache.CacheKey.of(tile, threeDeeRenderManager.getRotation(), threeDeeRenderManager.getLayerVisibility(),
+                    threeDeeRenderManager.getHiddenLayers(), threeDeeRenderManager.getOptions());
+            BufferedImage cached = renderCache.get(key);
+            if (cached != null) {
+                if (running) {
+                    threeDeeRenderManager.tileFinished(new RenderResult(tile, cached));
+                }
+                return;
+            }
+        }
         BufferedImage image = renderer.render(tile);
+        if (renderCache != null && key != null && image != null) {
+            renderCache.put(key, image);
+        }
         if (running) {
             threeDeeRenderManager.tileFinished(new RenderResult(tile, image));
         }
@@ -77,7 +98,7 @@ public class Background3DTileRenderer extends Thread {
     private final UniqueJobQueue<Tile3DRenderJob> jobQueue;
     private final ThreeDeeRenderManager threeDeeRenderManager;
     private final Tile3DRenderer renderer;
-    private volatile boolean running = true, rendering;
+    private volatile boolean running = true;
     
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Background3DTileRenderer.class);
 }

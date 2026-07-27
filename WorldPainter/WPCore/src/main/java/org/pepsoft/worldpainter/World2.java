@@ -9,7 +9,9 @@ import org.jnbt.CompoundTag;
 import org.jnbt.XMLTransformer;
 import org.pepsoft.minecraft.*;
 import org.pepsoft.util.*;
+import org.pepsoft.util.plugins.PluginManager;
 import org.pepsoft.util.undo.UndoManager;
+import org.pepsoft.worldpainter.objects.AbstractObject;
 import org.pepsoft.worldpainter.Dimension.Anchor;
 import org.pepsoft.worldpainter.exporting.WorldExportSettings;
 import org.pepsoft.worldpainter.history.HistoryEntry;
@@ -589,6 +591,10 @@ public class World2 extends InstanceKeeper implements Serializable, Cloneable {
     }
 
     public synchronized void save(ZipOutputStream out) throws IOException {
+        save(out, Collections.emptySet());
+    }
+
+    public synchronized void save(ZipOutputStream out, Set<String> skipRegionEntries) throws IOException {
         // First serialise everything but the dimensions to a separate file
         out.putNextEntry(new ZipEntry("world-data.bin"));
         try {
@@ -607,8 +613,45 @@ public class World2 extends InstanceKeeper implements Serializable, Cloneable {
 
         // Then serialise the dimensions individually
         for (Dimension dimension: dimensionsByAnchor.values()) {
-            dimension.save(out);
+            dimension.save(out, skipRegionEntries);
         }
+    }
+
+    public synchronized Set<String> getDirtyRegionEntryNames() {
+        final Set<String> entryNames = new HashSet<>();
+        for (Dimension dimension: dimensionsByAnchor.values()) {
+            entryNames.addAll(dimension.getDirtyRegionEntryNames());
+        }
+        return entryNames;
+    }
+
+    public synchronized void saveDirtyRegions(ZipOutputStream out, Set<String> dirtyRegionEntries) throws IOException {
+        for (Dimension dimension: dimensionsByAnchor.values()) {
+            dimension.saveDirtyRegions(out, dirtyRegionEntries);
+        }
+    }
+
+    public synchronized void clearDirtyRegionsAfterSave() {
+        for (Dimension dimension: dimensionsByAnchor.values()) {
+            dimension.clearDirtyRegionsAfterSave();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    synchronized void loadDimensionFromCompartmentalisedData(String anchorPath, byte[] dimensionData, List<Map.Entry<String, byte[]>> regionEntries) throws UnloadableWorldException {
+        final Anchor anchor = Anchor.fromString(anchorPath);
+        Dimension dimension;
+        try (WPCustomObjectInputStream wrappedIn = new WPCustomObjectInputStream(new ByteArrayInputStream(dimensionData), PluginManager.getPluginClassLoader(), AbstractObject.class)) {
+            dimension = (Dimension) wrappedIn.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            throw new UnloadableWorldException("Could not load dimension " + anchorPath, e, null);
+        }
+        dimension.setWorld(this);
+        dimension.loadRegionData(regionEntries);
+        if (dimensionsByAnchor == null) {
+            dimensionsByAnchor = new HashMap<>();
+        }
+        addDimension(dimension);
     }
 
     /**
@@ -909,7 +952,7 @@ public class World2 extends InstanceKeeper implements Serializable, Cloneable {
     }
 
     private String name = "Generated World";
-    private boolean createGoodiesChest = true;
+    private boolean createGoodiesChest = ! Branding.isV2();
     private Point spawnPoint = new Point(0, 0);
     private File importedFrom;
     @Deprecated

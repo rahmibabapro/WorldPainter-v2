@@ -55,10 +55,19 @@ import org.pepsoft.worldpainter.ramps.ColourGradient;
 import org.pepsoft.worldpainter.ramps.DefaultColourRamp;
 import org.pepsoft.worldpainter.selection.*;
 import org.pepsoft.worldpainter.threedeeview.ThreeDeeFrame;
+import org.pepsoft.worldpainter.ui.IdleMemoryGuard;
 import org.pepsoft.worldpainter.tools.BiomesViewerFrame;
 import org.pepsoft.worldpainter.tools.Eyedropper.PaintType;
 import org.pepsoft.worldpainter.tools.Eyedropper.SelectionListener;
+import org.pepsoft.worldpainter.tools.MapQuickPresetDialog;
 import org.pepsoft.worldpainter.tools.RespawnPlayerDialog;
+import org.pepsoft.worldpainter.tools.RiverTerrainSupport;
+import org.pepsoft.worldpainter.tools.RiverToolsDialog;
+import org.pepsoft.worldpainter.tools.RoadToolsDialog;
+import org.pepsoft.worldpainter.tools.ScriptLibraryActions;
+import org.pepsoft.worldpainter.tools.SnowToolsDialog;
+import org.pepsoft.worldpainter.tools.scripts.BundledScriptCatalog;
+import org.pepsoft.worldpainter.tools.scripts.BundledScriptCatalog.Category;
 import org.pepsoft.worldpainter.tools.scripts.ScriptRunner;
 import org.pepsoft.worldpainter.util.*;
 import org.pepsoft.worldpainter.util.BetterAction;
@@ -88,6 +97,9 @@ import java.text.MessageFormat;
 import java.text.NumberFormat;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.zip.GZIPInputStream;
 
@@ -285,10 +297,26 @@ public final class App extends JFrame implements BrushControl,
         PlantLayerEditor.loadIconsInBackground();
 
         setTransferHandler(new WPTransferHandler(this));
+
+        idleMemoryGuard = new IdleMemoryGuard(this);
+        idleMemoryGuard.install();
     }
 
     public World2 getWorld() {
         return world;
+    }
+
+    /** Re-enable the UI after a modal dialog (such as an error dialog) closes. */
+    public void restoreUiInteractivity() {
+        setEnabled(true);
+    }
+
+    /** Drops redo stacks and rendered 3D tile caches; safe to call while a world is open but idle. */
+    public void releaseIdleMemory() {
+        undoManagers.values().forEach(UndoManager::clearRedo);
+        if (threeDeeFrame != null) {
+            threeDeeFrame.clearRenderCache();
+        }
     }
 
     /**
@@ -1900,7 +1928,7 @@ public final class App extends JFrame implements BrushControl,
         return -1;
     }
 
-    void addButtonForNewCustomTerrain(int index, MixedMaterial customMaterial, boolean select) {
+    public void addButtonForNewCustomTerrain(int index, MixedMaterial customMaterial, boolean select) {
         Terrain.setCustomMaterial(index, customMaterial);
 
         if (customTerrainPanel == null) {
@@ -1926,6 +1954,38 @@ public final class App extends JFrame implements BrushControl,
             paintUpdater.updatePaint();
             dockingManager.activateFrame("customTerrain");
         }
+    }
+
+    public int findNextAvailableCustomTerrainIndex() {
+        return findNextCustomTerrainIndex();
+    }
+
+    public JToggleButton getCustomMaterialButton(int index) {
+        return customMaterialButtons[index];
+    }
+
+    public void activateDockPanel(String frameKey) {
+        if (dockingManager != null) {
+            dockingManager.activateFrame(frameKey);
+        }
+    }
+
+    public void setTerrainPaint(Terrain terrain) {
+        paintUpdater = () -> {
+            paint = PaintFactory.createTerrainPaint(terrain);
+            paintChanged();
+        };
+        paintUpdater.updatePaint();
+    }
+
+    public void showCustomTerrainPanel() {
+        if ((dockingManager != null) && (dockingManager.getFrame("customTerrain") != null)) {
+            dockingManager.showFrame("customTerrain");
+        }
+    }
+
+    public void selectRiverSourceTerrainForPainting() {
+        RiverTerrainSupport.selectRiverSourceTerrainForPainting(this);
     }
 
     boolean performUndo() {
@@ -2324,7 +2384,16 @@ public final class App extends JFrame implements BrushControl,
                         // Save the world to a temporary file first, to ensure that there is enough space
                         world.addHistoryEntry(HistoryEntry.WORLD_SAVED, normalisedFile);
                         final WorldIO worldIO = new WorldIO(world);
-                        worldIO.save(new FileOutputStream(tempFile));
+                        try (FileOutputStream fileOut = new FileOutputStream(tempFile)) {
+                            if (config.isCompartmentalisedWorldFormat()
+                                    && normalisedFile.isFile()
+                                    && WorldIO.isCompartmentalisedFile(normalisedFile)
+                                    && (! world.getDirtyRegionEntryNames().isEmpty())) {
+                                worldIO.saveCompartmentalisedIncremental(fileOut, normalisedFile, true);
+                            } else {
+                                worldIO.save(fileOut);
+                            }
+                        }
 
                         // If that succeeded, move the existing file out of the way by rotating (if enabled) or deleting
                         // it
@@ -2352,7 +2421,7 @@ public final class App extends JFrame implements BrushControl,
                         }
 
                         // Finally, move the temporary file to the final location
-                        if (! tempFile.renameTo(normalisedFile)) {
+                        if (! moveSaveFile(tempFile, normalisedFile)) {
                             throw new IOException("Could not move " + tempFile.getName() + " to " + normalisedFile.getName() + "; world is saved as " + tempFile.getName());
                         }
 
@@ -2413,6 +2482,25 @@ public final class App extends JFrame implements BrushControl,
         }
     }
 
+    private static boolean moveSaveFile(File source, File target) {
+        if (source.renameTo(target)) {
+            return true;
+        }
+        try {
+            java.nio.file.Files.move(source.toPath(), target.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            return true;
+        } catch (IOException ignored) {
+            try {
+                java.nio.file.Files.copy(source.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                return source.delete();
+            } catch (IOException e) {
+                return false;
+            }
+        }
+    }
+
     private void rotateAutosaveFile() {
         if (Configuration.getInstance().isAutosaveInhibited()) {
             return;
@@ -2467,13 +2555,19 @@ public final class App extends JFrame implements BrushControl,
     }
 
     private void autosave() {
+        if (autosaveInProgress) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("[AUTOSAVE] Skipping; autosave already in progress");
+            }
+            return;
+        }
         try {
             if (activeOperation != null) {
                 activeOperation.interrupt();
             }
 
             if (logger.isDebugEnabled()) {
-                logger.debug("[AUTOSAVE] Autosaving");
+                logger.debug("[AUTOSAVE] Autosaving in background");
             }
             saveCustomMaterials();
             saveCustomBiomes();
@@ -2483,31 +2577,62 @@ public final class App extends JFrame implements BrushControl,
                 this.dimension.setLastViewPosition(view.getViewCentreInWorldCoords());
             }
 
-            ProgressDialog.executeTask(this, new ProgressTask<java.lang.Void>() {
-                @Override
-                public String getName() {
-                    return "Autosaving";
-                }
+            autosaveInProgress = true;
+            autosaveCancelRequested = new AtomicBoolean(false);
+            final World2 worldToSave = world;
+            autosaveExecutor.execute(() -> {
+                try (OperationWatchdog.WatchdogHandle ignored = OperationWatchdog.start("Autosave", 60_000, () ->
+                        logger.warn("[AUTOSAVE] Autosave still running after 60 seconds"))) {
+                    synchronized (worldToSave) {
+                        if (autosaveCancelRequested.get()) {
+                            return;
+                        }
+                        final File autosaveFile = getAutosaveFile();
+                        final File tempFile = new File(autosaveFile.getParentFile(), autosaveFile.getName() + ".tmp");
+                        if (tempFile.exists() && (! tempFile.delete())) {
+                            throw new IOException("Could not remove stale autosave temp file " + tempFile);
+                        }
 
-                @Override
-                public java.lang.Void execute(ProgressReceiver progressReceiver) {
-                    try {
+                        final WorldIO worldIO = new WorldIO(worldToSave);
+                        final Configuration config = Configuration.getInstance();
+                        try (FileOutputStream out = new FileOutputStream(tempFile)) {
+                            if (config.isCompartmentalisedWorldFormat() && autosaveFile.isFile() && WorldIO.isCompartmentalisedFile(autosaveFile)) {
+                                worldIO.saveCompartmentalisedIncremental(out, autosaveFile);
+                            } else {
+                                worldIO.save(out);
+                            }
+                        }
+
+                        if (autosaveCancelRequested.get()) {
+                            if (! tempFile.delete()) {
+                                logger.warn("Could not delete cancelled autosave temp file {}", tempFile);
+                            }
+                            return;
+                        }
+
                         rotateAutosaveFile();
-                        WorldIO worldIO = new WorldIO(world);
-                        worldIO.save(new FileOutputStream(getAutosaveFile()));
-                    } catch (IOException e) {
-                        throw new RuntimeException("I/O error autosaving world (message: " + e.getMessage() + ")", e);
+                        if (! moveSaveFile(tempFile, autosaveFile)) {
+                            throw new IOException("Could not rename " + tempFile + " to " + autosaveFile);
+                        }
+
+                        lastSaveTimestamp = lastChangeTimestamp = System.currentTimeMillis();
+                        lastAutosavedState = worldToSave.getChangeNo();
+
+                        config.logEvent(new EventVO(EVENT_KEY_ACTION_AUTOSAVE_WORLD).addTimestamp().setTransient());
                     }
-                    return null;
+                } catch (RuntimeException | Error | IOException e) {
+                    logger.error("An exception occurred while trying to autosave world", e);
+                    final String detail = (e.getMessage() != null) ? e.getMessage() : e.getClass().getSimpleName();
+                    SwingUtilities.invokeLater(() -> beepAndShowWarning(App.this,
+                            "An error occurred while trying to autosave the world.\n"
+                            + detail + "\n\n"
+                            + "One possibility is that the disk is full; please make space.\n"
+                            + "It has not been autosaved. If this keeps happening,\n"
+                            + "please report it to the author.", "Autosave Failed"));
+                } finally {
+                    autosaveInProgress = false;
                 }
-            }, NOT_CANCELABLE, NO_FOCUS_STEALING); // TODO make cancelable. Close the output stream? That oughta do it. But also move the previous autosave file back...
-
-            lastSaveTimestamp = lastChangeTimestamp = System.currentTimeMillis();
-            lastAutosavedState = world.getChangeNo();
-
-            // Log an event
-            final EventVO event = new EventVO(EVENT_KEY_ACTION_AUTOSAVE_WORLD).addTimestamp().setTransient();
-            Configuration.getInstance().logEvent(event);
+            });
         } catch (RuntimeException | Error e) {
             logger.error("An exception occurred while trying to autosave world", e);
             beepAndShowWarning(this, "An error occurred while trying to autosave the world.\n" +
@@ -2868,6 +2993,7 @@ public final class App extends JFrame implements BrushControl,
             @Serial
             private static final long serialVersionUID = 2011090601L;
         });
+        actionMap.put(ACTION_NAME_UNDO, ACTION_UNDO);
         actionMap.put(ACTION_NAME_REDO, ACTION_REDO);
         actionMap.put(ACTION_NAME_ZOOM_IN, ACTION_ZOOM_IN);
         actionMap.put(ACTION_NAME_ZOOM_OUT, ACTION_ZOOM_OUT);
@@ -2901,6 +3027,7 @@ public final class App extends JFrame implements BrushControl,
         inputMap.put(getKeyStroke(VK_SUBTRACT, SHIFT_DOWN_MASK),                       ACTION_NAME_DECREASE_RADIUS_BY_ONE);
         inputMap.put(getKeyStroke(VK_MINUS,    SHIFT_DOWN_MASK),                       ACTION_NAME_DECREASE_RADIUS_BY_ONE);
         inputMap.put(getKeyStroke(VK_ADD,      SHIFT_DOWN_MASK),                       ACTION_NAME_INCREASE_RADIUS_BY_ONE);
+        inputMap.put(getKeyStroke(VK_Z,        platformCommandMask),                   ACTION_NAME_UNDO);
         inputMap.put(getKeyStroke(VK_Z,        platformCommandMask | SHIFT_DOWN_MASK), ACTION_NAME_REDO);
         inputMap.put(getKeyStroke(VK_MINUS,    platformCommandMask),                   ACTION_NAME_ZOOM_OUT);
         inputMap.put(getKeyStroke(VK_EQUALS,   platformCommandMask | SHIFT_DOWN_MASK), ACTION_NAME_ZOOM_IN);
@@ -3717,7 +3844,7 @@ public final class App extends JFrame implements BrushControl,
 
         constraints.fill = GridBagConstraints.NONE;
         constraints.insets = new Insets(3, 1, 1, 1);
-        levelLabel = new JLabel("Intensity: 50 %");
+        levelLabel = new JLabel("Intensity: 100 %");
         brushSettingsPanel.add(levelLabel, constraints);
         
         constraints.fill = HORIZONTAL;
@@ -3727,6 +3854,8 @@ public final class App extends JFrame implements BrushControl,
         preferredSize = levelSlider.getPreferredSize();
         preferredSize.width = 1;
         levelSlider.setPreferredSize(preferredSize);
+        levelSlider.setValue(100);
+        brush.setLevel(1.0f);
         brushSettingsPanel.add(levelSlider, constraints);
         
         constraints.fill = GridBagConstraints.NONE;
@@ -4375,6 +4504,13 @@ public final class App extends JFrame implements BrushControl,
         menuItem.setMnemonic('b');
         menu.add(menuItem);
 
+        menuItem = new JMenuItem("Quick Map Presets...");
+        menuItem.addActionListener(e -> showQuickMapPresets());
+        menuItem.setMnemonic('q');
+        menu.add(menuItem);
+
+        menu.add(createScriptLibraryMenu());
+
         menuItem = new JMenuItem("Run script...");
         menuItem.addActionListener(e -> {
             try {
@@ -4611,6 +4747,11 @@ public final class App extends JFrame implements BrushControl,
         toolBar.addSeparator();
         toolBar.add(ACTION_MOVE_TO_SPAWN);
         toolBar.add(ACTION_MOVE_TO_ORIGIN);
+        toolBar.addSeparator();
+        final JButton quickSettingsButton = new JButton("Hızlı Ayarlar");
+        quickSettingsButton.setToolTipText("Quick Settings — bundled scripts (rivers, roads, snow, presets)");
+        quickSettingsButton.addActionListener(e -> showQuickSettingsPopup(quickSettingsButton));
+        toolBar.add(quickSettingsButton);
         toolBar.addSeparator();
         JToggleButton button = new JToggleButton(ACTION_GRID);
         button.setHideActionText(true);
@@ -5561,6 +5702,96 @@ public final class App extends JFrame implements BrushControl,
         hidePreferences = MacUtils.installPreferencesHandler(this::openPreferences);
     }
     
+    public Collection<UndoManager> getUndoManagersForScripts() {
+        return undoManagers.values();
+    }
+
+    public void refreshCurrentDimensionView() {
+        if (view != null) {
+            view.refreshTiles();
+        }
+    }
+
+    private void showQuickMapPresets() {
+        if (dimension == null) {
+            DesktopUtils.beep();
+            return;
+        }
+        new MapQuickPresetDialog(this, dimension, this).setVisible(true);
+    }
+
+    private void showQuickSettingsPopup(Component invoker) {
+        final JPopupMenu popup = new JPopupMenu("Hızlı Ayarlar");
+        JMenuItem item = new JMenuItem("Quick Map Presets...");
+        item.addActionListener(e -> showQuickMapPresets());
+        popup.add(item);
+        popup.addSeparator();
+        popup.add(createScriptLibraryMenu());
+        popup.addSeparator();
+        item = new JMenuItem("Run script...");
+        item.addActionListener(e -> {
+            try {
+                new ScriptRunner(this, world, dimension, undoManagers.values()).setVisible(true);
+            } catch (UnsupportedClassVersionError | NoClassDefFoundError exc) {
+                beepAndShowError(App.this, "JavaScript support requires Java 11 or later.", "Newer Java Required");
+            }
+        });
+        popup.add(item);
+        popup.show(invoker, 0, invoker.getHeight());
+    }
+
+    private JMenu createScriptLibraryMenu() {
+        final JMenu libraryMenu = new JMenu("Script Library");
+
+        final JMenu riversMenu = new JMenu("Rivers");
+        JMenuItem menuItem = new JMenuItem("Generate Rivers...");
+        menuItem.addActionListener(e -> {
+            if (dimension == null) {
+                DesktopUtils.beep();
+                return;
+            }
+            new RiverToolsDialog(this, this, dimension).setVisible(true);
+        });
+        riversMenu.add(menuItem);
+        menuItem = new JMenuItem("River from Line Layer...");
+        menuItem.addActionListener(e -> ScriptLibraryActions.runBundledScript(this, world, dimension, undoManagers.values(), Category.RIVERS, "river_from_line"));
+        riversMenu.add(menuItem);
+        libraryMenu.add(riversMenu);
+
+        final JMenu roadsMenu = new JMenu("Roads");
+        menuItem = new JMenuItem("Flatten Road (from line layer)...");
+        menuItem.addActionListener(e -> {
+            if (dimension == null) {
+                DesktopUtils.beep();
+                return;
+            }
+            new RoadToolsDialog(this, this, dimension, getAllLayers()).setVisible(true);
+        });
+        roadsMenu.add(menuItem);
+        libraryMenu.add(roadsMenu);
+
+        final JMenu snowMenu = new JMenu("Snow");
+        menuItem = new JMenuItem("Snowify...");
+        menuItem.addActionListener(e -> {
+            if (dimension == null) {
+                DesktopUtils.beep();
+                return;
+            }
+            new SnowToolsDialog(this, this, dimension).setVisible(true);
+        });
+        snowMenu.add(menuItem);
+        libraryMenu.add(snowMenu);
+
+        final JMenu globalsMenu = new JMenu("Global Presets");
+        for (BundledScriptCatalog.BundledScript script: BundledScriptCatalog.getByCategory(Category.GLOBALS)) {
+            menuItem = new JMenuItem(script.displayName() + "...");
+            menuItem.addActionListener(e -> ScriptLibraryActions.runBundledScript(this, world, dimension, undoManagers.values(), Category.GLOBALS, script.id()));
+            globalsMenu.add(menuItem);
+        }
+        libraryMenu.add(globalsMenu);
+        return libraryMenu;
+    }
+
     private void showGlobalOperations() {
         if ((world == null) || (dimension == null)) {
             DesktopUtils.beep();
@@ -6736,6 +6967,14 @@ public final class App extends JFrame implements BrushControl,
     private World2 world;
     private long lastSavedState = -1, lastAutosavedState = -1, lastSaveTimestamp = -1;
     private volatile long lastChangeTimestamp = -1;
+    private volatile boolean autosaveInProgress;
+    private volatile AtomicBoolean autosaveCancelRequested;
+    private final ExecutorService autosaveExecutor = Executors.newSingleThreadExecutor(r -> {
+        final Thread thread = new Thread(r, "wp-autosave");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private IdleMemoryGuard idleMemoryGuard;
     private Dimension dimension, backgroundDimension;
     private boolean showBackgroundStatus;
     private int backgroundZoom;
@@ -6747,7 +6986,7 @@ public final class App extends JFrame implements BrushControl,
     private boolean programmaticChange;
     private UndoManager currentUndoManager;
     private JSlider levelSlider, brushRotationSlider;
-    private float level = 0.51f, toolLevel = 0.51f;
+    private float level = 1.0f, toolLevel = 1.0f;
     private int maxRadius = DEFAULT_MAX_RADIUS, brushRotation = 0, toolBrushRotation = 0, previousBrushRotation = 0;
     private JComboBox<TerrainMode> terrainModeComboBox;
     private JCheckBox terrainSoloCheckBox;
@@ -6808,6 +7047,7 @@ public final class App extends JFrame implements BrushControl,
     private static final String ACTION_NAME_INCREASE_RADIUS_BY_ONE = "increaseRadiusByOne"; // NOI18N
     private static final String ACTION_NAME_DECREASE_RADIUS        = "decreaseRadius"; // NOI18N
     private static final String ACTION_NAME_DECREASE_RADIUS_BY_ONE = "decreaseRadiusByOne"; // NOI18N
+    private static final String ACTION_NAME_UNDO                   = "undo"; // NOI18N
     private static final String ACTION_NAME_REDO                   = "redo"; // NOI18N
     private static final String ACTION_NAME_ZOOM_IN                = "zoomIn"; // NOI18N
     private static final String ACTION_NAME_ZOOM_OUT               = "zoomOut"; // NOI18N

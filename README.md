@@ -1,11 +1,29 @@
-# WorldPainter
+# WorldPainter v2
 
-WorldPainter is an interactive map generator for Minecraft. It allows you to "paint" landscapes using similar tools as a regular paint program. Sculpt and mould the terrain, paint materials, trees, snow and ice, etc. onto it, and much more.
+Clean fork of [Captain-Chaos/WorldPainter](https://github.com/Captain-Chaos/WorldPainter) based on **upstream 2.27.x**, with **performance and memory optimizations only**.
 
-## Distributing
+Feature forks (surface smoothing, FlatLaf UI, biome packs, script library, etc.) are **not** included. Full previous fork tip is kept locally as branch `worldpainter-v2-legacy`.
 
-WorldPainter is open source software, licensed under the GPL version 3. This means that if you distribute it, original or in modified form, you must also distribute it (including your changes) as open source under the GPL version 3 (or later). See the [LICENSE](LICENSE) file for details.
+## Optimizations
 
-## Building
+- Turbo / hollow export + heap-aware `ExportMemoryBudget`
+- Export height snapshots / chunk height cache / interior hollower
+- Compartmentalised / incremental `.world` save
+- Idle memory guard + 3D tile render cache
+- Optimized Minecraft game rules on export
+- Separate config: `%APPDATA%\WorldPainter [V2]`
 
-WorldPainter is a Maven project and easy to build from the command line with Maven, or using your favourite IDE. However there are some missing dependencies which are not in Maven Central which you will have to install locally first. See the [BUILDING](BUILDING.md) file for details.
+## Build & run
+
+See **[BUILDING-V2.md](BUILDING-V2.md)**.
+
+```powershell
+.\build-v2.ps1
+.\launch-WorldPainter-v2.bat
+```
+
+Desktop launcher: `WorldPainter v2.bat` → `dist\WorldPainter v2\WorldPainter v2.exe`
+
+## License
+
+GPL v3 (derived work).

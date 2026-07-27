@@ -13,15 +13,18 @@ import org.pepsoft.util.ProgressReceiver;
 import org.pepsoft.util.SubProgressReceiver;
 import org.pepsoft.worldpainter.*;
 import org.pepsoft.worldpainter.Dimension;
+import org.pepsoft.worldpainter.util.FileInUseException;
 import org.pepsoft.worldpainter.exporting.*;
 import org.pepsoft.worldpainter.history.HistoryEntry;
 import org.pepsoft.worldpainter.layers.*;
 import org.pepsoft.worldpainter.plugins.PlatformManager;
-import org.pepsoft.worldpainter.util.FileInUseException;
+import org.pepsoft.worldpainter.platforms.MapDiagnostics;
+import org.pepsoft.worldpainter.platforms.WorldStorageLayout;
 import org.pepsoft.worldpainter.vo.EventVO;
 
 import java.awt.*;
 import java.io.*;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -41,6 +44,7 @@ import static org.pepsoft.worldpainter.Dimension.Anchor.*;
 import static org.pepsoft.worldpainter.Dimension.Role.MASTER;
 import static org.pepsoft.worldpainter.Platform.Capability.*;
 import static org.pepsoft.worldpainter.platforms.PlatformUtils.determineCompatiblePlatforms;
+import org.pepsoft.worldpainter.exporting.ExportMemoryBudget;
 
 /**
  *
@@ -206,6 +210,11 @@ public class JavaWorldMerger extends JavaWorldExporter { // TODO can this be mad
 
         // Read existing level.dat file
         JavaLevel level = JavaLevel.load(new File(worldDir, "level.dat"));
+        final MapDiagnostics.Summary diagnostics = MapDiagnostics.analyse(worldDir, level, platform);
+        MapDiagnostics.log(diagnostics);
+        if (diagnostics.layoutMismatch) {
+            warnings = MapDiagnostics.userMessage(diagnostics);
+        }
 
         // Sanity checks
         int version = level.getVersion();
@@ -275,9 +284,15 @@ public class JavaWorldMerger extends JavaWorldExporter { // TODO can this be mad
             // Record start of export
             long start = System.currentTimeMillis();
 
+            // Pre-merge safety backup (in addition to the rename-based backup)
+            createPreMergeSafetyBackup(worldDir);
+
             // Backup existing level
             if (! worldDir.renameTo(backupDir)) {
                 throw new FileInUseException("Could not move " + worldDir + " to " + backupDir);
+            }
+            if (! worldDir.mkdirs()) {
+                throw new IOException("Could not create " + worldDir);
             }
 
             // Modify it if necessary and write it to the new level
@@ -299,28 +314,7 @@ public class JavaWorldMerger extends JavaWorldExporter { // TODO can this be mad
             // TODO: copy EVERYTHING and then operate solely on the copied map? No need to copy things from the backup
 
             // Copy everything that we are not going to generate
-            final Set<File> skipDirs = new HashSet<>();
-            if ((selectedDimensions == null) || selectedDimensions.contains(DIM_NORMAL)) {
-                final File backupNormalDimDir = platformProvider.getDimensionDir(platform, backupDir, DIM_NORMAL);
-                skipDirs.add(new File(backupNormalDimDir, "region"));
-                skipDirs.add(new File(backupNormalDimDir, "entities"));
-            }
-            if ((selectedDimensions == null) || selectedDimensions.contains(DIM_NETHER)) {
-                final File backupNetherDimDir = platformProvider.getDimensionDir(platform, backupDir, DIM_NETHER);
-                skipDirs.add(new File(backupNetherDimDir, "region"));
-                skipDirs.add(new File(backupNetherDimDir, "entities"));
-            }
-            if ((selectedDimensions == null) || selectedDimensions.contains(DIM_END)) {
-                final File backupEndDimDir = platformProvider.getDimensionDir(platform, backupDir, DIM_END);
-                skipDirs.add(new File(backupEndDimDir, "region"));
-                skipDirs.add(new File(backupEndDimDir, "entities"));
-            }
-            FileUtils.copyDir(backupDir, worldDir, file -> (!skipDirs.contains(file))
-                    && (! file.getName().equalsIgnoreCase("level.dat"))
-                    && (! file.getName().equalsIgnoreCase("level.dat_old"))
-                    && (! file.getName().equalsIgnoreCase("session.lock"))
-                    && (! file.getName().equalsIgnoreCase("maxheight.txt"))
-                    && (! file.getName().equalsIgnoreCase("Height.txt")));
+            copyWorldFiles(backupDir, worldDir, selectedDimensions, WorldStorageLayout.detect(backupDir));
 
             // Save the level.dat file. This will also create a session.lock file, hopefully kicking out any Minecraft
             // instances which may have the map open:
@@ -409,11 +403,21 @@ public class JavaWorldMerger extends JavaWorldExporter { // TODO can this be mad
             if (progressReceiver != null) {
                 progressReceiver.setMessage("merging " + dimension.getName() + " dimension");
             }
-            final int dim = dimension.getAnchor().dim;
-            final File dimensionDir = platformProvider.getDimensionDir(platform, worldDir, dim), backupDimensionDir = platformProvider.getDimensionDir(platform, backupWorldDir, dim);
+            final File dimensionDir, backupDimensionDir;
+            final Dimension.Anchor anchor = dimension.getAnchor();
+            final int dim = anchor.dim;
+            final WorldStorageLayout.Layout outputLayout = WorldStorageLayout.layoutForPlatform(platform);
+            final WorldStorageLayout.Layout backupLayout = WorldStorageLayout.detect(backupWorldDir);
+            dimensionDir = WorldStorageLayout.getDimensionRoot(worldDir, dim, outputLayout);
+            backupDimensionDir = WorldStorageLayout.getDimensionRoot(backupWorldDir, dim, backupLayout);
+            if (! dimensionDir.exists()) {
+                if (! dimensionDir.mkdirs()) {
+                    throw new RuntimeException("Could not create directory " + dimensionDir);
+                }
+            }
             final Set<DataType> dataTypes = platformProvider.getDataTypes(platform);
             for (DataType dataType: dataTypes) {
-                File regionDir = new File(dimensionDir, dataType.name().toLowerCase());
+                File regionDir = new File(dimensionDir, dataType.folderName());
                 if (! regionDir.exists()) {
                     if (! regionDir.mkdirs()) {
                         throw new RuntimeException("Could not create directory " + regionDir);
@@ -518,7 +522,8 @@ public class JavaWorldMerger extends JavaWorldExporter { // TODO can this be mad
                 // Merge each individual region
                 final Map<Point, List<Fixup>> fixups = new HashMap<>();
                 final Set<Point> exportedRegions = new HashSet<>();
-                final ExecutorService executor = createExecutorService("merging", allRegionCoords.size() + additionalRegions.size());
+                final int mergeThreadCount = ExportMemoryBudget.compute(dimension, allRegionCoords.size() + additionalRegions.size(), worldExportSettings).getExportThreadCount();
+                final ExecutorService executor = createExecutorService("merging", mergeThreadCount);
                 final ParallelProgressManager parallelProgressManager = (progressReceiver != null) ? new ParallelProgressManager(progressReceiver, sortedRegions.size() + additionalRegions.size()) : null;
                 final AtomicBoolean abort = new AtomicBoolean();
                 try {
@@ -641,7 +646,7 @@ public class JavaWorldMerger extends JavaWorldExporter { // TODO can this be mad
                                     final WorldRegion minecraftWorld = new WorldRegion(regionCoords.x, regionCoords.y, combined.getMinHeight(), combined.getMaxHeight(), platform);
                                     ExportResults exportResults = null;
                                     try {
-                                        exportResults = exportRegion(minecraftWorld, combined, null, regionCoords, selectedTiles != null, exporters, null, chunkFactory, null, (progressReceiver1 != null) ? new SubProgressReceiver(progressReceiver1, 0.9f, 0.1f) : null);
+                                        exportResults = exportRegion(minecraftWorld, combined, null, regionCoords, selectedTiles != null, exporters, null, chunkFactory, null, null, (progressReceiver1 != null) ? new SubProgressReceiver(progressReceiver1, 0.9f, 0.1f) : null);
                                         if (logger.isDebugEnabled()) {
                                             logger.debug("Generated region " + regionCoords.x + "," + regionCoords.y);
                                         }
@@ -820,7 +825,7 @@ public class JavaWorldMerger extends JavaWorldExporter { // TODO can this be mad
         for (Map.Entry<DataType, File> entry: regions.entrySet()) {
             DataType type = entry.getKey();
             File file = entry.getValue();
-            FileUtils.copyFileToDir(file, new File(dimensionDir, type.name().toLowerCase()), (progressReceiver != null)
+            FileUtils.copyFileToDir(file, new File(dimensionDir, type.folderName()), (progressReceiver != null)
                     ? ((fileCount == 1) ? progressReceiver : new SubProgressReceiver(progressReceiver, "Copying region " + coords.x + "," + coords.y + " of type " + type + " unchanged", (float) fileNo / fileCount, 1.0f / fileCount))
                     : null);
             fileNo++;
@@ -1050,6 +1055,82 @@ public class JavaWorldMerger extends JavaWorldExporter { // TODO can this be mad
                 "\n" +
                 "The partially processed map is now probably corrupted.\n" +
                 "You should replace it from the backup at " + backupDir + ".");
+    }
+
+    private void createPreMergeSafetyBackup(File worldDir) throws IOException {
+        final File backupsDir = new File(worldDir.getParentFile(), "backups");
+        if ((! backupsDir.exists()) && (! backupsDir.mkdirs())) {
+            logger.warn("Could not create pre-merge backups directory {}", backupsDir);
+            return;
+        }
+        final String timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date());
+        final File dest = new File(backupsDir, worldDir.getName() + "-pre-merge-" + timestamp);
+        FileUtils.copyDir(worldDir, dest);
+        logger.info("Pre-merge safety backup created at {}", dest.getAbsolutePath());
+    }
+
+    private void copyWorldFiles(File backupDir, File worldDir, Set<Integer> selectedDimensions, WorldStorageLayout.Layout backupLayout) throws IOException {
+        final File[] files = backupDir.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File file: files) {
+            final String name = file.getName();
+            if (name.equalsIgnoreCase("level.dat") || name.equalsIgnoreCase("level.dat_old") || name.equalsIgnoreCase("session.lock")) {
+                continue;
+            }
+            if (name.equalsIgnoreCase("maxheight.txt") || name.equalsIgnoreCase("Height.txt")) {
+                continue;
+            }
+            if (backupLayout == WorldStorageLayout.Layout.V26_1 && name.equalsIgnoreCase("dimensions")) {
+                copyV26DimensionsExceptMerged(file, new File(worldDir, "dimensions"), selectedDimensions);
+                continue;
+            }
+            if (shouldSkipLegacyRootEntry(name, selectedDimensions)) {
+                continue;
+            }
+            if (file.isFile()) {
+                FileUtils.copyFileToDir(file, worldDir);
+            } else if (file.isDirectory()) {
+                FileUtils.copyDir(file, new File(worldDir, name));
+            } else {
+                logger.warn("Not copying " + file + "; not a regular file or directory");
+            }
+        }
+    }
+
+    private static void copyV26DimensionsExceptMerged(File srcDimensions, File destDimensions, Set<Integer> selectedDimensions) throws IOException {
+        final File srcMinecraft = new File(srcDimensions, "minecraft");
+        if (! srcMinecraft.isDirectory()) {
+            return;
+        }
+        final File destMinecraft = new File(destDimensions, "minecraft");
+        for (File dimDir: srcMinecraft.listFiles()) {
+            if (dimDir == null) {
+                continue;
+            }
+            final int dim = WorldStorageLayout.dimensionFromPathName(dimDir.getName());
+            if ((selectedDimensions == null) || ((dim >= 0) && selectedDimensions.contains(dim))) {
+                continue;
+            }
+            FileUtils.copyDir(dimDir, new File(destMinecraft, dimDir.getName()));
+        }
+    }
+
+    private static boolean shouldSkipLegacyRootEntry(String name, Set<Integer> selectedDimensions) {
+        final boolean mergeNormal = (selectedDimensions == null) || selectedDimensions.contains(DIM_NORMAL);
+        final boolean mergeNether = (selectedDimensions == null) || selectedDimensions.contains(DIM_NETHER);
+        final boolean mergeEnd = (selectedDimensions == null) || selectedDimensions.contains(DIM_END);
+        if (mergeNormal && WorldStorageLayout.isDimensionBeingMerged(name, DIM_NORMAL)) {
+            return true;
+        }
+        if (mergeNether && name.equalsIgnoreCase("DIM-1")) {
+            return true;
+        }
+        if (mergeEnd && name.equalsIgnoreCase("DIM1")) {
+            return true;
+        }
+        return false;
     }
 
     private void processExistingChunk(final Chunk existingChunk) {

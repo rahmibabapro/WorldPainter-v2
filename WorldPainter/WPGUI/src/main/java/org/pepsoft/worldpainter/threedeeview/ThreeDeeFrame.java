@@ -47,6 +47,8 @@ public class ThreeDeeFrame extends JFrame implements WindowListener {
         this.colourScheme = colourScheme;
         this.customBiomeManager = customBiomeManager;
         this.coords = initialCoords;
+        this.renderCache = new Tile3DRenderCache(true);
+        this.renderOptions = Tile3DRendererOptions.preview();
         
         scrollPane = new JScrollPane();
         
@@ -167,7 +169,7 @@ public class ThreeDeeFrame extends JFrame implements WindowListener {
     public final void setDimension(Dimension dimension) {
         this.dimension = dimension;
         if (dimension != null) {
-            threeDeeView = new ThreeDeeView(dimension, colourScheme, customBiomeManager, rotation, zoom);
+            threeDeeView = new ThreeDeeView(dimension, colourScheme, customBiomeManager, rotation, zoom, renderCache, renderOptions);
             threeDeeView.setLayerVisibility(layerVisibility);
             threeDeeView.setHiddenLayers(hiddenLayers);
             scrollPane.setViewportView(threeDeeView);
@@ -220,7 +222,13 @@ public class ThreeDeeFrame extends JFrame implements WindowListener {
         moveTo(coords);
     }
 
-    @Override public void windowClosing(WindowEvent e) {}
+    @Override public void windowClosing(WindowEvent e) {
+        renderCache.clear();
+    }
+
+    public void clearRenderCache() {
+        renderCache.clear();
+    }
     @Override public void windowClosed(WindowEvent e) {}
     @Override public void windowIconified(WindowEvent e) {}
     @Override public void windowDeiconified(WindowEvent e) {}
@@ -240,11 +248,7 @@ public class ThreeDeeFrame extends JFrame implements WindowListener {
             }
             final Tile centreMostTile = threeDeeView.getCentreMostTile();
             if (centreMostTile != null) {
-                threeDeeView = new ThreeDeeView(dimension, colourScheme, customBiomeManager, rotation, zoom);
-                threeDeeView.setLayerVisibility(layerVisibility);
-                threeDeeView.setHiddenLayers(hiddenLayers);
-                scrollPane.setViewportView(threeDeeView);
-//                scrollPane.getViewport().setViewPosition(new Point((threeDeeView.getWidth() - scrollPane.getWidth()) / 2, (threeDeeView.getHeight() - scrollPane.getHeight()) / 2));
+                threeDeeView.setRotation(rotation);
                 threeDeeView.moveToTile(centreMostTile);
                 glassPane.setRotation(DIRECTIONS[rotation], dimension.getAnchor().invert);
             }
@@ -266,11 +270,7 @@ public class ThreeDeeFrame extends JFrame implements WindowListener {
             }
             final Tile centreMostTile = threeDeeView.getCentreMostTile();
             if (centreMostTile != null) {
-                threeDeeView = new ThreeDeeView(dimension, colourScheme, customBiomeManager, rotation, zoom);
-                threeDeeView.setLayerVisibility(layerVisibility);
-                threeDeeView.setHiddenLayers(hiddenLayers);
-                scrollPane.setViewportView(threeDeeView);
-//                scrollPane.getViewport().setViewPosition(new Point((threeDeeView.getWidth() - scrollPane.getWidth()) / 2, (threeDeeView.getHeight() - scrollPane.getHeight()) / 2));
+                threeDeeView.setRotation(rotation);
                 threeDeeView.moveToTile(centreMostTile);
                 glassPane.setRotation(DIRECTIONS[rotation], dimension.getAnchor().invert);
             }
@@ -511,6 +511,8 @@ public class ThreeDeeFrame extends JFrame implements WindowListener {
     private Dimension dimension;
     private ThreeDeeView threeDeeView;
     private ColourScheme colourScheme;
+    private final Tile3DRenderCache renderCache;
+    private final Tile3DRendererOptions renderOptions;
     private int rotation = 3, zoom = 1;
     private Point coords;
     private LayerVisibilityMode layerVisibility = SURFACE;

@@ -41,11 +41,13 @@ public class DefaultCustomObjectProvider extends AbstractPlugin implements Custo
             return Schematic.load(file);
         } else if (name.endsWith(".schem")) {
             return Schem.load(file);
+        } else if (name.endsWith(".bp")) {
+            return AxiomBlueprint.load(file);
         } else {
             throw new IllegalArgumentException("Not a supported filename extension: \"" + file.getName() + "\"");
         }
     }
 
-    private static final List<String> SUPPORTED_EXTENSIONS = ImmutableList.of("bo2", "bo3", "schematic", "nbt", "schem");
-    private static final List<String> TYPES = ImmutableList.of(Bo2Object.class.getName(), Bo3Object.class.getName(), Structure.class.getName(), Schematic.class.getName(), Schem.class.getName());
+    private static final List<String> SUPPORTED_EXTENSIONS = ImmutableList.of("bo2", "bo3", "schematic", "nbt", "schem", "bp");
+    private static final List<String> TYPES = ImmutableList.of(Bo2Object.class.getName(), Bo3Object.class.getName(), Structure.class.getName(), Schematic.class.getName(), Schem.class.getName(), AxiomBlueprint.class.getName());
 }

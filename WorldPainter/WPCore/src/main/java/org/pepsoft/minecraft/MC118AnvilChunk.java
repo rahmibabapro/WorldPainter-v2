@@ -43,6 +43,7 @@ public final class MC118AnvilChunk extends MCNamedBlocksChunk implements Section
         this.maxHeight = maxHeight;
 
         inputDataVersion = null;
+        exportDataVersion = null;
         undergroundSections = (-minHeight) >> 4;
         sections = new Section[(maxHeight >> 4) + undergroundSections];
         heightMaps = new HashMap<>();
@@ -164,6 +165,10 @@ public final class MC118AnvilChunk extends MCNamedBlocksChunk implements Section
         return inputDataVersion;
     }
 
+    public void setExportDataVersion(int exportDataVersion) {
+        this.exportDataVersion = exportDataVersion;
+    }
+
     private void addFluidTick(int x, int y, int z, Material material) {
         // Fluid ticks are in world coordinates for some reason
         x = (xPos << 4) | x;
@@ -246,7 +251,8 @@ public final class MC118AnvilChunk extends MCNamedBlocksChunk implements Section
             extraTags.forEach((type, tags) -> tags.forEach((name, tag) -> setTag(type, name, tag)));
         }
 
-        final int outputDataVersion = (inputDataVersion != null) ? inputDataVersion : DATA_VERSION_MC_1_18_0;
+        final int outputDataVersion = (inputDataVersion != null) ? inputDataVersion
+                : (exportDataVersion != null) ? exportDataVersion : DATA_VERSION_MC_1_18_0;
         setTag(REGION, TAG_DATA_VERSION, new IntTag(TAG_DATA_VERSION, outputDataVersion));
         if (containsType(ENTITIES)) {
             // Prevent the creation of the separate ENTITIES chunk if it's not necessary
@@ -525,6 +531,21 @@ public final class MC118AnvilChunk extends MCNamedBlocksChunk implements Section
         section.materials.setValue(x, z, y & 0xf, (material == AIR) ? null : material);
     }
 
+    /**
+     * Fill a vertical column range with a single material.
+     * <p>Must not promote a single column fill to {@link Section#singleMaterial} for the whole
+     * 16×16×16 section — neighbouring columns often have different surface heights, which
+     * produces visible stone/deepslate boxes at section boundaries (especially below Y=0).
+     */
+    public void fillColumnUniform(int x, int z, int minY, int maxY, Material material) {
+        if (readOnly || (material == AIR)) {
+            return;
+        }
+        for (int y = minY; y <= maxY; y++) {
+            setMaterial(x, y, z, material);
+        }
+    }
+
     @Override
     public boolean isReadOnly() {
         return readOnly;
@@ -785,6 +806,7 @@ public final class MC118AnvilChunk extends MCNamedBlocksChunk implements Section
     final List<CompoundTag> fluidTicks = new ArrayList<>();
     final Map<DataType, Map<String, Tag>> extraTags;
     final Integer inputDataVersion;
+    Integer exportDataVersion;
     int highestSectionWithSkylight = Integer.MIN_VALUE;
     boolean lightOn;
     long inhabitedTime, lastUpdate;

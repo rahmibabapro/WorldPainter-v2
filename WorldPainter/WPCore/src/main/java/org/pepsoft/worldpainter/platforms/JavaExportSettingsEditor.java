@@ -5,6 +5,7 @@
  */
 package org.pepsoft.worldpainter.platforms;
 
+import org.pepsoft.worldpainter.Branding;
 import org.pepsoft.worldpainter.Platform;
 import org.pepsoft.worldpainter.exporting.ExportSettings;
 import org.pepsoft.worldpainter.exporting.ExportSettingsEditor;
@@ -25,6 +26,16 @@ public class JavaExportSettingsEditor extends ExportSettingsEditor {
     public JavaExportSettingsEditor(Platform platform) {
         this.platform = platform;
         initComponents();
+        checkBoxOptimizedExport = new javax.swing.JCheckBox("Optimized export (recommended)");
+        checkBoxOptimizedExport.setToolTipText("Writes performance-oriented game rules and defers chunk lighting to Minecraft (similar to Optimize World).");
+        checkBoxOptimizedExport.setSelected(true);
+        add(checkBoxOptimizedExport);
+        if (Branding.isV2()) {
+            checkBoxTurboExport = new javax.swing.JCheckBox("Turbo export (fastest)");
+            checkBoxTurboExport.setToolTipText("Skips caves, resources, lighting and fluid flow. Minecraft completes these on first load.");
+            checkBoxTurboExport.addActionListener(evt -> setControlStates());
+            add(checkBoxTurboExport, 0);
+        }
     }
 
     @Override
@@ -91,11 +102,33 @@ public class JavaExportSettingsEditor extends ExportSettingsEditor {
         checkBoxRemoveFloatingLeaves.setSelected(javaSettings.removeFloatingLeaves);
         checkBoxMakeAllLeavesPersistent.setSelected(javaSettings.makeAllLeavesPersistent);
         checkBoxRemovePlants.setSelected(javaSettings.isRemovePlants());
+        checkBoxFastExport.setSelected(! javaSettings.calculateSkyLight && ! javaSettings.calculateBlockLight && ! javaSettings.calculateLeafDistance);
+        checkBoxOptimizedExport.setSelected(javaSettings.isApplyOptimizedGameRules());
+        if (checkBoxTurboExport != null) {
+            checkBoxTurboExport.setSelected(javaSettings.equals(JavaExportSettings.turboExportPreset()));
+        }
         setControlStates();
     }
 
     @Override
     public JavaExportSettings getExportSettings() {
+        if (checkBoxTurboExport != null && checkBoxTurboExport.isSelected()) {
+            return JavaExportSettings.turboExportPreset().withApplyOptimizedGameRules(checkBoxOptimizedExport.isSelected());
+        }
+        if (checkBoxFastExport.isSelected()) {
+            return new JavaExportSettings(
+                    radioButtonWaterFloat.isSelected() ? LEAVE_FLOATING : DROP,
+                    radioButtonLavaFloat.isSelected() ? LEAVE_FLOATING : DROP,
+                    radioButtonSandFloat.isSelected() ? LEAVE_FLOATING : (radioButtonSandSupport.isSelected() ? SUPPORT : DROP),
+                    radioButtonGravelFloat.isSelected() ? LEAVE_FLOATING : (radioButtonGravelSupport.isSelected() ? SUPPORT : DROP),
+                    radioButtonCementFloat.isSelected() ? LEAVE_FLOATING : (radioButtonCementSupport.isSelected() ? SUPPORT : DROP),
+                    checkBoxWaterFlow.isSelected(),
+                    checkBoxLavaFlow.isSelected(),
+                    false, false, false, false,
+                    checkBoxMakeAllLeavesPersistent.isSelected(),
+                    checkBoxRemovePlants.isSelected(),
+                    checkBoxOptimizedExport.isSelected());
+        }
         return new JavaExportSettings(
                 radioButtonWaterFloat.isSelected() ? LEAVE_FLOATING : DROP,
                 radioButtonLavaFloat.isSelected() ? LEAVE_FLOATING : DROP,
@@ -109,14 +142,49 @@ public class JavaExportSettingsEditor extends ExportSettingsEditor {
                 checkBoxLeafDistance.isSelected(),
                 checkBoxLeafDistance.isSelected() && checkBoxRemoveFloatingLeaves.isSelected(),
                 checkBoxMakeAllLeavesPersistent.isSelected(),
-                checkBoxRemovePlants.isSelected());
+                checkBoxRemovePlants.isSelected(),
+                checkBoxOptimizedExport.isSelected());
     }
 
     private void setControlStates() {
-        checkBoxSkyLight.setEnabled(platform.capabilities.contains(PRECALCULATED_LIGHT));
-        checkBoxBlockLight.setEnabled(platform.capabilities.contains(PRECALCULATED_LIGHT));
-        checkBoxLeafDistance.setEnabled(platform.capabilities.contains(NAME_BASED));
-        checkBoxRemoveFloatingLeaves.setEnabled(platform.capabilities.contains(NAME_BASED) && checkBoxLeafDistance.isSelected());
+        final boolean turboExport = checkBoxTurboExport != null && checkBoxTurboExport.isSelected();
+        final boolean fastExport = turboExport || checkBoxFastExport.isSelected();
+        checkBoxFastExport.setEnabled(! turboExport);
+        radioButtonWaterFloat.setEnabled(! turboExport);
+        radioButtonWaterDrop.setEnabled(! turboExport);
+        radioButtonLavaFloat.setEnabled(! turboExport);
+        radioButtonLavaDrop.setEnabled(! turboExport);
+        radioButtonSandFloat.setEnabled(! turboExport);
+        radioButtonSandSupport.setEnabled(! turboExport);
+        radioButtonSandDrop.setEnabled(! turboExport);
+        radioButtonGravelFloat.setEnabled(! turboExport);
+        radioButtonGravelSupport.setEnabled(! turboExport);
+        radioButtonGravelDrop.setEnabled(! turboExport);
+        radioButtonCementFloat.setEnabled(! turboExport);
+        radioButtonCementSupport.setEnabled(! turboExport);
+        radioButtonCementDrop.setEnabled(! turboExport);
+        checkBoxWaterFlow.setEnabled(! turboExport);
+        checkBoxLavaFlow.setEnabled(! turboExport);
+        if (turboExport) {
+            checkBoxFastExport.setSelected(true);
+            radioButtonWaterFloat.setSelected(true);
+            radioButtonLavaFloat.setSelected(true);
+            radioButtonSandFloat.setSelected(true);
+            radioButtonGravelFloat.setSelected(true);
+            radioButtonCementFloat.setSelected(true);
+            checkBoxWaterFlow.setSelected(false);
+            checkBoxLavaFlow.setSelected(false);
+        }
+        checkBoxSkyLight.setEnabled(! fastExport && platform.capabilities.contains(PRECALCULATED_LIGHT));
+        checkBoxBlockLight.setEnabled(! fastExport && platform.capabilities.contains(PRECALCULATED_LIGHT));
+        checkBoxLeafDistance.setEnabled(! fastExport && platform.capabilities.contains(NAME_BASED));
+        checkBoxRemoveFloatingLeaves.setEnabled(! fastExport && platform.capabilities.contains(NAME_BASED) && checkBoxLeafDistance.isSelected());
+        if (fastExport) {
+            checkBoxSkyLight.setSelected(false);
+            checkBoxBlockLight.setSelected(false);
+            checkBoxLeafDistance.setSelected(false);
+            checkBoxRemoveFloatingLeaves.setSelected(false);
+        }
     }
 
     /**
@@ -160,6 +228,7 @@ public class JavaExportSettingsEditor extends ExportSettingsEditor {
         checkBoxMakeAllLeavesPersistent = new javax.swing.JCheckBox();
         checkBoxRemovePlants = new javax.swing.JCheckBox();
         jLabel8 = new javax.swing.JLabel();
+        checkBoxFastExport = new javax.swing.JCheckBox();
 
         jLabel1.setText("Water:");
 
@@ -237,10 +306,22 @@ public class JavaExportSettingsEditor extends ExportSettingsEditor {
 
         jLabel8.setText("Plants:");
 
+        checkBoxFastExport.setText("Fast export (skip lighting and leaf distance)");
+        checkBoxFastExport.setToolTipText("Skips sky light, block light and leaf distance calculation for faster exports");
+        checkBoxFastExport.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                checkBoxFastExportActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(checkBoxFastExport)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
             .addGroup(layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -298,6 +379,8 @@ public class JavaExportSettingsEditor extends ExportSettingsEditor {
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
                 .addContainerGap()
+                .addComponent(checkBoxFastExport)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel1)
                     .addComponent(radioButtonWaterFloat)
@@ -354,6 +437,10 @@ public class JavaExportSettingsEditor extends ExportSettingsEditor {
         setControlStates();
     }//GEN-LAST:event_checkBoxLeafDistanceActionPerformed
 
+    private void checkBoxFastExportActionPerformed(java.awt.event.ActionEvent evt) {
+        setControlStates();
+    }
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.ButtonGroup buttonGroup1;
     private javax.swing.ButtonGroup buttonGroup2;
@@ -361,6 +448,7 @@ public class JavaExportSettingsEditor extends ExportSettingsEditor {
     private javax.swing.ButtonGroup buttonGroup4;
     private javax.swing.ButtonGroup buttonGroup5;
     private javax.swing.JCheckBox checkBoxBlockLight;
+    private javax.swing.JCheckBox checkBoxFastExport;
     private javax.swing.JCheckBox checkBoxLavaFlow;
     private javax.swing.JCheckBox checkBoxLeafDistance;
     private javax.swing.JCheckBox checkBoxMakeAllLeavesPersistent;
@@ -391,5 +479,7 @@ public class JavaExportSettingsEditor extends ExportSettingsEditor {
     private javax.swing.JRadioButton radioButtonWaterFloat;
     // End of variables declaration//GEN-END:variables
 
+    private javax.swing.JCheckBox checkBoxOptimizedExport;
+    private javax.swing.JCheckBox checkBoxTurboExport;
     private final Platform platform;
 }

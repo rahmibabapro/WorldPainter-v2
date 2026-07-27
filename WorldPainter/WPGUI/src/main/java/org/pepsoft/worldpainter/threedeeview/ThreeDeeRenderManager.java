@@ -12,6 +12,7 @@ import org.pepsoft.worldpainter.biomeschemes.CustomBiomeManager;
 import org.pepsoft.worldpainter.layers.Layer;
 import org.pepsoft.worldpainter.threedeeview.Tile3DRenderer.LayerVisibilityMode;
 
+import java.awt.image.BufferedImage;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -21,10 +22,17 @@ import java.util.Set;
  */
 public class ThreeDeeRenderManager {
     public ThreeDeeRenderManager(Dimension dimension, ColourScheme colourScheme, CustomBiomeManager customBiomeManager, int rotation) {
+        this(dimension, colourScheme, customBiomeManager, rotation, null, Tile3DRendererOptions.preview());
+    }
+
+    public ThreeDeeRenderManager(Dimension dimension, ColourScheme colourScheme, CustomBiomeManager customBiomeManager, int rotation,
+                                 Tile3DRenderCache renderCache, Tile3DRendererOptions options) {
         this.dimension = dimension;
         this.colourScheme = colourScheme;
         this.customBiomeManager = customBiomeManager;
         this.rotation = rotation;
+        this.renderCache = renderCache;
+        this.options = options;
     }
     
     /**
@@ -33,7 +41,14 @@ public class ThreeDeeRenderManager {
      * @param tile The tile to be rendered.
      */
     public synchronized void renderTile(Tile tile) {
-//        System.out.println("Queueing tile " + tile + " for rendering");
+        if (renderCache != null) {
+            Tile3DRenderCache.CacheKey key = Tile3DRenderCache.CacheKey.of(tile, rotation, layerVisibility, hiddenLayers, options);
+            BufferedImage cached = renderCache.get(key);
+            if (cached != null) {
+                tileFinished(new RenderResult(tile, cached));
+                return;
+            }
+        }
         if (jobQueue == null) {
             startThreads();
         }
@@ -87,12 +102,50 @@ public class ThreeDeeRenderManager {
         this.hiddenLayers = hiddenLayers;
     }
 
+    public synchronized void setRotation(int rotation) {
+        if (this.rotation != rotation) {
+            this.rotation = rotation;
+            restartThreads();
+        }
+    }
+
+    public synchronized void setOptions(Tile3DRendererOptions options) {
+        if (! this.options.equalsOptions(options)) {
+            this.options = options;
+            restartThreads();
+        }
+    }
+
+    public Tile3DRenderCache getRenderCache() {
+        return renderCache;
+    }
+
+    public int getRotation() {
+        return rotation;
+    }
+
+    public LayerVisibilityMode getLayerVisibility() {
+        return layerVisibility;
+    }
+
+    public Set<Layer> getHiddenLayers() {
+        return hiddenLayers;
+    }
+
+    public Tile3DRendererOptions getOptions() {
+        return options;
+    }
+
+    private void restartThreads() {
+        stop();
+    }
+
     private void startThreads() {
         jobQueue = new UniqueJobQueue<>();
         int noOfThreads = Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
         renderThreads = new Background3DTileRenderer[noOfThreads];
         for (int i = 0; i < noOfThreads; i++) {
-            renderThreads[i] = new Background3DTileRenderer(dimension, colourScheme, customBiomeManager, rotation, jobQueue, this, layerVisibility, hiddenLayers);
+            renderThreads[i] = new Background3DTileRenderer(dimension, colourScheme, customBiomeManager, rotation, jobQueue, this, layerVisibility, hiddenLayers, options);
             renderThreads[i].start();
         }
     }
@@ -100,7 +153,9 @@ public class ThreeDeeRenderManager {
     private final Dimension dimension;
     private final ColourScheme colourScheme;
     private final CustomBiomeManager customBiomeManager;
-    private final int rotation;
+    private int rotation;
+    private final Tile3DRenderCache renderCache;
+    private Tile3DRendererOptions options;
     private HashSet<RenderResult> results = new HashSet<>();
     private Background3DTileRenderer[] renderThreads;
     private UniqueJobQueue<Tile3DRenderJob> jobQueue;

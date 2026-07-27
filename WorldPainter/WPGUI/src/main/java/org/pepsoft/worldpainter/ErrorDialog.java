@@ -90,16 +90,14 @@ public class ErrorDialog extends javax.swing.JDialog {
             setTitle("Out of Memory");
             final Integer threadCount = getMostRecentThreadCount();
             if ((threadCount != null) && (threadCount > 1)) {
-                jTextArea1.setText("Not enough memory available for that operation!\n\n" +
-                    "If this happened during an Export or Merge operation,\n" +
-                    "try reducing the maximum thread count to " + (threadCount - 1) + " on the\n" +
-                    "Performance tab of the Preferences screen.");
+                jTextArea1.setText("Not enough memory available for that operation!\n\n"
+                    + "WorldPainter will automatically retry large exports with\n"
+                    + "reduced parallelism. If you still see this message, close\n"
+                    + "other applications and try again.");
             } else {
                 jTextArea1.setText("Not enough memory available for that operation!\n\n"
-                    + "WorldPainter is already using the recommended maximum\n"
-                    + "amount of memory, so it is not recommended to give it\n"
-                    + "more. To be able to perform the operation you should\n"
-                    + "install more memory (and reinstall WorldPainter).");
+                    + "Close other applications to free memory, then export again.\n"
+                    + "Export already used the minimum safe thread count.");
             }
             jButton1.setEnabled(false);
             jButton1.setToolTipText("Not necessary to send details of out of memory errors");
@@ -267,6 +265,15 @@ public class ErrorDialog extends javax.swing.JDialog {
         initComponents();
 
         getRootPane().setDefaultButton(jButton2);
+
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosed(java.awt.event.WindowEvent e) {
+                if (parent instanceof App app) {
+                    app.restoreUiInteractivity();
+                }
+            }
+        });
 
         ActionMap actionMap = rootPane.getActionMap();
         actionMap.put("cancel", new AbstractAction("cancel") {

@@ -313,6 +313,7 @@ public class DimensionPropertiesEditor extends javax.swing.JPanel {
         spinnerChasmsMinLevel.setEnabled(enabled);
         spinnerChasmsMaxLevel.setEnabled(enabled);
         checkBoxCoverSteepTerrain.setEnabled(enabled);
+        checkBoxSmoothSurfaceSlabsStairs.setEnabled(enabled);
         checkBoxExportAnnotations.setEnabled(enabled);
         checkBoxSnowUnderTrees.setEnabled(enabled);
         comboBoxSurfaceLayerAnchor.setEnabled(enabled);
@@ -357,6 +358,9 @@ public class DimensionPropertiesEditor extends javax.swing.JPanel {
         }
         dimension.setBottomless(checkBoxBottomless.isSelected());
         dimension.setCoverSteepTerrain(checkBoxCoverSteepTerrain.isSelected());
+        dimension.setSurfaceSmoothing(checkBoxSmoothSurfaceSlabsStairs.isSelected()
+                ? Dimension.SurfaceSmoothing.SLABS_AND_STAIRS
+                : Dimension.SurfaceSmoothing.NONE);
         dimension.setCeilingHeight((Integer) spinnerCeilingHeight.getValue());
         if (comboBoxSubsurfaceBiome.isEnabled()) {
             dimension.setUndergroundBiome((Integer) comboBoxSubsurfaceBiome.getSelectedItem());
@@ -742,6 +746,7 @@ public class DimensionPropertiesEditor extends javax.swing.JPanel {
         spinnerMinecraftSeed.setValue(dimension.getMinecraftSeed());
         checkBoxBottomless.setSelected(dimension.isBottomless());
         checkBoxCoverSteepTerrain.setSelected(dimension.isCoverSteepTerrain());
+        checkBoxSmoothSurfaceSlabsStairs.setSelected(dimension.getSurfaceSmoothing() == Dimension.SurfaceSmoothing.SLABS_AND_STAIRS);
         ((SpinnerNumberModel) spinnerCeilingHeight.getModel()).setMinimum(minHeight + 1);
         ((SpinnerNumberModel) spinnerCeilingHeight.getModel()).setMaximum(maxHeight + 1);
         spinnerCeilingHeight.setValue(dimension.getCeilingHeight());
@@ -1170,6 +1175,7 @@ public class DimensionPropertiesEditor extends javax.swing.JPanel {
         setEnabled(checkBoxDecorationLushCaves, enabled && decorations && mcVersionAtLeast1_17);
         setEnabled(checkBoxDecorationDripstoneCaves, enabled && decorations && mcVersionAtLeast1_17);
         setEnabled(checkBoxCoverSteepTerrain, enabled && (! caveFloor) && (! master)); // TODO make it possible for this to be different for the master dimension
+        setEnabled(checkBoxSmoothSurfaceSlabsStairs, enabled && (! caveFloor) && (! master));
         setEnabled(comboBoxSurfaceLayerAnchor, enabled);
         setEnabled(comboBoxSubsurfaceMaterial, enabled && (! caveFloor) && (! master)); // TODO make it possible for this to be different for the master dimension
         setEnabled(comboBoxUndergroundLayerAnchor, enabled && (! caveFloor) && (! master)); // TODO make it possible for this to be different for the master dimension
@@ -1342,6 +1348,7 @@ public class DimensionPropertiesEditor extends javax.swing.JPanel {
         checkBoxBottomless = new javax.swing.JCheckBox();
         jLabel67 = new javax.swing.JLabel();
         checkBoxCoverSteepTerrain = new javax.swing.JCheckBox();
+        checkBoxSmoothSurfaceSlabsStairs = new javax.swing.JCheckBox();
         jLabel78 = new javax.swing.JLabel();
         spinnerCeilingHeight = new javax.swing.JSpinner();
         comboBoxSurfaceLayerAnchor = new javax.swing.JComboBox<>();
@@ -1617,6 +1624,9 @@ public class DimensionPropertiesEditor extends javax.swing.JPanel {
 
         checkBoxCoverSteepTerrain.setText("keep steep terrain covered");
         checkBoxCoverSteepTerrain.setToolTipText("<html>Enable this to extend the top layer<br>\ndownwards on steep terrain such as cliffs <br>\nso that the underground material is never exposed.</html>");
+
+        checkBoxSmoothSurfaceSlabsStairs.setText("smooth surface with slabs and stairs");
+        checkBoxSmoothSurfaceSlabsStairs.setToolTipText("<html>Replace stone-family surface blocks with slabs and stairs<br>\nbased on neighbouring heights (Axiom-style smoothing).<br>\nOnly applies to materials that have matching slab/stair blocks.</html>");
 
         jLabel78.setText("Ceiling dimension height:");
 
@@ -1929,6 +1939,8 @@ public class DimensionPropertiesEditor extends javax.swing.JPanel {
                         .addGap(18, 18, 18)
                         .addComponent(checkBoxCoverSteepTerrain)
                         .addGap(18, 18, 18)
+                        .addComponent(checkBoxSmoothSurfaceSlabsStairs)
+                        .addGap(18, 18, 18)
                         .addComponent(jLabel83)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(comboBoxSurfaceLayerAnchor, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
@@ -1965,6 +1977,7 @@ public class DimensionPropertiesEditor extends javax.swing.JPanel {
                     .addComponent(jLabel66)
                     .addComponent(spinnerMaxSurfaceDepth, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(checkBoxCoverSteepTerrain)
+                    .addComponent(checkBoxSmoothSurfaceSlabsStairs)
                     .addComponent(comboBoxSurfaceLayerAnchor, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(jLabel83))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
@@ -4240,6 +4253,7 @@ public class DimensionPropertiesEditor extends javax.swing.JPanel {
     private javax.swing.JCheckBox checkBoxChasmsBreakSurface;
     private javax.swing.JCheckBox checkBoxChasmsEverywhere;
     private javax.swing.JCheckBox checkBoxCoverSteepTerrain;
+    private javax.swing.JCheckBox checkBoxSmoothSurfaceSlabsStairs;
     private javax.swing.JCheckBox checkBoxDeciduousEverywhere;
     private javax.swing.JCheckBox checkBoxDecorateCaverns;
     private javax.swing.JCheckBox checkBoxDecorateCaves;

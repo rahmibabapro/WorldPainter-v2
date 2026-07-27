@@ -1,6 +1,9 @@
 package org.pepsoft.worldpainter.util;
 
 import org.pepsoft.worldpainter.Configuration;
+import org.pepsoft.worldpainter.Dimension;
+import org.pepsoft.worldpainter.exporting.ExportMemoryBudget;
+import org.pepsoft.worldpainter.exporting.WorldExportSettings;
 import org.slf4j.Logger;
 
 import static org.slf4j.LoggerFactory.getLogger;
@@ -35,15 +38,16 @@ public final class ThreadUtils {
     }
 
     /**
-     * Choose a thread count taking into account the number of processor cores, the number of regions and the available
-     * memory, assuming that each job will need at least approximately {@link #REQUIRED_MEMORY_PER_REGION_EXPORT} bytes
-     * of memory.
-     *
-     * @param operation   The name of the operation for use in the log entry.
-     * @param regionCount The number of regions to be exported.
-     * @return The number of threads to use.
+     * Choose a thread count for region export, respecting available heap and hollow-export overhead.
      */
     public static int chooseThreadCountForExport(String operation, int regionCount) {
+        return chooseThreadCountForExport(operation, regionCount, false);
+    }
+
+    /**
+     * Legacy export thread count (no dimension context). Prefer {@link #planExport(Dimension, int, WorldExportSettings)}.
+     */
+    public static int chooseThreadCountForExport(String operation, int regionCount, boolean hollowInterior) {
         final Runtime runtime = Runtime.getRuntime();
         runtime.gc();
         final long totalMemory = runtime.totalMemory();
@@ -51,32 +55,66 @@ public final class ThreadUtils {
         final long memoryInUse = totalMemory - freeMemory;
         final long maxMemory = runtime.maxMemory();
         final long maxMemoryAvailable = maxMemory - memoryInUse;
-        final int threadCount;
+        final long memoryPerRegion = REQUIRED_MEMORY_PER_REGION_EXPORT
+                + (hollowInterior ? HOLLOW_EXTRA_MEMORY_PER_REGION : 0L);
+        final int maxThreadsByMem = (int) Math.max((maxMemoryAvailable - EXPORT_MEMORY_RESERVE) / memoryPerRegion, 1);
+
+        int threadCount;
         final String sysProp = System.getProperty("org.pepsoft.worldpainter.threads");
         final Integer configProp = (Configuration.getInstance() != null) ? Configuration.getInstance().getMaxThreadCount() : null;
         if (sysProp != null) {
-            threadCount = Math.max(Math.min(Integer.parseInt(sysProp), regionCount), 1);
-            logger.info("Using " + threadCount + " thread(s) for " + operation + " (max. thread count source: org.pepsoft.worldpainter.threads advanced setting set to " + sysProp + ")");
+            threadCount = Integer.parseInt(sysProp);
         } else if (configProp != null) {
-            threadCount = Math.max(Math.min(configProp, regionCount), 1);
-            logger.info("Using " + threadCount + " thread(s) for " + operation + " (max. thread count source: max. thread count in preferences set to " + configProp + ")");
+            threadCount = configProp;
         } else {
-            final int maxThreadsByMem = (int) (maxMemoryAvailable / REQUIRED_MEMORY_PER_REGION_EXPORT);
-            threadCount = Math.max(Math.min(Math.min(maxThreadsByMem, runtime.availableProcessors()), regionCount), 1);
-            logger.info("Using " + threadCount + " thread(s) for " + operation + " (max. thread count source: logical processors: " + runtime.availableProcessors() + ", available memory: " + (maxMemoryAvailable / 1048576L) + " MB)");
+            threadCount = runtime.availableProcessors();
         }
-        mostRecentThreadCount = threadCount;
-        return threadCount;
+
+        final int capped = Math.max(Math.min(Math.min(Math.min(threadCount, maxThreadsByMem), runtime.availableProcessors()), regionCount), 1);
+        mostRecentThreadCount = capped;
+        logger.info("Using {} thread(s) for {} (legacy budget, hollow={})", capped, operation, hollowInterior);
+        return capped;
     }
 
     /**
-     * Get the value most recently returned by {@link #chooseThreadCountForExport(String, int)}, if any.
+     * Plan export threads using full world + settings memory budget.
+     */
+    public static ExportMemoryBudget planExport(Dimension dimension, int regionCount, WorldExportSettings settings) {
+        final ExportMemoryBudget budget = ExportMemoryBudget.compute(dimension, regionCount, settings);
+        mostRecentThreadCount = budget.getExportThreadCount();
+        return budget;
+    }
+
+    /**
+     * Chunk-generation pool size that shares the heap with export workers.
+     */
+    public static int chooseChunkThreadCountForExport(int exportThreadCount) {
+        final int processors = Runtime.getRuntime().availableProcessors();
+        return Math.max(2, Math.min(Math.min(exportThreadCount, processors / 2 + 1), 8));
+    }
+
+    /**
+     * Chunk threads from a full export budget (preferred).
+     */
+    public static int chooseChunkThreadCountForExport(ExportMemoryBudget budget) {
+        return budget.getChunkThreadCount();
+    }
+
+    /**
+     * Get the value most recently returned by export thread planning, if any.
      */
     public static Integer getMostRecentThreadCount() {
         return mostRecentThreadCount;
     }
 
-    public static final long REQUIRED_MEMORY_PER_REGION_EXPORT = 250000000L;
+    /** Approximate bytes per concurrently exported region (chunk buffers + region file). */
+    public static final long REQUIRED_MEMORY_PER_REGION_EXPORT = 280_000_000L;
+
+    /** Additional bytes per region when interior hollowing is enabled. */
+    public static final long HOLLOW_EXTRA_MEMORY_PER_REGION = 120_000_000L;
+
+    /** Headroom reserved for the loaded world, UI and GC during export. */
+    private static final long EXPORT_MEMORY_RESERVE = 768_000_000L;
 
     private static final Logger logger = getLogger(ThreadUtils.class);
     private static volatile Integer mostRecentThreadCount;

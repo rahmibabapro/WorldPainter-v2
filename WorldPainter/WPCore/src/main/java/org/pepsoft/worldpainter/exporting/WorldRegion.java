@@ -237,10 +237,12 @@ public class WorldRegion implements MinecraftWorld {
 
     @Override
     public void addChunk(Chunk chunk) {
-        int localX = chunk.getxPos() - (regionX << 5);
-        int localZ = chunk.getzPos() - (regionZ << 5);
-        if ((localX >= -1) && (localX <= CHUNKS_PER_SIDE) && (localZ >= -1) && (localZ <= CHUNKS_PER_SIDE)) {
-            chunks[localX + 1][localZ + 1] = chunk;
+        synchronized (chunks) {
+            int localX = chunk.getxPos() - (regionX << 5);
+            int localZ = chunk.getzPos() - (regionZ << 5);
+            if ((localX >= -1) && (localX <= CHUNKS_PER_SIDE) && (localZ >= -1) && (localZ <= CHUNKS_PER_SIDE)) {
+                chunks[localX + 1][localZ + 1] = chunk;
+            }
         }
     }
 
@@ -257,15 +259,28 @@ public class WorldRegion implements MinecraftWorld {
     public void save(File worldDir, int dimension) {
         try (ChunkStore chunkStore = platformProvider.getChunkStore(platform, worldDir, dimension)) {
             chunkStore.doInTransaction(() -> {
-                for (int x = 0; x < CHUNKS_PER_SIDE; x++) {
-                    for (int z = 0; z < CHUNKS_PER_SIDE; z++) {
-                        final Chunk chunk = chunks[x + 1][z + 1];
-                        if (chunk != null) {
-                            chunkStore.saveChunk(chunk);
+                synchronized (chunks) {
+                    for (int x = 0; x < CHUNKS_PER_SIDE; x++) {
+                        for (int z = 0; z < CHUNKS_PER_SIDE; z++) {
+                            final Chunk chunk = chunks[x + 1][z + 1];
+                            if (chunk != null) {
+                                chunkStore.saveChunk(chunk);
+                            }
                         }
                     }
                 }
             });
+        }
+    }
+
+    /** Release chunk references after a region is saved to help GC during long exports. */
+    public void clearChunks() {
+        synchronized (chunks) {
+            for (int x = 0; x < chunks.length; x++) {
+                for (int z = 0; z < chunks[x].length; z++) {
+                    chunks[x][z] = null;
+                }
+            }
         }
     }
 

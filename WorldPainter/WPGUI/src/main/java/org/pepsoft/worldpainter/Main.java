@@ -20,6 +20,7 @@ import org.pepsoft.worldpainter.operations.MouseOrTabletOperation;
 import org.pepsoft.worldpainter.plugins.PlatformManager;
 import org.pepsoft.worldpainter.plugins.Plugin;
 import org.pepsoft.worldpainter.plugins.WPPluginManager;
+import org.pepsoft.worldpainter.ui.UiDiagnostics;
 import org.pepsoft.worldpainter.util.BetterAction;
 import org.pepsoft.worldpainter.vo.EventVO;
 import org.slf4j.LoggerFactory;
@@ -86,6 +87,7 @@ public class Main {
         // Work around a bug in the JIDE Docking Framework which otherwise causes duplicate mouse events on focus
         // switches resulting in uncommanded edits
         System.setProperty("docking.focusWorkaround1", "true");
+        Branding.applyDefaults();
         // Disable Java2D's automatic UI scaling, as it does not do a good job with the editor view; we want to do it
         // ourselves
         System.setProperty("sun.java2d.uiScale.enabled", "false");
@@ -166,7 +168,8 @@ public class Main {
         StatusPrinter.printInCaseOfErrorsOrWarnings(logContext);
         SLF4JBridgeHandler.removeHandlersForRootLogger();
         SLF4JBridgeHandler.install();
-        logger.info("Starting WorldPainter " + Version.VERSION + " (" + Version.BUILD + ")");
+        logger.info("Starting {} {} ({})", Branding.PRODUCT_NAME, Version.VERSION, Version.BUILD);
+        UiDiagnostics.logStartupPaths();
         logger.info("Running on {} version {}; architecture: {}", System.getProperty("os.name"), System.getProperty("os.version"), System.getProperty("os.arch"));
         logger.info("Running on {} Java version {}; maximum heap size: {} MB", System.getProperty("java.vendor"), System.getProperty("java.specification.version"), Runtime.getRuntime().maxMemory() / 1000000);
         if (autosaveInhibited) {
@@ -269,6 +272,19 @@ public class Main {
                 logger.info("Creating new configuration");
             }
             config = new Configuration();
+            final Configuration.LookAndFeel defaultLaf = Branding.defaultLookAndFeel();
+            if (defaultLaf != null) {
+                config.setLookAndFeel(defaultLaf);
+            }
+        } else if (Branding.isV2()) {
+            // Migrate away from the old FlatLaf / dark "modern UI" fork defaults to stock WorldPainter L&F.
+            final Configuration.LookAndFeel existingLaf = config.getLookAndFeel();
+            if ((existingLaf == Configuration.LookAndFeel.FLAT_DARK)
+                    || (existingLaf == Configuration.LookAndFeel.DARK_METAL)
+                    || (existingLaf == Configuration.LookAndFeel.DARK_NIMBUS)) {
+                logger.info("Resetting look and feel from {} to SYSTEM (original WorldPainter UI)", existingLaf);
+                config.setLookAndFeel(Configuration.LookAndFeel.SYSTEM);
+            }
         }
         // Load the transient settings into the config object
         config.setSafeMode(safeMode);
@@ -288,8 +304,9 @@ public class Main {
             }
         }
 
+        // v2: autosave inhibition is logged only; no startup dialog (NavRail/modern UI session).
         if (config.isAutosaveEnabled() && autosaveInhibited) {
-            StartupMessages.addWarning("Another instance of WorldPainter is already running.\nAutosave will therefore be disabled in this instance of WorldPainter!");
+            logger.info("Autosave disabled in this instance because another WorldPainter session holds the lock file");
         }
 
         // Store the acceleration type in the config object so the Preferences dialog can edit it
@@ -410,13 +427,16 @@ public class Main {
 
         final World2 world;
         final File autosaveFile = new File(configDir, "autosave.world");
-        if ((file == null) && (autosaveInhibited || (! config.isAutosaveEnabled()) || (! autosaveFile.isFile()))) {
-            if (! safeMode) {
-                world = WorldFactory.createDefaultWorld(config, new Random().nextLong());
-//                world = WorldFactory.createFancyWorld(config, new Random().nextLong());
-            } else {
+        final File autosaveTempFile = new File(configDir, "autosave.world.tmp");
+        if ((file == null) && (autosaveInhibited || (! config.isAutosaveEnabled()) || ((! autosaveFile.isFile()) && (! autosaveTempFile.isFile())))) {
+            if (safeMode) {
                 logger.info("[SAFE MODE] Using default configuration for default world");
                 world = WorldFactory.createDefaultWorld(new Configuration(), new Random().nextLong());
+            } else if (Branding.startWithoutDefaultWorld()) {
+                logger.info("Starting with no world loaded (v2 empty startup)");
+                world = null;
+            } else {
+                world = WorldFactory.createDefaultWorld(config, new Random().nextLong());
             }
         } else {
             world = null;
@@ -434,7 +454,9 @@ public class Main {
             }
         }
 
-        final Configuration.LookAndFeel lookAndFeel = (config.getLookAndFeel() != null) ? config.getLookAndFeel() : Configuration.LookAndFeel.SYSTEM;
+        final Configuration.LookAndFeel lookAndFeel = (config.getLookAndFeel() != null)
+                ? config.getLookAndFeel()
+                : (Branding.defaultLookAndFeel() != null ? Branding.defaultLookAndFeel() : Configuration.LookAndFeel.SYSTEM);
         SwingUtilities.invokeLater(() -> {
             Configuration myConfig = Configuration.getInstance();
             if (myConfig.isSafeMode()) {
@@ -462,17 +484,22 @@ public class Main {
                             laf = "org.netbeans.swing.laf.dark.DarkNimbusLookAndFeel";
                             IconUtils.setTheme("dark_nimbus");
                             break;
+                        case FLAT_DARK:
+                            // Legacy modern-UI setting; use stock system L&F.
+                            laf = UIManager.getSystemLookAndFeelClassName();
+                            break;
                         default:
                             throw new InternalError();
                     }
                     logger.debug("Installing look and feel: " + laf);
                     UIManager.setLookAndFeel(laf);
                     LookAndFeelFactory.installJideExtension();
-                    if (((lookAndFeel == Configuration.LookAndFeel.DARK_METAL)
-                            || (lookAndFeel == Configuration.LookAndFeel.DARK_NIMBUS))) {
+                    if ((lookAndFeel == Configuration.LookAndFeel.DARK_METAL)
+                            || (lookAndFeel == Configuration.LookAndFeel.DARK_NIMBUS)
+                            || (lookAndFeel == Configuration.LookAndFeel.FLAT_DARK)) {
                         // Patch some things to make dark themes look better
                         VoidRenderer.setColour(UIManager.getColor("Panel.background").getRGB());
-                        if (lookAndFeel == Configuration.LookAndFeel.DARK_METAL) {
+                        if ((lookAndFeel == Configuration.LookAndFeel.DARK_METAL) || (lookAndFeel == Configuration.LookAndFeel.FLAT_DARK)) {
                             UIManager.put("ContentContainer.background", UIManager.getColor("desktop"));
                             UIManager.put("JideTabbedPane.foreground", new Color(222, 222, 222));
                         }
@@ -492,6 +519,7 @@ public class Main {
 
             final App app = App.getInstance();
             app.setVisible(true);
+            UiDiagnostics.start(app);
             // Swing quirk:
             if (myConfig.isMaximised() && (System.getProperty("org.pepsoft.worldpainter.size") == null)) {
                 app.setExtendedState(Frame.MAXIMIZED_BOTH);
@@ -499,7 +527,8 @@ public class Main {
 
             // Do this later to give the app the chance to properly set itself up
             SwingUtilities.invokeLater(() -> {
-                if (Version.isSnapshot() && ! myConfig.isMessageDisplayed(SNAPSHOT_MESSAGE_KEY)) {
+                // v2 is a permanent fork product; skip upstream snapshot gate.
+                if ((! Branding.isV2()) && Version.isSnapshot() && ! myConfig.isMessageDisplayed(SNAPSHOT_MESSAGE_KEY)) {
                     String result = JOptionPane.showInputDialog(app, SNAPSHOT_MESSAGE, "Snapshot Release", WARNING_MESSAGE);
                     if (result == null) {
                         // Cancel was pressed
@@ -520,11 +549,9 @@ public class Main {
                     // On a Mac we may be doing this unnecessarily because we may be opening a .world file, but it has
                     // proven difficult to detect that. TODO
                     app.setWorld(world, true);
-                } else if ((! autosaveInhibited) && myConfig.isAutosaveEnabled() && autosaveFile.isFile()) {
-                    logger.info("Recovering autosaved world");
-                    app.open(autosaveFile);
-                    StartupMessages.addWarning("WorldPainter was not shut down correctly.\nYour world has been recovered from the most recent autosave.\nMake sure to Save it if you want to keep it!");
-                } else {
+                } else if (AutosaveFiles.tryRecover(app, autosaveInhibited)) {
+                    // Startup warning added by AutosaveFiles when recovery succeeds
+                } else if (file != null) {
                     app.open(file);
                 }
                 for (String error: StartupMessages.getErrors()) {
@@ -547,15 +574,15 @@ public class Main {
     }
 
     private static void configError(Throwable e) {
-        // Try to preserve the config file
         File configFile = Configuration.getConfigFile();
         if (configFile.isFile() && configFile.canRead()) {
-            File backupConfigFile = new File(configFile.getParentFile(), configFile.getName() + ".old");
+            File backupConfigFile = Configuration.getConfigBackupFile();
             try {
                 FileUtils.copyFileToFile(configFile, backupConfigFile, true);
             } catch (IOException e1) {
                 logger.error("I/O error while trying to preserve faulty config file", e1);
             }
+            Configuration.quarantineCorruptConfig(configFile);
         }
 
         // Report the error

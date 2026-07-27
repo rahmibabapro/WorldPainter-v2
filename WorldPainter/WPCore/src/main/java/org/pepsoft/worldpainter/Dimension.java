@@ -13,13 +13,17 @@ import org.pepsoft.util.MathUtils;
 import org.pepsoft.util.PerlinNoise;
 import org.pepsoft.util.ProgressReceiver;
 import org.pepsoft.util.ProgressReceiver.OperationCancelled;
+import org.pepsoft.util.WPCustomObjectInputStream;
 import org.pepsoft.util.mdc.MDCCapturingRuntimeException;
 import org.pepsoft.util.mdc.MDCThreadPoolExecutor;
+import org.pepsoft.util.plugins.PluginManager;
 import org.pepsoft.util.undo.BufferKey;
+import org.pepsoft.worldpainter.objects.AbstractObject;
 import org.pepsoft.util.undo.UndoListener;
 import org.pepsoft.util.undo.UndoManager;
 import org.pepsoft.worldpainter.biomeschemes.CustomBiome;
 import org.pepsoft.worldpainter.brushes.Brush;
+import org.pepsoft.worldpainter.exporting.ExportHeightSnapshot;
 import org.pepsoft.worldpainter.exporting.ExportSettings;
 import org.pepsoft.worldpainter.gardenofeden.Garden;
 import org.pepsoft.worldpainter.gardenofeden.Seed;
@@ -44,6 +48,7 @@ import java.beans.PropertyChangeSupport;
 import java.io.*;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
@@ -593,12 +598,26 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
      * {@code defaultHeight} if there is no tile at the specified coordinates.
      */
     public int getIntHeightAt(int x, int y, int defaultHeight) {
+        if (exportHeightSnapshot != null) {
+            return exportHeightSnapshot.getIntHeightAt(x, y, defaultHeight);
+        }
         Tile tile = getTile(x >> TILE_SIZE_BITS, y >> TILE_SIZE_BITS);
         if (tile != null) {
             return tile.getIntHeight(x & TILE_SIZE_MASK, y & TILE_SIZE_MASK);
         } else {
             return defaultHeight;
         }
+    }
+
+    /**
+     * Install a read-only height snapshot for the duration of export (cleared in {@link #clearExportHeightSnapshot()}).
+     */
+    public void setExportHeightSnapshot(ExportHeightSnapshot snapshot) {
+        exportHeightSnapshot = snapshot;
+    }
+
+    public void clearExportHeightSnapshot() {
+        exportHeightSnapshot = null;
     }
 
     /**
@@ -635,6 +654,12 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
      * no tile at the specified coordinates.
      */
     public float getHeightAt(int x, int y) {
+        if (exportHeightSnapshot != null) {
+            final float snapshotHeight = exportHeightSnapshot.getHeightAt(x, y);
+            if (! ExportHeightSnapshot.isMissing(snapshotHeight)) {
+                return snapshotHeight;
+            }
+        }
         Tile tile = getTile(x >> TILE_SIZE_BITS, y >> TILE_SIZE_BITS);
         if (tile != null) {
             return tile.getHeight(x & TILE_SIZE_MASK, y & TILE_SIZE_MASK);
@@ -1013,8 +1038,26 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
      * @return A {@link HeightMap} returning the distance to the nearest edge for every pixel where the specified layer
      * is set in this dimension.
      */
+    public void beginExportHeightMapCaching() {
+        exportDistancesToEdgeCache = new ConcurrentHashMap<>();
+        exportEdgeHeightsCache = new ConcurrentHashMap<>();
+    }
+
+    public void endExportHeightMapCaching() {
+        exportDistancesToEdgeCache = null;
+        exportEdgeHeightsCache = null;
+    }
+
     @SuppressWarnings("UnnecessaryLocalVariable") // Clarity
     public HeightMap getDistancesToEdge(final Layer layer, final float maxDistance) {
+        if (exportDistancesToEdgeCache != null) {
+            return exportDistancesToEdgeCache.computeIfAbsent(new LayerDistanceKey(layer, maxDistance), k -> bakeDistancesToEdge(layer, maxDistance));
+        }
+        return bakeDistancesToEdge(layer, maxDistance);
+    }
+
+    @SuppressWarnings("UnnecessaryLocalVariable") // Clarity
+    private HeightMap bakeDistancesToEdge(final Layer layer, final float maxDistance) {
         // Precalculate relative distances
         final float[][] distances = getDistancesToCentre(maxDistance);
 
@@ -1119,6 +1162,14 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
      */
     @SuppressWarnings("UnnecessaryLocalVariable") // Clarity
     public HeightMap getEdgeHeights(final TunnelLayer layer, final float maxDistance) {
+        if (exportEdgeHeightsCache != null) {
+            return exportEdgeHeightsCache.computeIfAbsent(new TunnelLayerDistanceKey(layer, maxDistance), k -> bakeEdgeHeights(layer, maxDistance));
+        }
+        return bakeEdgeHeights(layer, maxDistance);
+    }
+
+    @SuppressWarnings("UnnecessaryLocalVariable") // Clarity
+    private HeightMap bakeEdgeHeights(final TunnelLayer layer, final float maxDistance) {
         // Gather all the tiles that contain the layer so we can work on them directly rather than looking up tiles
         // continuously. visitTiles() will do the read locking
         final int[] coords = {Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE};
@@ -1539,6 +1590,22 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
             this.coverSteepTerrain = coverSteepTerrain;
             changeNo++;
             propertyChangeSupport.firePropertyChange("coverSteepTerrain", ! coverSteepTerrain, coverSteepTerrain);
+        }
+    }
+
+    public SurfaceSmoothing getSurfaceSmoothing() {
+        return (surfaceSmoothing != null) ? surfaceSmoothing : SurfaceSmoothing.NONE;
+    }
+
+    public void setSurfaceSmoothing(SurfaceSmoothing surfaceSmoothing) {
+        if (surfaceSmoothing == null) {
+            surfaceSmoothing = SurfaceSmoothing.NONE;
+        }
+        if (surfaceSmoothing != getSurfaceSmoothing()) {
+            final SurfaceSmoothing oldSurfaceSmoothing = getSurfaceSmoothing();
+            this.surfaceSmoothing = surfaceSmoothing;
+            changeNo++;
+            propertyChangeSupport.firePropertyChange("surfaceSmoothing", oldSurfaceSmoothing, surfaceSmoothing);
         }
     }
 
@@ -1970,7 +2037,9 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
 
     synchronized void ensureAllReadable() {
         ensureManagedAttributesReadable();
-        tiles.values().forEach(Tile::ensureAllReadable);
+        if (tiles != null) {
+            tiles.values().forEach(Tile::ensureAllReadable);
+        }
     }
 
     public void addDimensionListener(Listener listener) {
@@ -2322,6 +2391,10 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
     }
 
     public void save(ZipOutputStream out) throws IOException {
+        save(out, Collections.emptySet());
+    }
+
+    public void save(ZipOutputStream out, Set<String> skipRegionEntries) throws IOException {
         readLock.lock();
         try {
             setEventsInhibited(true);
@@ -2333,6 +2406,7 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
                     final Map<Point, Tile> savedTiles = tiles;
                     final World2 savedWorld = world;
                     try {
+                        prepareForSaving();
                         tiles = null;
                         world = null;
                         final ObjectOutputStream dataout = new ObjectOutputStream(out);
@@ -2350,25 +2424,11 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
                 final int regionX1 = lowestX >> 2, regionX2 = highestX >> 2, regionY1 = lowestY >> 2, regionY2 = highestY >> 2;
                 for (int regionX = regionX1; regionX <= regionX2; regionX++) {
                     for (int regionY = regionY1; regionY <= regionY2; regionY++) {
-                        final List<Tile> tileList = new ArrayList<>();
-                        for (int tileX = 0; tileX < 4; tileX++) {
-                            for (int tileY = 0; tileY < 4; tileY++) {
-                                final Tile tile = tiles.get(new Point((regionX << 2) | tileX, (regionY << 2) | tileY));
-                                if (tile != null) {
-                                    tile.prepareForSaving();
-                                    tileList.add(tile);
-                                }
-                            }
+                        final String entryName = path + "region-data-" + regionX + "," + regionY + ".bin";
+                        if (skipRegionEntries.contains(entryName)) {
+                            continue;
                         }
-
-                        out.putNextEntry(new ZipEntry(path + "region-data-" + regionX + "," + regionY + ".bin"));
-                        try {
-                            final ObjectOutputStream dataout = new ObjectOutputStream(out);
-                            dataout.writeObject(tileList);
-                            dataout.flush();
-                        } finally {
-                            out.closeEntry();
-                        }
+                        writeRegionEntry(out, path, regionX, regionY);
                     }
                 }
             } finally {
@@ -2376,6 +2436,95 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
             }
         } finally {
             readLock.unlock();
+        }
+    }
+
+    public Set<String> getDirtyRegionEntryNames() {
+        readLock.lock();
+        try {
+            final Set<String> entryNames = new HashSet<>();
+            final String path = anchor + "/";
+            for (Tile tile: dirtyTiles) {
+                entryNames.add(path + "region-data-" + (tile.getX() >> 2) + "," + (tile.getY() >> 2) + ".bin");
+            }
+            return entryNames;
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    public void saveDirtyRegions(ZipOutputStream out, Set<String> dirtyRegionEntries) throws IOException {
+        readLock.lock();
+        try {
+            final String path = anchor + "/";
+            final Set<Point> writtenRegions = new HashSet<>();
+            for (String entryName: dirtyRegionEntries) {
+                if (! entryName.startsWith(path)) {
+                    continue;
+                }
+                final int index = entryName.lastIndexOf("region-data-");
+                if (index < 0) {
+                    continue;
+                }
+                final String coords = entryName.substring(index + "region-data-".length(), entryName.length() - ".bin".length());
+                final String[] parts = coords.split(",");
+                if (parts.length != 2) {
+                    continue;
+                }
+                final Point regionCoords = new Point(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
+                if (writtenRegions.add(regionCoords)) {
+                    writeRegionEntry(out, path, regionCoords.x, regionCoords.y);
+                }
+            }
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    public void clearDirtyRegionsAfterSave() {
+        readLock.lock();
+        try {
+            dirtyTiles.clear();
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    void loadRegionData(List<Map.Entry<String, byte[]>> regionEntries) throws UnloadableWorldException {
+        writeLock.lock();
+        try {
+            for (Map.Entry<String, byte[]> regionEntry: regionEntries) {
+                try (WPCustomObjectInputStream wrappedIn = new WPCustomObjectInputStream(new ByteArrayInputStream(regionEntry.getValue()), PluginManager.getPluginClassLoader(), AbstractObject.class)) {
+                    final List<Tile> tileList = (List<Tile>) wrappedIn.readObject();
+                    tileList.forEach(this::addTile);
+                } catch (IOException | ClassNotFoundException e) {
+                    throw new UnloadableWorldException("Could not load region data " + regionEntry.getKey(), e, null);
+                }
+            }
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    private void writeRegionEntry(ZipOutputStream out, String path, int regionX, int regionY) throws IOException {
+        final List<Tile> tileList = new ArrayList<>();
+        for (int tileX = 0; tileX < 4; tileX++) {
+            for (int tileY = 0; tileY < 4; tileY++) {
+                final Tile tile = tiles.get(new Point((regionX << 2) | tileX, (regionY << 2) | tileY));
+                if (tile != null) {
+                    tile.prepareForSaving();
+                    tileList.add(tile);
+                }
+            }
+        }
+        out.putNextEntry(new ZipEntry(path + "region-data-" + regionX + "," + regionY + ".bin"));
+        try {
+            final ObjectOutputStream dataout = new ObjectOutputStream(out);
+            dataout.writeObject(tileList);
+            dataout.flush();
+        } finally {
+            out.closeEntry();
         }
     }
 
@@ -2586,7 +2735,7 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
         in.defaultReadObject();
 
         listeners = new ArrayList<>();
-        dirtyTiles = new HashSet<>();
+        dirtyTiles = ConcurrentHashMap.newKeySet();
         addedTiles = new HashSet<>();
         removedTiles = new HashSet<>();
         propertyChangeSupport = new PropertyChangeSupport(this);
@@ -2804,7 +2953,9 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
 
     @Serial
     private void writeObject(ObjectOutputStream out) throws IOException {
-        prepareForSaving();
+        if (tiles != null) {
+            prepareForSaving();
+        }
         out.defaultWriteObject();
     }
 
@@ -2838,6 +2989,7 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
     private Point lastViewPosition = new Point();
     private List<CustomBiome> customBiomes;
     private boolean coverSteepTerrain = true;
+    private SurfaceSmoothing surfaceSmoothing = Branding.isV2() ? SurfaceSmoothing.SLABS_AND_STAIRS : SurfaceSmoothing.NONE;
     private List<CustomLayer> customLayers = new ArrayList<>();
     private int wpVersion = CURRENT_WP_VERSION;
     private boolean fixOverlayCoords;
@@ -2860,7 +3012,7 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
     private Integer undergroundBiome;
     private transient List<Listener> listeners = new ArrayList<>();
     private transient boolean eventsInhibited;
-    private transient Set<Tile> dirtyTiles = new HashSet<>();
+    private transient Set<Tile> dirtyTiles = ConcurrentHashMap.newKeySet();
     private transient Set<Tile> addedTiles = new HashSet<>();
     private transient Set<Tile> removedTiles = new HashSet<>();
     private transient UndoManager undoManager;
@@ -2872,6 +3024,55 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
     private transient ReadWriteLock lock = new ReentrantReadWriteLock();
     private transient Lock readLock = lock.readLock(), writeLock = lock.writeLock();
     private transient boolean managedAttributesReadable, managedAttributesWritable;
+    private transient ExportHeightSnapshot exportHeightSnapshot;
+    private transient Map<LayerDistanceKey, HeightMap> exportDistancesToEdgeCache;
+    private transient Map<TunnelLayerDistanceKey, HeightMap> exportEdgeHeightsCache;
+
+    private static final class LayerDistanceKey {
+        private final Layer layer;
+        private final float maxDistance;
+
+        LayerDistanceKey(Layer layer, float maxDistance) {
+            this.layer = layer;
+            this.maxDistance = maxDistance;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            LayerDistanceKey that = (LayerDistanceKey) o;
+            return Float.compare(that.maxDistance, maxDistance) == 0 && Objects.equals(layer, that.layer);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(layer, maxDistance);
+        }
+    }
+
+    private static final class TunnelLayerDistanceKey {
+        private final TunnelLayer layer;
+        private final float maxDistance;
+
+        TunnelLayerDistanceKey(TunnelLayer layer, float maxDistance) {
+            this.layer = layer;
+            this.maxDistance = maxDistance;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            TunnelLayerDistanceKey that = (TunnelLayerDistanceKey) o;
+            return Float.compare(that.maxDistance, maxDistance) == 0 && Objects.equals(layer, that.layer);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(layer, maxDistance);
+        }
+    }
 
     public static final int[] POSSIBLE_AUTO_BIOMES = {BIOME_PLAINS, BIOME_FOREST,
         BIOME_SWAMPLAND, BIOME_JUNGLE, BIOME_MESA, BIOME_DESERT, BIOME_BEACH,
@@ -2913,6 +3114,11 @@ public class Dimension extends InstanceKeeper implements TileProvider, Serializa
     }
 
     public enum LayerAnchor {BEDROCK, TERRAIN}
+
+    public enum SurfaceSmoothing {
+        NONE,
+        SLABS_AND_STAIRS
+    }
 
     public enum WallType { BEDROCK, BARIER /* typo, but it's in the wild, so we can't easily fix it anymore... 😔 */}
 

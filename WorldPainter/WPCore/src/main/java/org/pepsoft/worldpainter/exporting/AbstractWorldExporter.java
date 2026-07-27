@@ -33,7 +33,10 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -52,9 +55,12 @@ import static org.pepsoft.worldpainter.DefaultPlugin.JAVA_MCREGION;
 import static org.pepsoft.worldpainter.Dimension.Role.DETAIL;
 import static org.pepsoft.worldpainter.Dimension.Role.MASTER;
 import static org.pepsoft.worldpainter.Platform.Capability.POPULATE;
+import static org.pepsoft.worldpainter.Platform.Capability.PRECALCULATED_LIGHT;
 import static org.pepsoft.worldpainter.exporting.WorldExportSettings.Step.*;
 import static org.pepsoft.worldpainter.layers.tunnel.TunnelLayer.Mode.CUSTOM_DIMENSION;
-import static org.pepsoft.worldpainter.util.ThreadUtils.chooseThreadCountForExport;
+import static org.pepsoft.worldpainter.util.ThreadUtils.chooseChunkThreadCountForExport;
+import static org.pepsoft.worldpainter.util.ThreadUtils.getMostRecentThreadCount;
+import static org.pepsoft.worldpainter.util.ThreadUtils.planExport;
 
 /**
  * An abstract {@link WorldExporter} for block based platforms.
@@ -226,8 +232,20 @@ public abstract class AbstractWorldExporter implements WorldExporter {
             }
 
             final Map<Point, List<Fixup>> fixups = new HashMap<>();
-            final ExecutorService executor = createExecutorService("exporting", sortedRegions.size());
+            System.gc();
+            final ExportMemoryBudget exportBudget = planExport(combined, sortedRegions.size(), worldExportSettings);
+            final int exportThreadCount = exportBudget.getExportThreadCount();
+            final int chunkThreadCount = chooseChunkThreadCountForExport(exportBudget);
+            final Semaphore inFlightRegions = new Semaphore(exportBudget.getMaxInFlightRegions());
+            final ExecutorService executor = createExecutorService("exporting", exportThreadCount);
+            final ExecutorService chunkExecutor = createExecutorService("chunk-generation", chunkThreadCount);
+            dimension.beginExportHeightMapCaching();
+            combined.beginExportHeightMapCaching();
+            if (ceiling != null) {
+                ceiling.beginExportHeightMapCaching();
+            }
             final RuntimeException[] exception = new RuntimeException[1];
+            final OutOfMemoryError[] outOfMemory = new OutOfMemoryError[1];
             final ParallelProgressManager parallelProgressManager = (progressReceiver != null) ? new ParallelProgressManager(progressReceiver, regions.size()) : null;
             final AtomicBoolean abort = new AtomicBoolean();
             try {
@@ -238,15 +256,28 @@ public abstract class AbstractWorldExporter implements WorldExporter {
                         if (abort.get()) {
                             return;
                         }
+                        boolean acquired = false;
+                        try {
+                            inFlightRegions.acquire();
+                            acquired = true;
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            abort.set(true);
+                            return;
+                        }
                         ProgressReceiver progressReceiver1 = (parallelProgressManager != null) ? parallelProgressManager.createProgressReceiver() : null;
                         if (progressReceiver1 != null) {
                             try {
                                 progressReceiver1.checkForCancellation();
                             } catch (OperationCancelled e) {
                                 abort.set(true);
+                                if (acquired) {
+                                    inFlightRegions.release();
+                                }
                                 return;
                             }
                         }
+                        WorldRegion worldRegion = null;
                         try {
                             final int minHeight = dimension.getMinHeight(), maxHeight = dimension.getMaxHeight();
                             final Map<Layer, LayerExporter> exporters = getExportersForRegion(combined, regionCoords);
@@ -254,10 +285,10 @@ public abstract class AbstractWorldExporter implements WorldExporter {
                             final WorldPainterChunkFactory chunkFactory = new WorldPainterChunkFactory(combined, exporters, platform, maxHeight);
                             final WorldPainterChunkFactory ceilingChunkFactory = (ceiling != null) ? new WorldPainterChunkFactory(ceiling, ceilingExporters, platform, maxHeight) : null;
 
-                            WorldRegion worldRegion = new WorldRegion(regionCoords.x, regionCoords.y, minHeight, maxHeight, platform);
+                            worldRegion = new WorldRegion(regionCoords.x, regionCoords.y, minHeight, maxHeight, platform);
                             ExportResults exportResults = null;
                             try {
-                                exportResults = exportRegion(worldRegion, combined, ceiling, regionCoords, tilesSelected, exporters, ceilingExporters, chunkFactory, ceilingChunkFactory, (progressReceiver1 != null) ? new SubProgressReceiver(progressReceiver1, 0.0f, 0.9f) : null);
+                                exportResults = exportRegion(worldRegion, combined, ceiling, regionCoords, tilesSelected, exporters, ceilingExporters, chunkFactory, ceilingChunkFactory, chunkExecutor, (progressReceiver1 != null) ? new SubProgressReceiver(progressReceiver1, 0.0f, 0.9f) : null);
                                 if (logger.isDebugEnabled()) {
                                     logger.debug("Generated region " + regionCoords.x + "," + regionCoords.y);
                                 }
@@ -274,21 +305,30 @@ public abstract class AbstractWorldExporter implements WorldExporter {
                                 if ((exportResults != null) && exportResults.chunksGenerated) {
                                     long saveStart = System.nanoTime();
                                     worldRegion.save(worldDir, dim);
+                                    worldRegion.clearChunks();
                                     long saveDuration = System.nanoTime() - saveStart;
-                                    collectedStats.timings.computeIfAbsent(DISK_WRITING, k -> new AtomicLong()).addAndGet(saveDuration);
+                                    synchronized (collectedStats) {
+                                        collectedStats.timings.computeIfAbsent(DISK_WRITING, k -> new AtomicLong()).addAndGet(saveDuration);
+                                    }
                                     if (logger.isDebugEnabled()) {
                                         logger.debug("Saving region took {} ms", saveDuration / 1_000_000);
                                     }
                                 }
                             }
                             synchronized (fixups) {
-                                if ((exportResults.fixups != null) && (!exportResults.fixups.isEmpty())) {
+                                if ((exportResults != null) && (exportResults.fixups != null) && (! exportResults.fixups.isEmpty())) {
                                     fixups.put(new Point(regionCoords.x, regionCoords.y), exportResults.fixups);
                                 }
                                 exportedRegions.add(regionCoords);
                             }
                             performFixupsIfNecessary(worldDir, combined, regions, fixups, exportedRegions, collectedStats, progressReceiver1);
                         } catch (Throwable t) {
+                            if (t instanceof OutOfMemoryError) {
+                                outOfMemory[0] = (OutOfMemoryError) t;
+                                abort.set(true);
+                                logger.error("OutOfMemoryError while exporting region {},{}", region.x, region.y, t);
+                                return;
+                            }
                             if (chainContains(t, OperationCancelled.class)) {
                                 logger.debug("Operation cancelled on thread {} (message: \"{}\")", Thread.currentThread().getName(), t.getMessage());
                             } else {
@@ -302,6 +342,16 @@ public abstract class AbstractWorldExporter implements WorldExporter {
                                     exception[0] = new RuntimeException(t.getClass().getSimpleName() + " while exporting region" + region.x + "," + region.y, exception[0]);
                                 }
                             }
+                        } finally {
+                            if (worldRegion != null) {
+                                worldRegion.clearChunks();
+                            }
+                            if (acquired) {
+                                inFlightRegions.release();
+                            }
+                            if (worldExportSettings.isHollowInterior()) {
+                                System.gc();
+                            }
                         }
                     });
                 }
@@ -312,30 +362,47 @@ public abstract class AbstractWorldExporter implements WorldExporter {
                 } catch (InterruptedException e) {
                     throw new MDCCapturingRuntimeException("Thread interrupted while waiting for all tasks to finish", e);
                 }
+                chunkExecutor.shutdown();
+                try {
+                    chunkExecutor.awaitTermination(366, TimeUnit.DAYS);
+                } catch (InterruptedException e) {
+                    throw new MDCCapturingRuntimeException("Thread interrupted while waiting for chunk generation to finish", e);
+                }
+                dimension.endExportHeightMapCaching();
+                combined.endExportHeightMapCaching();
+                if (ceiling != null) {
+                    ceiling.endExportHeightMapCaching();
+                }
             }
 
             // If there is a progress receiver then we have reported any exceptions to it, but if not then we should
             // rethrow the recorded exception, if any
+            if (outOfMemory[0] != null) {
+                throw outOfMemory[0];
+            }
             if (exception[0] != null) {
                 throw exception[0];
             }
 
-            if (! abort.get()) {
-                // It's possible for there to be fixups left, if thread A was performing fixups and thread B added new
-                // ones and then quit
-                synchronized (fixups) {
-                    if (! fixups.isEmpty()) {
-                        if (progressReceiver != null) {
-                            progressReceiver.setMessage("Doing remaining fixups for " + dimension.getName());
-                            progressReceiver.reset();
-                        }
-                        performFixups(worldDir, combined, collectedStats, progressReceiver, fixups);
+            if (abort.get()) {
+                throw new IllegalStateException("Export aborted because one or more regions failed.");
+            }
+
+            // It's possible for there to be fixups left, if thread A was performing fixups and thread B added new
+            // ones and then quit
+            synchronized (fixups) {
+                if (! fixups.isEmpty()) {
+                    if (progressReceiver != null) {
+                        progressReceiver.setMessage("Doing remaining fixups for " + dimension.getName());
+                        progressReceiver.reset();
                     }
+                    performFixups(worldDir, combined, collectedStats, progressReceiver, fixups);
                 }
             }
 
             // Calculate total size of dimension
             collectedStats.time = System.currentTimeMillis() - start;
+            ExportTimingReporter.logStats(logger, "Export " + dimension.getName(), collectedStats);
 
             if (progressReceiver != null) {
                 progressReceiver.setProgress(1.0f);
@@ -508,6 +575,10 @@ public abstract class AbstractWorldExporter implements WorldExporter {
     }
 
     protected ExportResults firstPass(MinecraftWorld minecraftWorld, Dimension dimension, Point regionCoords, Map<Point, Tile> tiles, boolean tileSelection, Map<Layer, LayerExporter> exporters, ChunkFactory chunkFactory, ProgressReceiver progressReceiver) throws OperationCancelled {
+        return firstPass(minecraftWorld, dimension, regionCoords, tiles, tileSelection, exporters, chunkFactory, null, progressReceiver);
+    }
+
+    protected ExportResults firstPass(MinecraftWorld minecraftWorld, Dimension dimension, Point regionCoords, Map<Point, Tile> tiles, boolean tileSelection, Map<Layer, LayerExporter> exporters, ChunkFactory chunkFactory, ExecutorService sharedChunkExecutor, ProgressReceiver progressReceiver) throws OperationCancelled {
         if (logger.isDebugEnabled()) {
             logger.debug("Start of first pass for region {},{}", regionCoords.x, regionCoords.y);
         }
@@ -530,37 +601,124 @@ public abstract class AbstractWorldExporter implements WorldExporter {
         final ExportResults exportResults = new ExportResults();
         final Anchor anchor = dimension.getAnchor();
         final Dimension oppositeDimension = dimension.getWorld().getDimension(new Anchor(anchor.dim, anchor.role, ! anchor.invert, anchor.id));
-        int chunkNo = 0;
         final int ceilingDelta = dimension.getMaxHeight() - dimension.getCeilingHeight();
+
+        final List<int[]> chunkCoords = new ArrayList<>(1156);
         for (int chunkX = lowestChunkX; chunkX <= highestChunkX; chunkX++) {
             for (int chunkY = lowestChunkY; chunkY <= highestChunkY; chunkY++) {
-                final ChunkFactory.ChunkCreationResult chunkCreationResult = createChunk(dimension, chunkFactory, tiles, chunkX, chunkY, tileSelection, exporters, ceiling);
-                if (chunkCreationResult != null) {
-                    if ((chunkX >= lowestRegionChunkX) && (chunkX <= highestRegionChunkX) && (chunkY >= lowestRegionChunkY) && (chunkY <= highestRegionChunkY)) {
-                        exportResults.chunksGenerated = true;
-                        exportResults.stats.landArea += chunkCreationResult.stats.landArea;
-                        exportResults.stats.surfaceArea += chunkCreationResult.stats.surfaceArea;
-                        exportResults.stats.waterArea += chunkCreationResult.stats.waterArea;
-                        chunkCreationResult.stats.timings.forEach(
-                                (stage, duration) -> exportResults.stats.timings.computeIfAbsent(stage, k -> new AtomicLong()).addAndGet(duration.get()));
-                    }
-                    if (ceiling) {
-                        final Chunk invertedChunk = new InvertedChunk(chunkCreationResult.chunk, ceilingDelta, platform);
-                        Chunk existingChunk = minecraftWorld.getChunkForEditing(chunkX, chunkY);
-                        if (existingChunk == null) {
-                            existingChunk = platformProvider.createChunk(platform, chunkX, chunkY, dimension.getMinHeight(), dimension.getMaxHeight());
-                            minecraftWorld.addChunk(existingChunk);
-                        }
-                        mergeCeilingChunk(invertedChunk, existingChunk, ! oppositeDimension.isBottomless(), ! dimension.isBottomless(), dimension.getCeilingHeight());
-                    } else {
-                        minecraftWorld.addChunk(chunkCreationResult.chunk);
-                    }
+                chunkCoords.add(new int[] {chunkX, chunkY});
+            }
+        }
+
+        final Map<Long, List<int[]>> batches = new LinkedHashMap<>();
+        for (int[] coord : chunkCoords) {
+            final long batchKey = ((long) (coord[0] >> CHUNK_BATCH_SHIFT) << 32) | (coord[1] >> CHUNK_BATCH_SHIFT & 0xffffffffL);
+            batches.computeIfAbsent(batchKey, k -> new ArrayList<>()).add(coord);
+        }
+
+        final boolean ownChunkExecutor = (sharedChunkExecutor == null);
+        final int fallbackChunkThreads = chooseChunkThreadCountForExport(
+                Optional.ofNullable(getMostRecentThreadCount()).orElse(Runtime.getRuntime().availableProcessors() / 2 + 1));
+        final ExecutorService chunkExecutor = ownChunkExecutor
+                ? createExecutorService("chunk-generation", fallbackChunkThreads)
+                : sharedChunkExecutor;
+        final AtomicLong completedChunks = new AtomicLong();
+        final AtomicBoolean chunkAbort = new AtomicBoolean();
+        final List<Future<?>> batchFutures = new ArrayList<>(batches.size());
+        try {
+            for (List<int[]> batch : batches.values()) {
+                if (chunkAbort.get()) {
+                    break;
                 }
-                chunkNo++;
-                if (progressReceiver != null) {
-                    progressReceiver.setProgress((float) chunkNo / 1156);
+                batchFutures.add(chunkExecutor.submit(() -> {
+                    for (int[] coord : batch) {
+                        if (chunkAbort.get()) {
+                            return;
+                        }
+                        final int chunkX = coord[0], chunkY = coord[1];
+                        final ChunkFactory.ChunkCreationResult chunkCreationResult = createChunk(dimension, chunkFactory, tiles, chunkX, chunkY, tileSelection, exporters, ceiling);
+                        if (chunkCreationResult != null) {
+                            synchronized (exportResults) {
+                                if ((chunkX >= lowestRegionChunkX) && (chunkX <= highestRegionChunkX) && (chunkY >= lowestRegionChunkY) && (chunkY <= highestRegionChunkY)) {
+                                    exportResults.chunksGenerated = true;
+                                    exportResults.stats.landArea += chunkCreationResult.stats.landArea;
+                                    exportResults.stats.surfaceArea += chunkCreationResult.stats.surfaceArea;
+                                    exportResults.stats.waterArea += chunkCreationResult.stats.waterArea;
+                                    chunkCreationResult.stats.timings.forEach(
+                                            (stage, duration) -> exportResults.stats.timings.computeIfAbsent(stage, k -> new AtomicLong()).addAndGet(duration.get()));
+                                }
+                            }
+                            if (ceiling) {
+                                final Chunk invertedChunk = new InvertedChunk(chunkCreationResult.chunk, ceilingDelta, platform);
+                                synchronized (minecraftWorld) {
+                                    Chunk existingChunk = minecraftWorld.getChunkForEditing(chunkX, chunkY);
+                                    if (existingChunk == null) {
+                                        existingChunk = platformProvider.createChunk(platform, chunkX, chunkY, dimension.getMinHeight(), dimension.getMaxHeight());
+                                        minecraftWorld.addChunk(existingChunk);
+                                    }
+                                    mergeCeilingChunk(invertedChunk, existingChunk, ! oppositeDimension.isBottomless(), ! dimension.isBottomless(), dimension.getCeilingHeight());
+                                }
+                            } else {
+                                synchronized (minecraftWorld) {
+                                    minecraftWorld.addChunk(chunkCreationResult.chunk);
+                                }
+                            }
+                        }
+                        if (progressReceiver != null) {
+                            try {
+                                progressReceiver.setProgress((float) completedChunks.incrementAndGet() / chunkCoords.size());
+                            } catch (OperationCancelled e) {
+                                chunkAbort.set(true);
+                                return;
+                            }
+                        } else {
+                            completedChunks.incrementAndGet();
+                        }
+                    }
+                }));
+            }
+        } finally {
+            if (chunkAbort.get()) {
+                for (Future<?> batchFuture : batchFutures) {
+                    batchFuture.cancel(true);
                 }
             }
+            for (Future<?> batchFuture : batchFutures) {
+                try {
+                    batchFuture.get();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new MDCCapturingRuntimeException("Thread interrupted while waiting for chunk generation to finish", e);
+                } catch (ExecutionException e) {
+                    if (chunkAbort.get()) {
+                        continue;
+                    }
+                    final Throwable cause = e.getCause();
+                    if (cause instanceof RuntimeException runtimeException) {
+                        throw runtimeException;
+                    }
+                    if (cause instanceof Error error) {
+                        throw error;
+                    }
+                    throw new MDCCapturingRuntimeException("Exception while generating chunks", cause);
+                } catch (CancellationException ignored) {
+                    if (! chunkAbort.get()) {
+                        throw new MDCCapturingRuntimeException("Chunk generation task cancelled unexpectedly", ignored);
+                    }
+                }
+            }
+            if (ownChunkExecutor) {
+                chunkExecutor.shutdown();
+                try {
+                    chunkExecutor.awaitTermination(366, TimeUnit.DAYS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new MDCCapturingRuntimeException("Thread interrupted while waiting for chunk generation to finish", e);
+                }
+            }
+        }
+        if (chunkAbort.get()) {
+            throw new OperationCancelled("Export cancelled");
         }
         if (logger.isDebugEnabled()) {
             logger.debug("End of first pass for region {},{}", regionCoords.x, regionCoords.y);
@@ -597,6 +755,9 @@ public abstract class AbstractWorldExporter implements WorldExporter {
         final Rectangle exportedArea = new Rectangle((regionCoords.x << 9), (regionCoords.y << 9), 512, 512);
         final List<Fixup> fixups = new ArrayList<>();
         for (SecondPassLayerExporter.Stage stage: SecondPassLayerExporter.Stage.values()) {
+            if (progressReceiver != null) {
+                progressReceiver.checkForCancellation();
+            }
             if (logger.isDebugEnabled()) {
                 logger.debug("Start of {} stage for region {},{}", stage, regionCoords.x, regionCoords.y);
             }
@@ -676,6 +837,10 @@ public abstract class AbstractWorldExporter implements WorldExporter {
     }
 
     protected void blockPropertiesPass(MinecraftWorld minecraftWorld, Point regionCoords, BlockBasedExportSettings exportSettings, ProgressReceiver progressReceiver) throws OperationCancelled {
+        blockPropertiesPass(minecraftWorld, regionCoords, exportSettings, worldExportSettings, progressReceiver);
+    }
+
+    private void blockPropertiesPass(MinecraftWorld minecraftWorld, Point regionCoords, BlockBasedExportSettings exportSettings, WorldExportSettings lightingWorldSettings, ProgressReceiver progressReceiver) throws OperationCancelled {
         float maxIterations = 0;
         final StringBuilder nounsBuilder = new StringBuilder();
         if (exportSettings.isCalculateSkyLight() || exportSettings.isCalculateBlockLight()) {
@@ -693,7 +858,7 @@ public abstract class AbstractWorldExporter implements WorldExporter {
         if (progressReceiver != null) {
             progressReceiver.setMessage("Calculating initial " + nouns);
         }
-        BlockPropertiesCalculator calculator = new BlockPropertiesCalculator(minecraftWorld, platform, worldExportSettings, exportSettings);
+        BlockPropertiesCalculator calculator = new BlockPropertiesCalculator(minecraftWorld, platform, lightingWorldSettings, exportSettings);
 
         // Calculate primary light
         int lowMark = Integer.MAX_VALUE, highMark = Integer.MIN_VALUE;
@@ -741,12 +906,41 @@ public abstract class AbstractWorldExporter implements WorldExporter {
         }
     }
 
+    private static WorldExportSettings withoutSkippingStep(WorldExportSettings settings, WorldExportSettings.Step step) {
+        final Set<WorldExportSettings.Step> skipped = settings.getStepsToSkip();
+        if ((skipped == null) || (! skipped.contains(step))) {
+            return settings;
+        }
+        final EnumSet<WorldExportSettings.Step> steps = EnumSet.copyOf(skipped);
+        steps.remove(step);
+        final WorldExportSettings copy = new WorldExportSettings(settings.getDimensionsToExport(), settings.getTilesToExport(), steps);
+        copy.setHollowInterior(settings.isHollowInterior());
+        copy.setHollowThickness(settings.getHollowThickness());
+        return copy;
+    }
+
+    private void applyDeferredMinecraftChunkStatus(MinecraftWorld minecraftWorld, Point regionCoords) {
+        final int lowestChunkX = (regionCoords.x << 5) - 1;
+        final int highestChunkX = (regionCoords.x << 5) + 32;
+        final int lowestChunkY = (regionCoords.y << 5) - 1;
+        final int highestChunkY = (regionCoords.y << 5) + 32;
+        for (int chunkX = lowestChunkX; chunkX <= highestChunkX; chunkX++) {
+            for (int chunkY = lowestChunkY; chunkY <= highestChunkY; chunkY++) {
+                final Chunk chunk = minecraftWorld.getChunk(chunkX, chunkY);
+                if (chunk != null) {
+                    chunk.setLightPopulated(false);
+                }
+            }
+        }
+    }
+
     protected ExportResults exportRegion(MinecraftWorld minecraftWorld,
                                          Dimension dimension, Dimension ceiling,
                                          Point regionCoords,
                                          boolean tileSelection,
                                          Map<Layer, LayerExporter> exporters, Map<Layer, LayerExporter> ceilingExporters,
                                          ChunkFactory chunkFactory, ChunkFactory ceilingChunkFactory,
+                                         ExecutorService sharedChunkExecutor,
                                          ProgressReceiver progressReceiver) {
         return doWithMdcContext(() -> {
             if (progressReceiver != null) {
@@ -794,21 +988,44 @@ public abstract class AbstractWorldExporter implements WorldExporter {
             }
 
             // First pass. Create terrain and apply layers which don't need access to neighbouring chunks
-            ExportResults exportResults = firstPass(minecraftWorld, dimension, regionCoords, tiles, tileSelection, exporters,chunkFactory,
-                    (progressReceiver != null) ? new SubProgressReceiver(progressReceiver, 0.0f, ((ceiling != null) ? 0.225f : 0.45f) /* TODO why doesn't this work? */) : null);
+            final ExportHeightSnapshot heightSnapshot = ExportHeightSnapshot.capture(tiles);
+            dimension.setExportHeightSnapshot(heightSnapshot);
+            if (ceiling != null) {
+                ceiling.setExportHeightSnapshot(ExportHeightSnapshot.capture(ceilingTiles));
+            }
+            try {
+            final boolean hollowInterior = worldExportSettings.isHollowInterior();
+            // Hollow is often a sizable fraction of region time; weight progress accordingly so ETA stays realistic.
+            final float hollowShare = hollowInterior ? ((ceiling != null) ? 0.12f : 0.18f) : 0f;
+            final float firstPassSize = (ceiling != null) ? 0.225f : (hollowInterior ? (0.45f - hollowShare) : 0.45f);
+            ExportResults exportResults = firstPass(minecraftWorld, dimension, regionCoords, tiles, tileSelection, exporters,chunkFactory, sharedChunkExecutor,
+                    (progressReceiver != null) ? new SubProgressReceiver(progressReceiver, 0.0f, firstPassSize) : null);
 
             ExportResults ceilingExportResults = null;
             if (ceiling != null) {
                 // First pass for the ceiling. Create terrain and apply layers which don't need access to neighbouring
                 // chunks
-                ceilingExportResults = firstPass(minecraftWorld, ceiling, regionCoords, ceilingTiles, tileSelection, ceilingExporters, ceilingChunkFactory,
+                ceilingExportResults = firstPass(minecraftWorld, ceiling, regionCoords, ceilingTiles, tileSelection, ceilingExporters, ceilingChunkFactory, sharedChunkExecutor,
                         (progressReceiver != null) ? new SubProgressReceiver(progressReceiver, 0.225f, 0.225f) : null);
             }
 
             if (exportResults.chunksGenerated || ((ceiling != null) && ceilingExportResults.chunksGenerated)) {
+                if (hollowInterior) {
+                    long hollowStart = System.nanoTime();
+                    final Rectangle exportedArea = new Rectangle(regionCoords.x << 9, regionCoords.y << 9, 512, 512);
+                    final ProgressReceiver hollowProgress = (progressReceiver != null)
+                            ? new SubProgressReceiver(progressReceiver, firstPassSize, hollowShare) : null;
+                    if (hollowProgress != null) {
+                        hollowProgress.setMessage("Hollowing enclosed blocks...");
+                    }
+                    ChunkInteriorHollower.hollowRegion(minecraftWorld, exportedArea, dimension.getMinHeight(), dimension.getMaxHeight(),
+                            worldExportSettings.getHollowThickness(), hollowProgress, isTurboNoCavesExport(worldExportSettings));
+                    exportResults.stats.timings.put(HOLLOW_INTERIOR, new AtomicLong(System.nanoTime() - hollowStart));
+                }
+                final float afterFirstPass = hollowInterior ? (firstPassSize + hollowShare) : firstPassSize;
                 // Second pass. Apply layers which need information from or apply changes to neighbouring chunks
                 List<Fixup> myFixups = secondPass(secondaryPassLayers, dimension, minecraftWorld, exporters, tiles.values(), regionCoords,
-                        exportResults, (progressReceiver != null) ? new SubProgressReceiver(progressReceiver, 0.45f, (ceiling != null) ? 0.05f : 0.1f) : null);
+                        exportResults, (progressReceiver != null) ? new SubProgressReceiver(progressReceiver, afterFirstPass, (ceiling != null) ? 0.05f : 0.1f) : null);
                 if ((myFixups != null) && (! myFixups.isEmpty())) {
                     exportResults.fixups = myFixups;
                 }
@@ -836,6 +1053,17 @@ public abstract class AbstractWorldExporter implements WorldExporter {
                     start = System.nanoTime();
                     blockPropertiesPass(minecraftWorld, regionCoords, exportSettings, (progressReceiver != null) ? new SubProgressReceiver(progressReceiver, 0.65f, 0.35f) : null);
                     exportResults.stats.timings.put(BLOCK_PROPERTIES, new AtomicLong(System.nanoTime() - start));
+                } else if ((exportSettings instanceof JavaExportSettings javaSettings)
+                        && javaSettings.defersChunkLightingToMinecraft()) {
+                    if (platform.capabilities.contains(PRECALCULATED_LIGHT)) {
+                        start = System.nanoTime();
+                        blockPropertiesPass(minecraftWorld, regionCoords, javaSettings.withSkylightOnly(),
+                                withoutSkippingStep(worldExportSettings, LIGHTING),
+                                (progressReceiver != null) ? new SubProgressReceiver(progressReceiver, 0.65f, 0.35f) : null);
+                        exportResults.stats.timings.put(BLOCK_PROPERTIES, new AtomicLong(System.nanoTime() - start));
+                    } else {
+                        applyDeferredMinecraftChunkStatus(minecraftWorld, regionCoords);
+                    }
                 }
             }
 
@@ -844,6 +1072,12 @@ public abstract class AbstractWorldExporter implements WorldExporter {
             }
 
             return exportResults;
+            } finally {
+                dimension.clearExportHeightSnapshot();
+                if (ceiling != null) {
+                    ceiling.clearExportHeightSnapshot();
+                }
+            }
         }, "region.coords", regionCoords);
     }
 
@@ -1019,8 +1253,8 @@ public abstract class AbstractWorldExporter implements WorldExporter {
         fromEntities.removeIf(entity -> (entity.getY() == (y - dy)) && ((entity.getX() - existingBlockDX) == x) && ((entity.getZ() - existingBlockDZ) == z));
     }
 
-    protected final ExecutorService createExecutorService(String operation, int jobCount) {
-        return MDCThreadPoolExecutor.newFixedThreadPool(chooseThreadCountForExport(operation, jobCount), new ThreadFactory() {
+    protected final ExecutorService createExecutorService(String operation, int threadCount) {
+        return MDCThreadPoolExecutor.newFixedThreadPool(Math.max(threadCount, 1), new ThreadFactory() {
             @Override
             public synchronized Thread newThread(Runnable r) {
                 Thread thread = new Thread(threadGroup, r, operation.toLowerCase().replaceAll("\\s+", "-") + "-" + nextID++);
@@ -1045,6 +1279,14 @@ public abstract class AbstractWorldExporter implements WorldExporter {
                 return rc;
             });
         }
+    }
+
+    private static boolean isTurboNoCavesExport(WorldExportSettings settings) {
+        if (settings == null) {
+            return false;
+        }
+        final Set<WorldExportSettings.Step> skipped = settings.getStepsToSkip();
+        return (skipped != null) && skipped.contains(CAVES);
     }
 
     protected final int getIntHeightAt(int dim, int x, int y) {
@@ -1301,7 +1543,24 @@ public abstract class AbstractWorldExporter implements WorldExporter {
         }
     };
 
+    private static void awaitExecutorTermination(ExecutorService executor) {
+        try {
+            if (! executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                logger.warn("Executor did not terminate within timeout; forcing shutdown");
+                executor.shutdownNow();
+                executor.awaitTermination(5, TimeUnit.SECONDS);
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+            throw new MDCCapturingRuntimeException("Thread interrupted while waiting for tasks to finish", e);
+        }
+    }
+
     private static final Logger logger = LoggerFactory.getLogger(AbstractWorldExporter.class);
+
+    /** Locality-aware chunk batch size: 2^CHUNK_BATCH_SHIFT chunks per side (4×4). */
+    private static final int CHUNK_BATCH_SHIFT = 2;
 
     public static class ExportResults {
         /**

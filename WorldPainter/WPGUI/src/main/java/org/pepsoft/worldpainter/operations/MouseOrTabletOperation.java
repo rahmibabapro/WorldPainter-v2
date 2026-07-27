@@ -10,6 +10,7 @@ import jpen.event.PenListener;
 import jpen.owner.multiAwt.AwtPenToolkit;
 import org.pepsoft.util.SystemUtils;
 import org.pepsoft.worldpainter.App;
+import org.pepsoft.worldpainter.Branding;
 import org.pepsoft.worldpainter.Dimension;
 import org.pepsoft.worldpainter.EventLogger;
 import org.pepsoft.worldpainter.WorldPainterView;
@@ -175,6 +176,14 @@ public abstract class MouseOrTabletOperation extends AbstractOperation implement
         this.level = level;
     }
 
+    /** v2 paints much faster by cutting the continuous-stroke timer delay. */
+    private int effectiveDelay() {
+        if (delay < 0) {
+            return delay;
+        }
+        return Branding.isV2() ? Math.max(1, delay / 5) : delay;
+    }
+
     @Override
     public void interrupt() {
         if (timer != null) {
@@ -244,7 +253,7 @@ public abstract class MouseOrTabletOperation extends AbstractOperation implement
                     final WorldPainterView view = getView();
                     if (! oneShot) {
                         interrupt(); // Make sure any operation in progress (due to timing issues perhaps) is interrupted
-                        timer = new Timer(delay, e -> {
+                        timer = new Timer(effectiveDelay(), e -> {
                             Point worldCoords = view.viewToWorld((int) x, (int) y);
                             tick(worldCoords.x, worldCoords.y, undo, first, (stylus || eraser) ? dynamicLevel : 1.0f);
                             view.updateStatusBar(worldCoords.x, worldCoords.y);
@@ -308,7 +317,7 @@ public abstract class MouseOrTabletOperation extends AbstractOperation implement
         final WorldPainterView view = getView();
         if (! oneShot) {
             interrupt(); // Make sure any operation in progress (due to timing issues perhaps) is interrupted
-            timer = new Timer(delay, e -> {
+            timer = new Timer(effectiveDelay(), e -> {
                 Point worldCoords = view.viewToWorld((int) x, (int) y);
                 tick(worldCoords.x, worldCoords.y, undo, first, 1.0f);
                 view.updateStatusBar(worldCoords.x, worldCoords.y);

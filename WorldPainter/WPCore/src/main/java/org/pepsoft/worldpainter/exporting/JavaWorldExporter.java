@@ -203,6 +203,12 @@ public class JavaWorldExporter extends AbstractWorldExporter { // TODO can this 
             }
         }
         level.setMapFeatures(world.isMapFeatures());
+        final ExportSettings exportSettings = (dim0.getExportSettings() != null)
+                ? dim0.getExportSettings()
+                : platformProvider.getDefaultExportSettings(platform);
+        final boolean writeOptimizedGameRules = (level instanceof Java261Level)
+                && (exportSettings instanceof org.pepsoft.worldpainter.platforms.JavaExportSettings)
+                && ((org.pepsoft.worldpainter.platforms.JavaExportSettings) exportSettings).isApplyOptimizedGameRules();
         if ((platform != JAVA_MCREGION)) {
             World2.BorderSettings borderSettings = world.getBorderSettings();
             level.setBorderCenterX(borderSettings.getCentreX());
@@ -218,7 +224,24 @@ public class JavaWorldExporter extends AbstractWorldExporter { // TODO can this 
         // Save the level.dat file. This will also create a session.lock file, hopefully kicking out any Minecraft
         // instances which may have the map open:
         level.save(worldDir);
+        if (writeOptimizedGameRules) {
+            writeOptimizedGameRules(worldDir);
+        }
         return level;
+    }
+
+    /**
+     * Write a performance-oriented {@code game_rules.dat} file (Minecraft 26.1+ external game rules storage).
+     */
+    private void writeOptimizedGameRules(File worldDir) throws IOException {
+        final File minecraftDataDir = new File(worldDir, "data/minecraft");
+        if ((! minecraftDataDir.exists()) && (! minecraftDataDir.mkdirs())) {
+            throw new IOException("Could not create " + minecraftDataDir);
+        }
+        final File gameRulesFile = new File(minecraftDataDir, "game_rules.dat");
+        try (org.jnbt.NBTOutputStream out = new org.jnbt.NBTOutputStream(new java.util.zip.GZIPOutputStream(new FileOutputStream(gameRulesFile)))) {
+            out.writeTag(OptimizedGameRules.createFileRoot());
+        }
     }
 
     @Override

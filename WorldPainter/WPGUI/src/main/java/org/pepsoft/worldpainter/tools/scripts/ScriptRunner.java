@@ -62,6 +62,16 @@ public class ScriptRunner extends WorldPainterDialog {
         Configuration config = Configuration.getInstance();
         recentScriptFiles = (config.getRecentScriptFiles() != null) ? new ArrayList<>(config.getRecentScriptFiles()) : new ArrayList<>();
         recentScriptFiles.removeIf(file -> !file.isFile());
+        try {
+            for (BundledScriptCatalog.BundledScript bundledScript: BundledScriptCatalog.getAll()) {
+                final File cachedScript = BundledScriptCatalog.materialise(bundledScript);
+                if (! recentScriptFiles.contains(cachedScript)) {
+                    recentScriptFiles.add(cachedScript);
+                }
+            }
+        } catch (IOException e) {
+            logger.warn("Could not load bundled script library", e);
+        }
         comboBoxScript.setModel(new DefaultComboBoxModel<>(recentScriptFiles.toArray(new File[recentScriptFiles.size()])));
         if ((comboBoxScript.getSelectedItem() != null) && ((File) comboBoxScript.getSelectedItem()).isFile()) {
             setupScript((File) comboBoxScript.getSelectedItem());
@@ -72,6 +82,55 @@ public class ScriptRunner extends WorldPainterDialog {
         scaleToUI();
         pack();
         setLocationRelativeTo(parent);
+    }
+
+    public ScriptRunner(Window parent, World2 world, Dimension dimension, Collection<UndoManager> undoManagers, File initialScript, Map<String, Object> presetParams) {
+        this(parent, world, dimension, undoManagers);
+        if ((initialScript != null) && initialScript.isFile()) {
+            recentScriptFiles.remove(initialScript);
+            recentScriptFiles.add(0, initialScript);
+            comboBoxScript.setModel(new DefaultComboBoxModel<>(recentScriptFiles.toArray(new File[recentScriptFiles.size()])));
+            comboBoxScript.setSelectedItem(initialScript);
+            setupScript(initialScript);
+            applyPresetParams(presetParams);
+            setControlStates();
+        }
+    }
+
+    private void applyPresetParams(Map<String, Object> presetParams) {
+        if ((presetParams == null) || (scriptDescriptor == null)) {
+            return;
+        }
+        for (ParameterDescriptor<?, ?> paramDescriptor: scriptDescriptor.parameterDescriptors) {
+            if (! presetParams.containsKey(paramDescriptor.name)) {
+                continue;
+            }
+            final Object value = presetParams.get(paramDescriptor.name);
+            paramDescriptor.getEditor();
+            applyPresetValue(paramDescriptor, value);
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void applyPresetValue(ParameterDescriptor paramDescriptor, Object value) {
+        if (value == null) {
+            return;
+        }
+        if (value instanceof Number number) {
+            if (paramDescriptor instanceof FloatParameterDescriptor floatDescriptor) {
+                floatDescriptor.setValue(number.floatValue());
+                return;
+            }
+            if (paramDescriptor instanceof IntegerParameterDescriptor integerDescriptor) {
+                integerDescriptor.setValue(number.intValue());
+                return;
+            }
+        }
+        if (value instanceof Boolean bool && paramDescriptor instanceof BooleanParameterDescriptor booleanDescriptor) {
+            booleanDescriptor.setValue(bool);
+            return;
+        }
+        paramDescriptor.setValue(paramDescriptor.toObject(String.valueOf(value)));
     }
 
     private void setControlStates() {
@@ -373,6 +432,11 @@ public class ScriptRunner extends WorldPainterDialog {
                     }
                     bindings.put("DataSize", dataSizes);
                     bindings.put("scriptDir", scriptFilePath);
+                    bindings.put("__FILE__", scriptFileName);
+                    bindings.put("progress", new ScriptProgress(context, null));
+                    if (dimension != null) {
+                        bindings.put("scriptDimension", new ScriptDimensionBridge(dimension, context, scriptEngine, null));
+                    }
 
                     // Capture output
                     final List<String> textQueue = new LinkedList<>();
@@ -412,7 +476,7 @@ public class ScriptRunner extends WorldPainterDialog {
                     // TODO add an event to the world history (after it has succeeded, and first make that history
                     //  undoable)
 
-                    // Execute script
+                    // Execute script — nested inhibit via Dimension ref-count
                     if (dimension != null) {
                         dimension.setEventsInhibited(true);
                     }

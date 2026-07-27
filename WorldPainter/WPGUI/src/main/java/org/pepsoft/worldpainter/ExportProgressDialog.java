@@ -16,6 +16,7 @@ import org.pepsoft.util.*;
 import org.pepsoft.util.ProgressReceiver.OperationCancelled;
 import org.pepsoft.util.Version;
 import org.pepsoft.util.swing.ProgressTask;
+import org.pepsoft.worldpainter.exporting.ExportMemoryBudget;
 import org.pepsoft.worldpainter.exporting.WorldExportSettings;
 import org.pepsoft.worldpainter.exporting.WorldExporter;
 import org.pepsoft.worldpainter.layers.Layer;
@@ -35,6 +36,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static java.util.Comparator.comparingLong;
 import static org.pepsoft.minecraft.Constants.*;
 import static org.pepsoft.util.ExceptionUtils.chainContains;
+import static org.pepsoft.util.ExceptionUtils.getFromChainOfType;
 import static org.pepsoft.worldpainter.Constants.V_1_17;
 import static org.pepsoft.worldpainter.DefaultPlugin.*;
 
@@ -109,8 +111,6 @@ public class ExportProgressDialog extends MultiProgressDialog<Map<Integer, Chunk
                 sb.append("<br><br>Please note: <b>this map uses a data pack</b> for a deviating build height.<br>This data pack has only been tested with Minecraft 1.20.5 - 1.21.10.<br>It may not be forward compatible with newer versions of Minecraft.");
             } else if (platform == JAVA_ANVIL_1_21_11) {
                 sb.append("<br><br>Please note: <b>this map uses a data pack</b> for a deviating build height.<br>This data pack has only been tested with Minecraft 1.21.11.<br>It may not be forward compatible with newer versions of Minecraft.");
-            } else if (platform == JAVA_ANVIL_26_1) {
-                sb.append("<br><br>Please note: <b>this map uses a data pack</b> for a deviating build height.<br>This data pack has only been tested with Minecraft 26.1 - 26.2.<br>It may not be forward compatible with newer versions of Minecraft.");
             }
         }
         if (result.size() == 1) {
@@ -189,7 +189,7 @@ public class ExportProgressDialog extends MultiProgressDialog<Map<Integer, Chunk
                 WorldExporter exporter = PlatformManager.getInstance().getExporter(world, exportSettings);
                 try {
                     backupDir = exporter.selectBackupDir(baseDir, name);
-                    return exporter.export(baseDir, name, backupDir, progressReceiver);
+                    return runExportWithMemoryRecovery(exporter, progressReceiver);
                 } catch (IOException e) {
                     throw new RuntimeException("I/O error while exporting world", e);
                 } catch (RuntimeException e) {
@@ -197,6 +197,47 @@ public class ExportProgressDialog extends MultiProgressDialog<Map<Integer, Chunk
                         allowRetry = true;
                     }
                     throw e;
+                }
+            }
+
+            private Map<Integer, ChunkFactory.Stats> runExportWithMemoryRecovery(WorldExporter exporter, ProgressReceiver progressReceiver) throws OperationCancelled, IOException {
+                try {
+                    return exporter.export(baseDir, name, backupDir, progressReceiver);
+                } catch (OutOfMemoryError oom) {
+                    return retryExportAfterOutOfMemory(exporter, progressReceiver, oom);
+                } catch (RuntimeException e) {
+                    if (chainContains(e, OutOfMemoryError.class)) {
+                        return retryExportAfterOutOfMemory(exporter, progressReceiver, getFromChainOfType(e, OutOfMemoryError.class));
+                    }
+                    throw e;
+                }
+            }
+
+            private Map<Integer, ChunkFactory.Stats> retryExportAfterOutOfMemory(WorldExporter exporter, ProgressReceiver progressReceiver, OutOfMemoryError oom) throws OperationCancelled, IOException {
+                logger.warn("Export ran out of memory; retrying with single-threaded export", oom);
+                System.gc();
+                try {
+                    Thread.sleep(500L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                System.gc();
+                ExportMemoryBudget.setForcedLowMemoryMode(true);
+                ExportMemoryBudget.setForcedMaxExportThreads(1);
+                try {
+                    progressReceiver.reset();
+                    progressReceiver.setMessage("Retrying export with reduced memory usage...");
+                    return exporter.export(baseDir, name, backupDir, progressReceiver);
+                } catch (OutOfMemoryError retryOom) {
+                    throw retryOom;
+                } catch (RuntimeException e) {
+                    if (chainContains(e, OutOfMemoryError.class)) {
+                        throw getFromChainOfType(e, OutOfMemoryError.class);
+                    }
+                    throw e;
+                } finally {
+                    ExportMemoryBudget.clearForcedMaxExportThreads();
+                    ExportMemoryBudget.clearForcedLowMemoryMode();
                 }
             }
         };
@@ -260,6 +301,8 @@ public class ExportProgressDialog extends MultiProgressDialog<Map<Integer, Chunk
     private final NumberFormat formatter = NumberFormat.getIntegerInstance();
     private volatile File backupDir;
     private volatile boolean allowRetry = false;
+
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ExportProgressDialog.class);
     
     private static final long serialVersionUID = 1L;
 }

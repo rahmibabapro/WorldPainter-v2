@@ -68,6 +68,17 @@ public class Tile extends InstanceKeeper implements Serializable, UndoListener, 
         return y;
     }
 
+    /**
+     * Monotonically increasing revision used to invalidate cached 3D tile renders.
+     */
+    public long getRenderRevision() {
+        return renderRevision;
+    }
+
+    private void bumpRenderRevision() {
+        renderRevision++;
+    }
+
     public synchronized int getMinHeight() {
         return minHeight;
     }
@@ -1673,6 +1684,7 @@ public class Tile extends InstanceKeeper implements Serializable, UndoListener, 
     }
 
     private void heightMapChanged() {
+        bumpRenderRevision();
         if (eventInhibitionCounter != 0) {
             heightMapDirty = true;
         } else {
@@ -1683,6 +1695,7 @@ public class Tile extends InstanceKeeper implements Serializable, UndoListener, 
     }
 
     private void terrainChanged() {
+        bumpRenderRevision();
         if (eventInhibitionCounter != 0) {
             terrainDirty = true;
         } else {
@@ -1693,6 +1706,7 @@ public class Tile extends InstanceKeeper implements Serializable, UndoListener, 
     }
 
     private void waterLevelChanged() {
+        bumpRenderRevision();
         if (eventInhibitionCounter != 0) {
             waterLevelDirty = true;
         } else {
@@ -1703,6 +1717,7 @@ public class Tile extends InstanceKeeper implements Serializable, UndoListener, 
     }
 
     private void layerDataChanged(Layer layer) {
+        bumpRenderRevision();
         if (eventInhibitionCounter != 0) {
             dirtyLayers.add(layer);
         } else {
@@ -1714,6 +1729,7 @@ public class Tile extends InstanceKeeper implements Serializable, UndoListener, 
     }
 
     private void allBitLayerDataChanged() {
+        bumpRenderRevision();
         if (eventInhibitionCounter != 0) {
             bitLayersDirty = true;
         } else {
@@ -1724,6 +1740,7 @@ public class Tile extends InstanceKeeper implements Serializable, UndoListener, 
     }
 
     private void allNonBitLayerDataChanged() {
+        bumpRenderRevision();
         if (eventInhibitionCounter != 0) {
             nonBitLayersDirty = true;
         } else {
@@ -1734,6 +1751,7 @@ public class Tile extends InstanceKeeper implements Serializable, UndoListener, 
     }
     
     private void seedsChanged() {
+        bumpRenderRevision();
         if (eventInhibitionCounter != 0) {
             seedsDirty = true;
         } else {
@@ -1818,6 +1836,7 @@ public class Tile extends InstanceKeeper implements Serializable, UndoListener, 
     private transient volatile Set<Layer> dirtyLayers;
     private transient int maxY;
     private transient volatile int eventInhibitionCounter;
+    private transient volatile long renderRevision;
 
     private transient BufferKey<short[]>            HEIGHTMAP_BUFFER_KEY;
     private transient BufferKey<int[]>              TALL_HEIGHTMAP_BUFFER_KEY;

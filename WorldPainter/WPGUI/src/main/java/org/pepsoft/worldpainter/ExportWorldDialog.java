@@ -15,10 +15,13 @@ import org.pepsoft.util.DesktopUtils;
 import org.pepsoft.worldpainter.Dimension.Anchor;
 import org.pepsoft.worldpainter.World2.BorderSettings;
 import org.pepsoft.worldpainter.biomeschemes.CustomBiomeManager;
+import org.pepsoft.worldpainter.exporting.ChunkInteriorHollower;
+import org.pepsoft.worldpainter.exporting.ExportMemoryBudget;
 import org.pepsoft.worldpainter.exporting.WorldExportSettings;
 import org.pepsoft.worldpainter.layers.CustomLayer;
 import org.pepsoft.worldpainter.layers.Layer;
 import org.pepsoft.worldpainter.layers.Populate;
+import org.pepsoft.worldpainter.platforms.JavaExportSettings;
 import org.pepsoft.worldpainter.plugins.PlatformManager;
 import org.pepsoft.worldpainter.util.EnumListCellRenderer;
 import org.pepsoft.worldpainter.util.FileFilter;
@@ -45,12 +48,15 @@ import static org.pepsoft.minecraft.Constants.DIFFICULTY_PEACEFUL;
 import static org.pepsoft.minecraft.datapack.DataPack.isDataPackFile;
 import static org.pepsoft.util.swing.MessageUtils.beepAndShowError;
 import static org.pepsoft.worldpainter.Constants.DIM_NORMAL;
+import static org.pepsoft.worldpainter.DefaultPlugin.JAVA_ANVIL_26_1;
+import static org.pepsoft.worldpainter.DefaultPlugin.JAVA_ANVIL_26_2;
 import static org.pepsoft.worldpainter.DefaultPlugin.JAVA_MCREGION;
 import static org.pepsoft.worldpainter.Dimension.Anchor.NORMAL_DETAIL;
 import static org.pepsoft.worldpainter.ExceptionHandler.doWithoutExceptionReporting;
 import static org.pepsoft.worldpainter.GameType.*;
 import static org.pepsoft.worldpainter.Platform.Capability.*;
 import static org.pepsoft.worldpainter.exporting.WorldExportSettings.EXPORT_EVERYTHING;
+import static org.pepsoft.worldpainter.exporting.WorldExportSettings.Step.*;
 import static org.pepsoft.worldpainter.util.BackupUtils.cleanUpBackups;
 import static org.pepsoft.worldpainter.util.FileUtils.selectFileForOpen;
 import static org.pepsoft.worldpainter.util.MaterialUtils.gatherBlocksWithoutIds;
@@ -83,6 +89,13 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
         }
 
         supportedPlatforms.addAll(PlatformManager.getInstance().getAllPlatforms());
+        if (Branding.isV2()) {
+            // Prefer Minecraft 26.2 for new exports; upgrade worlds still on 26.1.
+            final Platform current = world.getPlatform();
+            if ((current == JAVA_ANVIL_26_1) || (! supportedPlatforms.contains(current))) {
+                world.setPlatform(JAVA_ANVIL_26_2);
+            }
+        }
         final Platform platform = world.getPlatform();
         if (supportedPlatforms.contains(platform)) {
             labelPlatformWarning.setVisible(false);
@@ -102,7 +115,7 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
         fieldName.setText(world.getName());
 
         createDimensionPropertiesEditors();
-        checkBoxGoodies.setSelected(world.isCreateGoodiesChest());
+        checkBoxGoodies.setSelected(Branding.isV2() ? false : world.isCreateGoodiesChest());
         labelPlatform.setText("<html><u>" + platform.displayName + "</u></html>");
         labelPlatform.setToolTipText("Click to change the map format");
         comboBoxGameType.setModel(new DefaultComboBoxModel<>(platform.supportedGameTypes.toArray(new GameType[platform.supportedGameTypes.size()])));
@@ -119,6 +132,12 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
         listDataPacks.setEnabled(platform.capabilities.contains(DATA_PACKS));
         checkBoxMapFeatures.setSelected(world.isMapFeatures());
         comboBoxDifficulty.setSelectedIndex(world.getDifficulty());
+        checkBoxTurboExport.setVisible(Branding.isV2());
+        if (Branding.isV2()) {
+            checkBoxTurboExport.setSelected(config.isDefaultTurboExport());
+            checkBoxTurboExport.addActionListener(e -> checkBoxHollowInterior.setEnabled(checkBoxTurboExport.isSelected()));
+            checkBoxHollowInterior.setEnabled(checkBoxTurboExport.isSelected());
+        }
 
         DocumentListener documentListener = new DocumentListener() {
             @Override
@@ -222,7 +241,28 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
         exportSettings = (exportSettings != null)
                 ? exportSettings
                 : ((world.getExportSettings() != null) ? world.getExportSettings() : EXPORT_EVERYTHING);
-        final boolean exportAllDimensions = exportSettings.getDimensionsToExport() == null, inhibitWarnings = (exportSettings != EXPORT_EVERYTHING);
+        final boolean exportAllDimensions = exportSettings.getDimensionsToExport() == null;
+        if (Branding.isV2() && checkBoxTurboExport.isSelected()) {
+            Configuration.getInstance().setDefaultTurboExport(true);
+            for (Dimension dimension : world.getDimensions()) {
+                if (exportAllDimensions || exportSettings.getDimensionsToExport().contains(dimension.getAnchor().dim)) {
+                    dimension.setExportSettings(JavaExportSettings.turboExportPreset());
+                }
+            }
+            final Set<WorldExportSettings.Step> turboSteps = EnumSet.of(CAVES, RESOURCES, LIGHTING, LEAVES);
+            if ((exportSettings == EXPORT_EVERYTHING) || (exportSettings.getStepsToSkip() == null)) {
+                exportSettings = checkBoxHollowInterior.isSelected()
+                        ? WorldExportSettings.turboExportSettingsWithHollow()
+                        : WorldExportSettings.turboExportSettings();
+            } else {
+                exportSettings.getStepsToSkip().addAll(turboSteps);
+                exportSettings.setHollowInterior(checkBoxHollowInterior.isSelected());
+                if (checkBoxHollowInterior.isSelected()) {
+                    exportSettings.setHollowThickness(ChunkInteriorHollower.DEFAULT_HOLLOW_THICKNESS);
+                }
+            }
+        }
+        final boolean inhibitWarnings = (exportSettings != EXPORT_EVERYTHING);
         final Set<Point> selectedTiles = exportAllDimensions ? null : exportSettings.getTilesToExport();
         final int selectedDimension = exportAllDimensions ? DIM_NORMAL : exportSettings.getDimensionsToExport().iterator().next();
 
@@ -353,6 +393,9 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
             return;
         }
 
+        System.gc();
+        checkExportMemoryBudget(exportSettings);
+
         world.setCreateGoodiesChest(checkBoxGoodies.isSelected());
         world.setGameType((GameType) comboBoxGameType.getSelectedItem());
         world.setAllowCheats(checkBoxAllowCheats.isSelected());
@@ -384,6 +427,8 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
         checkBoxAllowCheats.setEnabled(false);
         checkBoxMapFeatures.setEnabled(false);
         comboBoxDifficulty.setEnabled(false);
+        checkBoxTurboExport.setEnabled(false);
+        checkBoxHollowInterior.setEnabled(false);
         listDataPacks.setEnabled(false);
         buttonAddDataPack.setEnabled(false);
         buttonRemoveDataPack.setEnabled(false);
@@ -408,6 +453,8 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
             }
             checkBoxGoodies.setEnabled(true);
             comboBoxGameType.setEnabled(true);
+            comboBoxDifficulty.setEnabled(true);
+            checkBoxTurboExport.setEnabled(true);
             checkBoxMapFeatures.setEnabled(true);
             listDataPacks.setEnabled(platform.capabilities.contains(DATA_PACKS));
             setControlStates();
@@ -423,7 +470,29 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
         }
         return true;
     }
-    
+
+    /**
+     * Estimate export memory headroom and warn when turbo/hollow may require reduced parallelism.
+     */
+    private boolean checkExportMemoryBudget(WorldExportSettings exportSettings) {
+        final Dimension dimension = world.getDimension(NORMAL_DETAIL);
+        if (dimension == null) {
+            return true;
+        }
+        final int estimatedRegions = Math.max(1, (dimension.getTileCount() + 3) / 4);
+        final ExportMemoryBudget budget = ExportMemoryBudget.compute(dimension, estimatedRegions, exportSettings);
+        logger.info("Pre-export memory budget: {} export threads, {} chunk threads, {} in-flight regions, {} MB headroom",
+                budget.getExportThreadCount(),
+                budget.getChunkThreadCount(),
+                budget.getMaxInFlightRegions(),
+                budget.getAvailableBytes() / 1_048_576L);
+        if (budget.isLowHeadroom()) {
+            logger.warn("Limited memory for export - parallelism capped to {} region thread(s) (hollow={})",
+                    budget.getExportThreadCount(), exportSettings.isHollowInterior());
+        }
+        return true;
+    }
+
     private void testExport() {
         final TestExportDialog dialog = new TestExportDialog(this, world, colourScheme, customBiomeManager, hiddenLayers, contourLines, contourSeparation, lightOrigin);
         dialog.setVisible(true);
@@ -633,6 +702,15 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
 
         comboBoxDifficulty.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Peaceful", "Easy", "Normal", "Hard" }));
 
+        checkBoxTurboExport = new javax.swing.JCheckBox();
+        checkBoxTurboExport.setText("Turbo export (fastest)");
+        checkBoxTurboExport.setToolTipText("<html>Skips caves, ores, lighting and leaves for faster export.<br>Minecraft can finish lighting when you first open the world.</html>");
+
+        checkBoxHollowInterior = new javax.swing.JCheckBox();
+        checkBoxHollowInterior.setText("Hollow terrain interiors");
+        checkBoxHollowInterior.setToolTipText("<html>Removes buried stone/dirt like WorldEdit //hollow 2, keeping a 2-block-thick shell.<br>Reduces block count and file size; slightly slower export.</html>");
+        checkBoxHollowInterior.setVisible(Branding.isV2());
+
         checkBoxMapFeatures.setSelected(true);
         checkBoxMapFeatures.setText(" ");
 
@@ -811,7 +889,9 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
                             .addGroup(jPanel1Layout.createSequentialGroup()
                                 .addComponent(jLabel9)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(checkBoxMapFeatures)))
+                                .addComponent(checkBoxMapFeatures))
+                            .addComponent(checkBoxTurboExport)
+                            .addComponent(checkBoxHollowInterior))
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 18, Short.MAX_VALUE)
                         .addComponent(panelMinecraftWorldBorder, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
                 .addContainerGap())
@@ -861,6 +941,10 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
                         .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                             .addComponent(jLabel9)
                             .addComponent(checkBoxMapFeatures))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(checkBoxTurboExport)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(checkBoxHollowInterior)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(jLabel11))
                     .addComponent(panelMinecraftWorldBorder, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
@@ -1009,6 +1093,8 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
     private javax.swing.JCheckBox checkBoxAllowCheats;
     private javax.swing.JCheckBox checkBoxGoodies;
     private javax.swing.JCheckBox checkBoxMapFeatures;
+    private javax.swing.JCheckBox checkBoxTurboExport;
+    private javax.swing.JCheckBox checkBoxHollowInterior;
     private javax.swing.JComboBox comboBoxDifficulty;
     private javax.swing.JComboBox<GameType> comboBoxGameType;
     private javax.swing.JTextField fieldDirectory;

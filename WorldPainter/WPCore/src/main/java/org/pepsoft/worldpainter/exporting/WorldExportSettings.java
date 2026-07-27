@@ -2,6 +2,7 @@ package org.pepsoft.worldpainter.exporting;
 
 import java.awt.*;
 import java.io.Serializable;
+import java.util.EnumSet;
 import java.util.Set;
 
 public class WorldExportSettings implements Serializable {
@@ -45,6 +46,23 @@ public class WorldExportSettings implements Serializable {
         this.stepsToSkip = stepsToSkip;
     }
 
+    public boolean isHollowInterior() {
+        return hollowInterior;
+    }
+
+    public void setHollowInterior(boolean hollowInterior) {
+        this.hollowInterior = hollowInterior;
+    }
+
+    /** Shell thickness preserved before clearing interiors ({@code //hollow <n>}); default 2. */
+    public int getHollowThickness() {
+        return hollowThickness;
+    }
+
+    public void setHollowThickness(int hollowThickness) {
+        this.hollowThickness = Math.max(0, hollowThickness);
+    }
+
     /**
      * The dimension(s) to export. If this is {@code null} then <em>all</em> dimensions must be exported.
      */
@@ -59,6 +77,12 @@ public class WorldExportSettings implements Serializable {
      * Export steps to skip. If this is {@code null} than <em>all</em> steps must be performed.
      */
     private Set<Step> stepsToSkip;
+
+    /** When true, enclosed terrain blocks are replaced with air before second-pass layers (trees, etc.). */
+    private boolean hollowInterior;
+
+    /** Layers of solid terrain kept from air / export bounds before hollowing (WorldEdit {@code //hollow n}). */
+    private int hollowThickness = ChunkInteriorHollower.DEFAULT_HOLLOW_THICKNESS;
 
     public static final WorldExportSettings EXPORT_EVERYTHING = new WorldExportSettings() {
         @Override
@@ -76,6 +100,21 @@ public class WorldExportSettings implements Serializable {
             throw new UnsupportedOperationException();
         }
     };
+
+    /** Skips caves, resources, lighting and leaves; optionally hollows buried terrain before trees/resources. */
+    public static WorldExportSettings turboExportSettings() {
+        final WorldExportSettings settings = new WorldExportSettings(null, null, EnumSet.of(Step.CAVES, Step.RESOURCES, Step.LIGHTING, Step.LEAVES));
+        settings.setHollowInterior(false);
+        return settings;
+    }
+
+    /** Turbo export with interior hollowing enabled (slower, smaller files). */
+    public static WorldExportSettings turboExportSettingsWithHollow() {
+        final WorldExportSettings settings = turboExportSettings();
+        settings.setHollowInterior(true);
+        settings.setHollowThickness(ChunkInteriorHollower.DEFAULT_HOLLOW_THICKNESS);
+        return settings;
+    }
 
     private static final long serialVersionUID = 1L;
 

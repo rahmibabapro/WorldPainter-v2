@@ -55,6 +55,10 @@ public class WorldIO {
         this.world = world;
     }
 
+    public static final int COMPARTMENTALISED_FORMAT_VERSION = 1;
+    public static final String METADATA_KEY_FORMAT = "org.pepsoft.worldpainter.format";
+    public static final String METADATA_KEY_FORMAT_VERSION = "org.pepsoft.worldpainter.formatVersion";
+
     /**
      * Save the world to a binary stream, such that it can later be loaded using
      * {@link #load(InputStream)}. The stream is closed before returning.
@@ -63,6 +67,18 @@ public class WorldIO {
      * @throws IOException If an I/O error occurred saving the world.
      */
     public void save(OutputStream out) throws IOException {
+        final Configuration config = Configuration.getInstance();
+        if ((config != null) && config.isCompartmentalisedWorldFormat()) {
+            saveCompartmentalised(out);
+        } else {
+            saveLegacy(out);
+        }
+    }
+
+    /**
+     * Save using legacy Java serialization + GZIP.
+     */
+    public void saveLegacy(OutputStream out) throws IOException {
         try (ObjectOutputStream wrappedOut = new ObjectOutputStream(new GZIPOutputStream(out))) {
             wrappedOut.writeObject(getMetadata());
             wrappedOut.writeObject(world);
@@ -86,13 +102,107 @@ public class WorldIO {
             final ObjectMapper objectMapper = new ObjectMapper()
                     .disable(AUTO_CLOSE_TARGET)
                     .disable(WRITE_DATES_AS_TIMESTAMPS);
+            final Map<String, Object> metadata = getMetadata();
+            metadata.put(METADATA_KEY_FORMAT, "compartmentalised");
+            metadata.put(METADATA_KEY_FORMAT_VERSION, COMPARTMENTALISED_FORMAT_VERSION);
             wrappedOut.putNextEntry(new ZipEntry("metadata.json"));
             try {
-                objectMapper.writeValue(wrappedOut, getMetadata());
+                objectMapper.writeValue(wrappedOut, metadata);
             } finally {
                 wrappedOut.closeEntry();
             }
             world.save(wrappedOut);
+            world.clearDirtyRegionsAfterSave();
+        }
+    }
+
+    /**
+     * Incrementally update a compartmentalised world file, rewriting only dirty region entries.
+     */
+    public void saveCompartmentalisedIncremental(OutputStream out, File existingFile) throws IOException {
+        saveCompartmentalisedIncremental(out, existingFile, false);
+    }
+
+    /**
+     * Incrementally update a compartmentalised world file.
+     *
+     * @param rewriteShell When {@code true}, metadata and dimension shells are rewritten (for manual save).
+     */
+    public void saveCompartmentalisedIncremental(OutputStream out, File existingFile, boolean rewriteShell) throws IOException {
+        final Set<String> dirtyRegionEntries = world.getDirtyRegionEntryNames();
+        if ((! existingFile.isFile()) || dirtyRegionEntries.isEmpty()) {
+            saveCompartmentalised(out);
+            return;
+        }
+        final Set<String> retainedRegionEntries = new HashSet<>();
+        try (ZipInputStream in = new ZipInputStream(new BufferedInputStream(new FileInputStream(existingFile)));
+             ZipOutputStream wrappedOut = new ZipOutputStream(out)) {
+            ZipEntry entry;
+            while ((entry = in.getNextEntry()) != null) {
+                final String name = entry.getName();
+                if (isRegionDataEntry(name) && (! dirtyRegionEntries.contains(name))) {
+                    wrappedOut.putNextEntry(new ZipEntry(name));
+                    in.transferTo(wrappedOut);
+                    wrappedOut.closeEntry();
+                    retainedRegionEntries.add(name);
+                }
+                in.closeEntry();
+            }
+            if (rewriteShell) {
+                writeCompartmentalisedShell(wrappedOut);
+                world.save(wrappedOut, retainedRegionEntries);
+            } else {
+                world.saveDirtyRegions(wrappedOut, dirtyRegionEntries);
+            }
+            world.clearDirtyRegionsAfterSave();
+        }
+    }
+
+    private void writeCompartmentalisedShell(ZipOutputStream wrappedOut) throws IOException {
+        final ObjectMapper objectMapper = new ObjectMapper()
+                .disable(AUTO_CLOSE_TARGET)
+                .disable(WRITE_DATES_AS_TIMESTAMPS);
+        final Map<String, Object> metadata = getMetadata();
+        metadata.put(METADATA_KEY_FORMAT, "compartmentalised");
+        metadata.put(METADATA_KEY_FORMAT_VERSION, COMPARTMENTALISED_FORMAT_VERSION);
+        wrappedOut.putNextEntry(new ZipEntry("metadata.json"));
+        try {
+            objectMapper.writeValue(wrappedOut, metadata);
+        } finally {
+            wrappedOut.closeEntry();
+        }
+    }
+
+    private static boolean isRegionDataEntry(String name) {
+        return name.endsWith(".bin") && name.contains("region-data-");
+    }
+
+    private static byte[] readEntryBytes(InputStream in) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        in.transferTo(buffer);
+        return buffer.toByteArray();
+    }
+
+    public static boolean isCompartmentalisedFile(File file) throws IOException {
+        if ((! file.isFile()) || (file.length() < 4)) {
+            return false;
+        }
+        try (InputStream in = new FileInputStream(file)) {
+            return in.read() == 'P' && in.read() == 'K';
+        }
+    }
+
+    /** Returns whether a file on disk can be loaded as a WorldPainter world (used for autosave recovery). */
+    public static boolean isLoadableWorldFile(File file) {
+        if ((file == null) || (! file.isFile()) || (file.length() < 4)) {
+            return false;
+        }
+        try (FileInputStream in = new FileInputStream(file)) {
+            final WorldIO worldIO = new WorldIO();
+            worldIO.load(in);
+            return worldIO.getWorld() != null;
+        } catch (UnloadableWorldException | IOException e) {
+            return false;
         }
     }
 
@@ -109,6 +219,20 @@ public class WorldIO {
      */
     @SuppressWarnings("unchecked") // Guaranteed by WorldPainter
     public void load(InputStream in) throws IOException, UnloadableWorldException {
+        final InputStream bufferedIn = in.markSupported() ? in : new BufferedInputStream(in);
+        bufferedIn.mark(4);
+        final int first = bufferedIn.read();
+        final int second = bufferedIn.read();
+        bufferedIn.reset();
+        if ((first == 'P') && (second == 'K')) {
+            loadCompartmentalised(new ZipInputStream(bufferedIn));
+        } else {
+            loadLegacy(bufferedIn);
+        }
+    }
+
+    @SuppressWarnings("unchecked") // Guaranteed by WorldPainter
+    private void loadLegacy(InputStream in) throws IOException, UnloadableWorldException {
         Map<String, Object> metadata = null;
         world = null;
         try {
@@ -134,6 +258,46 @@ public class WorldIO {
             } else {
                 throw e;
             }
+        }
+        if (metadata != null) {
+            world.setMetadata(metadata);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void loadCompartmentalised(ZipInputStream in) throws IOException, UnloadableWorldException {
+        Map<String, Object> metadata = null;
+        byte[] worldData = null;
+        final Map<String, byte[]> dimensionData = new HashMap<>();
+        final Map<String, List<Map.Entry<String, byte[]>>> regionDataByDimension = new HashMap<>();
+        ZipEntry entry;
+        while ((entry = in.getNextEntry()) != null) {
+            final byte[] data = readEntryBytes(in);
+            final String name = entry.getName();
+            if ("metadata.json".equals(name)) {
+                metadata = new ObjectMapper().readValue(data, Map.class);
+            } else if ("world-data.bin".equals(name)) {
+                worldData = data;
+            } else if (name.endsWith("/dim-data.bin")) {
+                dimensionData.put(name.substring(0, name.length() - "/dim-data.bin".length()), data);
+            } else if (name.contains("/region-data-")) {
+                final int slash = name.indexOf('/');
+                final String dimPath = name.substring(0, slash);
+                regionDataByDimension.computeIfAbsent(dimPath, k -> new ArrayList<>()).add(Map.entry(name, data));
+            }
+            in.closeEntry();
+        }
+        if (worldData == null) {
+            throw new UnloadableWorldException("Missing world-data.bin in compartmentalised world file", metadata);
+        }
+        try (WPCustomObjectInputStream wrappedIn = new WPCustomObjectInputStream(new ByteArrayInputStream(worldData), PluginManager.getPluginClassLoader(), AbstractObject.class)) {
+            world = (World2) wrappedIn.readObject();
+        } catch (ClassNotFoundException e) {
+            throw new UnloadableWorldException("Class not found while loading compartmentalised world", e, metadata);
+        }
+        for (Map.Entry<String, byte[]> dimEntry: dimensionData.entrySet()) {
+            final List<Map.Entry<String, byte[]>> regionEntries = regionDataByDimension.getOrDefault(dimEntry.getKey(), Collections.emptyList());
+            world.loadDimensionFromCompartmentalisedData(dimEntry.getKey(), dimEntry.getValue(), regionEntries);
         }
         if (metadata != null) {
             world.setMetadata(metadata);
