@@ -11,13 +11,17 @@
 
 package org.pepsoft.worldpainter;
 
+import org.pepsoft.util.FileUtils;
 import org.pepsoft.util.DesktopUtils;
 import org.pepsoft.worldpainter.Dimension.Anchor;
 import org.pepsoft.worldpainter.World2.BorderSettings;
 import org.pepsoft.worldpainter.biomeschemes.CustomBiomeManager;
 import org.pepsoft.worldpainter.exporting.ChunkInteriorHollower;
 import org.pepsoft.worldpainter.exporting.ExportMemoryBudget;
+import org.pepsoft.worldpainter.exporting.ExportPlan;
 import org.pepsoft.worldpainter.exporting.WorldExportSettings;
+import org.pepsoft.worldpainter.exporting.delta.DeltaExportCalculator;
+import org.pepsoft.worldpainter.exporting.delta.ExportManifest;
 import org.pepsoft.worldpainter.layers.CustomLayer;
 import org.pepsoft.worldpainter.layers.Layer;
 import org.pepsoft.worldpainter.layers.Populate;
@@ -244,6 +248,7 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
         final boolean exportAllDimensions = exportSettings.getDimensionsToExport() == null;
         if (Branding.isV2() && checkBoxTurboExport.isSelected()) {
             Configuration.getInstance().setDefaultTurboExport(true);
+            JavaExportSettings.applyTurboDeflateHint();
             for (Dimension dimension : world.getDimensions()) {
                 if (exportAllDimensions || exportSettings.getDimensionsToExport().contains(dimension.getAnchor().dim)) {
                     dimension.setExportSettings(JavaExportSettings.turboExportPreset());
@@ -261,6 +266,21 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
                     exportSettings.setHollowThickness(ChunkInteriorHollower.DEFAULT_HOLLOW_THICKNESS);
                 }
             }
+        }
+        if (Branding.isV2() && (exportSettings != EXPORT_EVERYTHING) && checkBoxLinearExport.isSelected()) {
+            exportSettings.setLinearRegionFormat(true);
+        } else if (Branding.isV2() && checkBoxLinearExport.isSelected()) {
+            if (exportSettings == EXPORT_EVERYTHING) {
+                exportSettings = new WorldExportSettings();
+            }
+            exportSettings.setLinearRegionFormat(true);
+        }
+        if (Branding.isV2() && checkBoxDeltaExport.isSelected()) {
+            if (exportSettings == EXPORT_EVERYTHING) {
+                exportSettings = new WorldExportSettings();
+            }
+            exportSettings.setDeltaExport(true);
+            exportSettings.setDeltaBorderExpansion(1);
         }
         final boolean inhibitWarnings = (exportSettings != EXPORT_EVERYTHING);
         final Set<Point> selectedTiles = exportAllDimensions ? null : exportSettings.getTilesToExport();
@@ -414,6 +434,13 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
             setCursor(Cursor.getDefaultCursor());
         }
 
+        if (Branding.isV2() && exportSettings.isDeltaExport()) {
+            exportSettings = applyDeltaTileSelection(exportSettings, baseDir, name);
+            if (exportSettings == null) {
+                return;
+            }
+        }
+
         world.setCreateGoodiesChest(checkBoxGoodies.isSelected());
         world.setGameType((GameType) comboBoxGameType.getSelectedItem());
         world.setAllowCheats(checkBoxAllowCheats.isSelected());
@@ -455,7 +482,8 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
         config.setExportDirectory(world.getPlatform(), baseDir);
         config.setSavesDirectory(baseDir);
 
-        final ExportProgressDialog dialog = new ExportProgressDialog(this, world, exportSettings, baseDir, name, previouslyAcknowledgedWarnings);
+        final ExportProgressDialog dialog = new ExportProgressDialog(this, world, exportSettings, baseDir, name,
+                previouslyAcknowledgedWarnings, ! Branding.isV2() || checkBoxVerifyExport.isSelected());
         view.setInhibitUpdates(true);
         try {
             dialog.setVisible(true);
@@ -467,6 +495,20 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
         } else {
             fieldName.setEnabled(true);
             buttonCancel.setEnabled(true);
+            buttonExport.setText("Retry");
+            buttonExport.setEnabled(true);
+            try {
+                final ExportPlan plan = ExportPlan.load(ExportPlan.pathForConfigDir(Configuration.getConfigDir()));
+                if (plan != null && plan.promotePending) {
+                    buttonExport.setToolTipText("Promote completed temp " + plan.tempDirName
+                            + " (close Minecraft first). Settings preserved.");
+                    logger.info("Retry ready: promotePending temp={}", plan.tempDirName);
+                } else {
+                    buttonExport.setToolTipText("Re-export with the same settings (close Minecraft first).");
+                }
+            } catch (Exception ex) {
+                logger.debug("Could not load export plan for Retry tip: {}", ex.toString());
+            }
             for (DimensionPropertiesEditor editor: dimensionPropertiesEditors.values()) {
                 editor.setEnabled(true);
             }
@@ -477,6 +519,52 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
             checkBoxMapFeatures.setEnabled(true);
             listDataPacks.setEnabled(platform.capabilities.contains(DATA_PACKS));
             setControlStates();
+        }
+    }
+
+    /**
+     * Restrict export to dirty tiles vs last manifest. Returns null if user aborts.
+     */
+    private WorldExportSettings applyDeltaTileSelection(WorldExportSettings settings, File baseDir, String mapName) {
+        final File worldDir = new File(baseDir, FileUtils.sanitiseName(mapName));
+        try {
+            final ExportManifest previous = ExportManifest.load(worldDir);
+            if (previous == null) {
+                JOptionPane.showMessageDialog(this,
+                        "No previous export manifest found.\nA full export will run and create .wpexport-manifest.json.",
+                        "Delta export", JOptionPane.INFORMATION_MESSAGE);
+                return settings;
+            }
+            final DeltaExportCalculator.DeltaPlan plan = DeltaExportCalculator.computeDelta(
+                    world, previous, settings.getDeltaBorderExpansion());
+            if (plan.dirtyTiles.isEmpty()) {
+                final int choice = JOptionPane.showConfirmDialog(this,
+                        "No tiles changed since the last export.\nRun a full export anyway?",
+                        "Delta export", YES_NO_OPTION);
+                if (choice != YES_OPTION) {
+                    return null;
+                }
+                return settings;
+            }
+            Set<Point> tiles = new HashSet<>(plan.dirtyTiles);
+            if (settings.getTilesToExport() != null && ! settings.getTilesToExport().isEmpty()) {
+                tiles.retainAll(settings.getTilesToExport());
+                if (tiles.isEmpty()) {
+                    beepAndShowError(this, "Delta dirty tiles do not intersect the current tile selection.", "Delta export");
+                    return null;
+                }
+            }
+            settings.setDimensionsToExport(Collections.singleton(DIM_NORMAL));
+            settings.setTilesToExport(tiles);
+            logger.info("Delta export: {} dirty tile(s) of {} (saved ~{}%)",
+                    tiles.size(), plan.totalTiles, String.format("%.1f", plan.getSavedPercentage()));
+            return settings;
+        } catch (IOException e) {
+            logger.warn("Could not load export manifest for delta: {}", e.toString());
+            JOptionPane.showMessageDialog(this,
+                    "Could not read previous export manifest; falling back to full export.\n" + e.getMessage(),
+                    "Delta export", JOptionPane.WARNING_MESSAGE);
+            return settings;
         }
     }
 
@@ -736,6 +824,24 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
         checkBoxHollowInterior.setText("Hollow terrain interiors");
         checkBoxHollowInterior.setToolTipText("<html>Removes buried stone/dirt like WorldEdit //hollow 2, keeping a 2-block-thick shell.<br>Reduces block count and file size; slightly slower export.</html>");
         checkBoxHollowInterior.setVisible(Branding.isV2());
+        checkBoxLinearExport = new javax.swing.JCheckBox();
+        checkBoxLinearExport.setText("Also write Linear regions (AgeOfMC)");
+        checkBoxLinearExport.setToolTipText("<html>After Anvil export, also write sibling .linear files (uncompressed NBT slots + Zstd region).<br>For LinearPaper / AgeOfMC forks only. Vanilla/FO use .mca. Verify on a test server before production.</html>");
+        checkBoxLinearExport.setVisible(Branding.isV2());
+        checkBoxLinearExport.setSelected(false);
+        checkBoxDeltaExport = new javax.swing.JCheckBox();
+        checkBoxDeltaExport.setText("Delta export (experimental)");
+        checkBoxDeltaExport.setToolTipText("<html><b>Experimental.</b> Re-export only tiles that differ from .wpexport-manifest.json<br>"
+                + "(height/terrain/water/layers sample + 1-tile halo). Surface dimension only.<br>"
+                + "First export without a manifest is full. Neighbor lighting seams possible.</html>");
+        checkBoxDeltaExport.setVisible(Branding.isV2());
+        checkBoxDeltaExport.setSelected(false);
+        checkBoxVerifyExport = new javax.swing.JCheckBox();
+        checkBoxVerifyExport.setText("Verify export (MCA header check)");
+        checkBoxVerifyExport.setToolTipText("<html>After export, scan MCA location tables and chunk sector lengths<br>"
+                + "(overworld + Nether/End region folders). Does <b>not</b> decompress or parse NBT.</html>");
+        checkBoxVerifyExport.setVisible(Branding.isV2());
+        checkBoxVerifyExport.setSelected(true);
 
         checkBoxMapFeatures.setSelected(true);
         checkBoxMapFeatures.setText(" ");
@@ -917,7 +1023,10 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                                 .addComponent(checkBoxMapFeatures))
                             .addComponent(checkBoxTurboExport)
-                            .addComponent(checkBoxHollowInterior))
+                            .addComponent(checkBoxHollowInterior)
+                            .addComponent(checkBoxLinearExport)
+                            .addComponent(checkBoxDeltaExport)
+                            .addComponent(checkBoxVerifyExport))
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 18, Short.MAX_VALUE)
                         .addComponent(panelMinecraftWorldBorder, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
                 .addContainerGap())
@@ -971,6 +1080,12 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
                         .addComponent(checkBoxTurboExport)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(checkBoxHollowInterior)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(checkBoxLinearExport)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(checkBoxDeltaExport)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(checkBoxVerifyExport)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(jLabel11))
                     .addComponent(panelMinecraftWorldBorder, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
@@ -1130,6 +1245,9 @@ public class ExportWorldDialog extends WPDialogWithPaintSelection {
     private javax.swing.JCheckBox checkBoxMapFeatures;
     private javax.swing.JCheckBox checkBoxTurboExport;
     private javax.swing.JCheckBox checkBoxHollowInterior;
+    private javax.swing.JCheckBox checkBoxLinearExport;
+    private javax.swing.JCheckBox checkBoxDeltaExport;
+    private javax.swing.JCheckBox checkBoxVerifyExport;
     private javax.swing.JComboBox comboBoxDifficulty;
     private javax.swing.JComboBox<GameType> comboBoxGameType;
     private javax.swing.JTextField fieldDirectory;

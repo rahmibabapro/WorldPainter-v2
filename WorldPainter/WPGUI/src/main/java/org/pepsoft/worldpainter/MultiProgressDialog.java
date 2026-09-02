@@ -101,7 +101,25 @@ public abstract class MultiProgressDialog<T> extends javax.swing.JDialog impleme
     public void exceptionThrown(Throwable exception) {
         doLaterOnEventThread(() -> {
             if (chainContains(exception, FileInUseException.class)) {
-                beepAndShowError(MultiProgressDialog.this, "Could not " + getVerb().toLowerCase() + " the world because the existing map directory is in use.\nPlease close Minecraft and all other windows and try again.", "Map In Use");
+                final StringBuilder msg = new StringBuilder();
+                msg.append("Could not ").append(getVerb().toLowerCase())
+                        .append(" the world because the existing map directory is in use.\n")
+                        .append("Please close Minecraft and all other windows.\n\n")
+                        .append("Click OK, then use Retry on the dialog (settings are preserved).\n")
+                        .append("If a complete *.wp-exporting temp exists, Retry promotes it without re-exporting.\n")
+                        .append("Otherwise Retry re-runs the export. A plan was saved in the config directory.");
+                if (this instanceof ExportProgressDialog) {
+                    final ExportProgressDialog epd = (ExportProgressDialog) this;
+                    if (epd.getUnfinishedRegionsReport() != null && ! epd.getUnfinishedRegionsReport().isBlank()) {
+                        msg.append("\n\nUnfinished regions:\n").append(epd.getUnfinishedRegionsReport());
+                    }
+                } else if (this instanceof MergeProgressDialog) {
+                    final MergeProgressDialog mpd = (MergeProgressDialog) this;
+                    if (mpd.getUnfinishedRegionsReport() != null && ! mpd.getUnfinishedRegionsReport().isBlank()) {
+                        msg.append("\n\n").append(mpd.getUnfinishedRegionsReport());
+                    }
+                }
+                beepAndShowError(MultiProgressDialog.this, msg.toString(), "Map In Use");
             } else if (chainContains(exception, MissingCustomTerrainException.class)) {
                 beepAndShowError(MultiProgressDialog.this, "Custom Terrain " + (getFromChainOfType(exception, MissingCustomTerrainException.class)).getIndex() + " not configured!\n" +
                         "Please configure it on the Custom Terrain panel.\n" +

@@ -6,6 +6,7 @@ import org.pepsoft.util.IconUtils;
 import org.pepsoft.util.swing.BetterJPopupMenu;
 import org.pepsoft.worldpainter.App;
 import org.pepsoft.worldpainter.ColourScheme;
+import org.pepsoft.worldpainter.Configuration;
 import org.pepsoft.worldpainter.Platform;
 import org.pepsoft.worldpainter.World2;
 import org.pepsoft.worldpainter.biomeschemes.*;
@@ -153,6 +154,16 @@ public class BiomesPanel extends JPanel implements CustomBiomeManager.CustomBiom
         add(label1);
         label2.setAlignmentX(0.0f);
         add(label2);
+
+        checkBoxBiomeGridSnap.setAlignmentX(0.0f);
+        checkBoxBiomeGridSnap.setSelected(Configuration.isBiomeGridSnapEnabled());
+        checkBoxBiomeGridSnap.addActionListener(e -> {
+            final Configuration config = Configuration.getInstance();
+            if (config != null) {
+                config.setBiomeGridSnap(checkBoxBiomeGridSnap.isSelected());
+            }
+        });
+        add(checkBoxBiomeGridSnap);
 
         JButton addCustomBiomeButton = new JButton(IconUtils.loadScaledIcon("org/pepsoft/worldpainter/icons/plus.png"));
         addCustomBiomeButton.putClientProperty(KEY_ADD_BUTTON, TRUE);
@@ -490,6 +501,7 @@ public class BiomesPanel extends JPanel implements CustomBiomeManager.CustomBiom
     private final JPanel grid = new JPanel(new GridLayout(0, 5)), optionsPanel = new JPanel();
     private final ButtonGroup buttonGroup;
     private final JLabel label1 = new JLabel("Selected biome: 1"), label2 = new JLabel("Plains");
+    private final JCheckBox checkBoxBiomeGridSnap = new JCheckBox("Snap to Minecraft 4×4 biome grid");
 
     private final CustomBiomeManager customBiomeManager;
     private final Listener listener;

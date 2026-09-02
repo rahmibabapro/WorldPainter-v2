@@ -246,6 +246,39 @@ public class Bo2LayerEditor extends AbstractLayerEditor<Bo2Layer> implements Lis
         buttonRemoveFile.setEnabled(objectsSelected);
         buttonReloadAll.setEnabled(filesSelected);
         buttonEdit.setEnabled(objectsSelected);
+        buttonAxiomBatch.setEnabled(objectsSelected && selectionContainsAxiom());
+    }
+
+    private boolean selectionContainsAxiom() {
+        for (int index : listObjects.getSelectedIndices()) {
+            if (listModel.getElementAt(index) instanceof AxiomBlueprint) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void applyAxiomBatchTransforms() {
+        final int[] indices = listObjects.getSelectedIndices();
+        if (indices.length == 0) {
+            return;
+        }
+        final List<WPObject> selected = new ArrayList<>(indices.length);
+        for (int index : indices) {
+            selected.add(listModel.getElementAt(index));
+        }
+        final Platform platform = context.getDimension().getWorld().getPlatform();
+        final Window owner = SwingUtilities.getWindowAncestor(this);
+        final AxiomBatchTransformDialog dialog = new AxiomBatchTransformDialog(owner, selected, platform);
+        dialog.setVisible(true);
+        if (! dialog.isApplied()) {
+            return;
+        }
+        final List<WPObject> transformed = dialog.getResult();
+        for (int i = 0; i < indices.length; i++) {
+            listModel.set(indices[i], transformed.get(i));
+        }
+        settingsChanged();
     }
     
     private void addFilesOrDirectory() {
@@ -647,6 +680,13 @@ public class Bo2LayerEditor extends AbstractLayerEditor<Bo2Layer> implements Lis
             }
         });
 
+        buttonAxiomBatch = new javax.swing.JButton();
+        buttonAxiomBatch.setText("BP…");
+        buttonAxiomBatch.setToolTipText("Batch transform selected Axiom .bp blueprints (Y/rotate/mirror/replace air)");
+        buttonAxiomBatch.setEnabled(false);
+        buttonAxiomBatch.setMargin(new java.awt.Insets(2, 2, 2, 2));
+        buttonAxiomBatch.addActionListener(evt -> applyAxiomBatchTransforms());
+
         labelLeafDecayTitle.setText("Leaf decay settings for these objects:");
 
         labelEffectiveLeafDecaySetting.setText("<html>Leaves do <b>not</b> decay.</html>");
@@ -831,6 +871,7 @@ public class Bo2LayerEditor extends AbstractLayerEditor<Bo2Layer> implements Lis
                     .addComponent(buttonAddFile, javax.swing.GroupLayout.Alignment.TRAILING)
                     .addComponent(buttonRemoveFile, javax.swing.GroupLayout.Alignment.TRAILING)
                     .addComponent(buttonEdit, javax.swing.GroupLayout.Alignment.TRAILING)
+                    .addComponent(buttonAxiomBatch, javax.swing.GroupLayout.Alignment.TRAILING)
                     .addComponent(buttonReloadAll, javax.swing.GroupLayout.Alignment.TRAILING)))
             .addGroup(layout.createSequentialGroup()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -886,6 +927,8 @@ public class Bo2LayerEditor extends AbstractLayerEditor<Bo2Layer> implements Lis
                         .addComponent(buttonRemoveFile)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(buttonEdit)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(buttonAxiomBatch)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(buttonReloadAll)
                         .addGap(0, 0, Short.MAX_VALUE))
@@ -986,6 +1029,7 @@ public class Bo2LayerEditor extends AbstractLayerEditor<Bo2Layer> implements Lis
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton buttonAddFile;
+    private javax.swing.JButton buttonAxiomBatch;
     private javax.swing.JButton buttonEdit;
     private javax.swing.JButton buttonReloadAll;
     private javax.swing.JButton buttonRemoveFile;

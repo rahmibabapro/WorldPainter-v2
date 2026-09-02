@@ -84,9 +84,9 @@ public class ChunkInteriorHollowerTest {
 
         assertEquals(WATER, region.getMaterialAt(0, 10, 0));
         assertEquals(AIR, region.getMaterialAt(8, 8, 8));
-        assertEquals(STONE, region.getMaterialAt(8, 8, 14));
-        assertEquals(STONE, region.getMaterialAt(8, 8, 13));
-        assertEquals(GRASS, region.getMaterialAt(8, 16, 8));
+        assertEquals(STONE, region.getMaterialAt(8, 8, 15));
+        assertEquals(AIR, region.getMaterialAt(8, 8, 14));
+        assertEquals(GRASS, region.getMaterialAt(8, 8, 16));
     }
 
     @Test

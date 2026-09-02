@@ -273,7 +273,14 @@ public class WorldRegion implements MinecraftWorld {
                         }
                     }
                 }
-                toSave.parallelStream().forEach(chunkStore::saveChunk);
+                // NBT+compress concurrently. Virtual threads off by default (CPU-bound; see PERFORMANCE.md).
+                final boolean useVirtual = Boolean.parseBoolean(
+                        System.getProperty("org.pepsoft.worldpainter.export.virtualThreads", "false"));
+                if (useVirtual) {
+                    saveWithVirtualThreadsOrThrow(chunkStore, toSave);
+                } else {
+                    toSave.parallelStream().forEach(chunkStore::saveChunk);
+                }
             });
         }
     }
@@ -286,6 +293,53 @@ public class WorldRegion implements MinecraftWorld {
                     chunks[x][z] = null;
                 }
             }
+        }
+    }
+
+    /**
+     * Java 21+ virtual-thread flush via reflection (WPCore still compiles on Java 17 toolchain).
+     * Failures propagate — never fall through to a second full rewrite of the same chunks.
+     * If the VT API is unavailable, falls back once to {@code parallelStream} without partial VT writes.
+     */
+    private static void saveWithVirtualThreadsOrThrow(ChunkStore chunkStore, List<Chunk> toSave) {
+        java.util.concurrent.ExecutorService executor;
+        try {
+            java.lang.reflect.Method factory = java.util.concurrent.Executors.class
+                    .getMethod("newVirtualThreadPerTaskExecutor");
+            executor = (java.util.concurrent.ExecutorService) factory.invoke(null);
+        } catch (ReflectiveOperationException | ClassCastException e) {
+            toSave.parallelStream().forEach(chunkStore::saveChunk);
+            return;
+        }
+        java.util.List<java.util.concurrent.Future<?>> futures = new java.util.ArrayList<>(toSave.size());
+        try {
+            for (Chunk chunk : toSave) {
+                futures.add(executor.submit(() -> chunkStore.saveChunk(chunk)));
+            }
+            for (java.util.concurrent.Future<?> future : futures) {
+                try {
+                    future.get();
+                } catch (java.util.concurrent.ExecutionException e) {
+                    for (java.util.concurrent.Future<?> f : futures) {
+                        f.cancel(true);
+                    }
+                    executor.shutdownNow();
+                    Throwable cause = e.getCause() != null ? e.getCause() : e;
+                    if (cause instanceof RuntimeException re) {
+                        throw re;
+                    }
+                    throw new RuntimeException("Chunk save failed on virtual thread", cause);
+                } catch (InterruptedException e) {
+                    for (java.util.concurrent.Future<?> f : futures) {
+                        f.cancel(true);
+                    }
+                    executor.shutdownNow();
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Chunk save interrupted", e);
+                }
+            }
+        } finally {
+            executor.shutdownNow();
         }
     }
 

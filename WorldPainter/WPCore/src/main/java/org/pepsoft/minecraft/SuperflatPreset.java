@@ -200,9 +200,9 @@ public class SuperflatPreset implements Serializable {
                 stream(tokens[3].split(",")).forEach(structure -> {
                     int p = structure.indexOf('(');
                     if (p == -1) {
-                        structures.put(Structure.valueOf(structure.toUpperCase()), emptyMap());
+                        structures.put(Structure.valueOf(structure.toUpperCase(Locale.ROOT)), emptyMap());
                     } else {
-                        Structure key = Structure.valueOf(structure.substring(0, p).toUpperCase());
+                        Structure key = Structure.valueOf(structure.substring(0, p).toUpperCase(Locale.ROOT));
                         Map<String, String> params = new HashMap<>();
                         for (String attr: structure.substring(p + 1, structure.length() - 1).split(" ")) {
                             p = attr.indexOf('=');
@@ -230,7 +230,7 @@ public class SuperflatPreset implements Serializable {
                             .map(layerTag -> new Layer(((StringTag) layerTag.getTag("block")).getValue(), ((NumberTag) layerTag.getTag("height")).intValue()))
                             .collect(toList()),
                     ((CompoundTag) tag.getTag("structures")).getValue().values().stream()
-                            .collect(toMap(structureTag -> Structure.valueOf(structureTag.getName().toUpperCase()),
+                            .collect(toMap(structureTag -> Structure.valueOf(structureTag.getName().toUpperCase(Locale.ROOT)),
                                     structureTag -> ((CompoundTag) structureTag).getValue().entrySet().stream().collect(toMap(Entry::getKey, paramEntry -> ((StringTag) paramEntry.getValue()).getValue())))),
                     false,
                     false

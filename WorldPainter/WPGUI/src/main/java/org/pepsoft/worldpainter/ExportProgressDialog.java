@@ -17,8 +17,10 @@ import org.pepsoft.util.ProgressReceiver.OperationCancelled;
 import org.pepsoft.util.Version;
 import org.pepsoft.util.swing.ProgressTask;
 import org.pepsoft.worldpainter.exporting.ExportMemoryBudget;
+import org.pepsoft.worldpainter.exporting.ExportPlan;
 import org.pepsoft.worldpainter.exporting.WorldExportSettings;
 import org.pepsoft.worldpainter.exporting.WorldExporter;
+import org.pepsoft.worldpainter.exporting.health.WorldHealthInspector;
 import org.pepsoft.worldpainter.layers.Layer;
 import org.pepsoft.worldpainter.plugins.PlatformManager;
 import org.pepsoft.worldpainter.util.FileInUseException;
@@ -29,6 +31,8 @@ import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.NumberFormat;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -47,12 +51,17 @@ import static org.pepsoft.worldpainter.DefaultPlugin.*;
 public class ExportProgressDialog extends MultiProgressDialog<Map<Integer, ChunkFactory.Stats>> implements WindowListener {
     /** Creates new form ExportWorldDialog */
     public ExportProgressDialog(Window parent, World2 world, WorldExportSettings exportSettings, File baseDir, String name, String acknowledgedWarnings) {
+        this(parent, world, exportSettings, baseDir, name, acknowledgedWarnings, true);
+    }
+
+    public ExportProgressDialog(Window parent, World2 world, WorldExportSettings exportSettings, File baseDir, String name, String acknowledgedWarnings, boolean runHealthCheck) {
         super(parent, "Exporting");
         this.world = world;
         this.baseDir = baseDir;
         this.name = name;
         this.exportSettings = exportSettings;
         this.acknowledgedWarnings = acknowledgedWarnings;
+        this.runHealthCheck = runHealthCheck;
         addWindowListener(this);
 
         JButton minimiseButton = new JButton("Minimize");
@@ -62,6 +71,11 @@ public class ExportProgressDialog extends MultiProgressDialog<Map<Integer, Chunk
 
     public boolean isAllowRetry() {
         return allowRetry;
+    }
+
+    /** Optional region report for Retry UI (#529). */
+    public String getUnfinishedRegionsReport() {
+        return unfinishedRegionsReport;
     }
 
     // WindowListener
@@ -165,6 +179,9 @@ public class ExportProgressDialog extends MultiProgressDialog<Map<Integer, Chunk
             sb.append("<br><br><em>Previously acknowledged warnings:</em>");
             sb.append(acknowledgedWarnings);
         }
+        if (healthSummary != null && ! healthSummary.isBlank()) {
+            sb.append("<br><br><b>World health:</b> ").append(healthSummary.replace("\n", "<br>"));
+        }
         sb.append("</html>");
         return sb.toString();
     }
@@ -188,15 +205,86 @@ public class ExportProgressDialog extends MultiProgressDialog<Map<Integer, Chunk
                 progressReceiver.setMessage("Exporting world " + name);
                 WorldExporter exporter = PlatformManager.getInstance().getExporter(world, exportSettings);
                 try {
+                    saveExportPlan();
                     backupDir = exporter.selectBackupDir(baseDir, name);
-                    return runExportWithMemoryRecovery(exporter, progressReceiver);
+                    final Map<Integer, ChunkFactory.Stats> stats = runExportWithMemoryRecovery(exporter, progressReceiver);
+                    if (runHealthCheck) {
+                        try {
+                            final File worldDir = new File(baseDir, FileUtils.sanitiseName(name));
+                            final WorldHealthInspector.HealthReport report = WorldHealthInspector.inspectExportedWorld(worldDir);
+                            healthSummary = report.summaryLine();
+                            if (report.hasErrors()) {
+                                final StringBuilder detail = new StringBuilder(healthSummary);
+                                for (WorldHealthInspector.HealthIssue issue : report.getIssues()) {
+                                    if (issue.severity == WorldHealthInspector.Severity.ERROR) {
+                                        detail.append("\n").append(issue);
+                                    }
+                                }
+                                healthSummary = detail.toString();
+                            }
+                        } catch (Exception healthEx) {
+                            logger.warn("Post-export health check failed: {}", healthEx.toString());
+                            healthSummary = "Health check failed: " + healthEx.getMessage();
+                        }
+                    }
+                    return stats;
                 } catch (IOException e) {
                     throw new RuntimeException("I/O error while exporting world", e);
                 } catch (RuntimeException e) {
                     if (chainContains(e, FileInUseException.class)) {
                         allowRetry = true;
+                        final File worldDir = new File(baseDir, FileUtils.sanitiseName(name));
+                        final File tempDir = new File(baseDir, FileUtils.sanitiseName(name) + ".wp-exporting");
+                        final boolean promoteReady = tempDir.isDirectory() && new File(tempDir, "level.dat").isFile();
+                        unfinishedRegionsReport = "Map folder locked during backup or promote.\n"
+                                + "Target: " + worldDir + "\n"
+                                + (promoteReady
+                                ? ("Complete temp ready to promote: " + tempDir.getName()
+                                        + "\nClose Minecraft, then Retry — promote only (no full re-export).")
+                                : "No complete *.wp-exporting temp found; Retry will re-export.")
+                                + "\nExport plan saved under the WorldPainter config directory.";
+                        markExportPlanPromotePending(promoteReady, tempDir.getName());
                     }
                     throw e;
+                }
+            }
+
+            private void markExportPlanPromotePending(boolean promoteReady, String tempName) {
+                try {
+                    final Path planPath = ExportPlan.pathForConfigDir(Configuration.getConfigDir());
+                    final ExportPlan plan = Files.exists(planPath) ? ExportPlan.load(planPath) : new ExportPlan();
+                    plan.worldName = world.getName();
+                    plan.baseDir = baseDir.getAbsolutePath();
+                    plan.mapName = name;
+                    plan.promotePending = promoteReady;
+                    plan.tempDirName = promoteReady ? tempName : null;
+                    plan.unfinishedRegions = unfinishedRegionsReport;
+                    plan.savedAtEpochMs = System.currentTimeMillis();
+                    plan.save(planPath);
+                } catch (Exception ex) {
+                    logger.warn("Could not update export plan for Retry: {}", ex.toString());
+                }
+            }
+
+            private void saveExportPlan() {
+                try {
+                    final ExportPlan plan = new ExportPlan();
+                    plan.worldName = world.getName();
+                    plan.baseDir = baseDir.getAbsolutePath();
+                    plan.mapName = name;
+                    plan.platformId = world.getPlatform() != null ? world.getPlatform().displayName : "";
+                    plan.turbo = exportSettings != null && exportSettings.getStepsToSkip() != null
+                            && exportSettings.getStepsToSkip().contains(WorldExportSettings.Step.LIGHTING);
+                    plan.linear = exportSettings != null && exportSettings.isLinearRegionFormat();
+                    plan.hollow = exportSettings != null && exportSettings.isHollowInterior();
+                    if (exportSettings != null && exportSettings.getDimensionsToExport() != null) {
+                        plan.dimensionsCsv = ExportPlan.dimensionsToCsv(exportSettings.getDimensionsToExport());
+                    }
+                    plan.savedAtEpochMs = System.currentTimeMillis();
+                    final File configDir = Configuration.getConfigDir();
+                    plan.save(ExportPlan.pathForConfigDir(configDir));
+                } catch (Exception ex) {
+                    logger.warn("Could not save export plan: {}", ex.toString());
                 }
             }
 
@@ -298,9 +386,12 @@ public class ExportProgressDialog extends MultiProgressDialog<Map<Integer, Chunk
     private final String name, acknowledgedWarnings;
     private final File baseDir;
     private final WorldExportSettings exportSettings;
+    private final boolean runHealthCheck;
     private final NumberFormat formatter = NumberFormat.getIntegerInstance();
     private volatile File backupDir;
     private volatile boolean allowRetry = false;
+    private volatile String unfinishedRegionsReport;
+    private volatile String healthSummary;
 
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ExportProgressDialog.class);
     

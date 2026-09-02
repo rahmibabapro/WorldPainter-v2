@@ -1,9 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package org.pepsoft.worldpainter.tools;
 
 import ch.qos.logback.classic.LoggerContext;
@@ -34,12 +28,13 @@ import java.util.Map;
 import static org.pepsoft.worldpainter.plugins.WPPluginManager.DESCRIPTOR_PATH;
 
 /**
- *
- * @author SchmitzP
+ * Headless / CLI scripting host ({@code wpscript}).
+ * Structured errors: {@code WP_ERROR code=N kind=K message=...} (#495).
+ * Queue: {@code wpscript --queue a.js b.js -- arg1 arg2} (#462 batch).
+ * GUI {@link org.pepsoft.worldpainter.tools.scripts.ScriptRunner} never calls {@code System.exit}.
  */
 public class ScriptingTool {
     public static void main(String[] args) throws IOException, ClassNotFoundException {
-        // Initialise logging
         LoggerContext logContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         try {
             JoranConfigurator configurator = new JoranConfigurator();
@@ -56,59 +51,68 @@ public class ScriptingTool {
                 "This is free software distributed under the terms of the GPL, version 3, a copy\n" +
                 "of which you can find in the installation directory.\n");
 
-        // Check arguments
         if (args.length < 1) {
-            System.err.println("Usage:\n" +
-                    "\n" +
-                    "    wpscript <scriptfile> [<scriptarg> ...]\n" +
-                    "\n" +
-                    "Where <scriptfile> is the filename, including extension, of the script to\n" +
-                    "execute, and [<scriptarg> ...] an optional list of one or more arguments for\n" +
-                    "the script, which will be available to the script in the arguments (from index\n" +
-                    "0) or argv (from index 1) array.");
-            System.exit(1);
+            printUsage();
+            fail(1, "missing_script", "No script file specified");
+            return;
         }
 
-        // Load script
-        final File scriptFile = new File(args[0]);
-        if (! scriptFile.isFile()) {
-            System.err.println(args[0] + " does not exist or is not a regular file");
-            System.exit(1);
+        final List<String> scripts = new ArrayList<>();
+        final List<String> scriptArgs = new ArrayList<>();
+        if ("--queue".equals(args[0])) {
+            int i = 1;
+            while (i < args.length && ! "--".equals(args[i])) {
+                scripts.add(args[i++]);
+            }
+            if (i < args.length && "--".equals(args[i])) {
+                i++;
+            }
+            while (i < args.length) {
+                scriptArgs.add(args[i++]);
+            }
+            if (scripts.isEmpty()) {
+                fail(1, "empty_queue", "--queue requires at least one script file");
+                return;
+            }
+        } else {
+            scripts.add(args[0]);
+            for (int i = 1; i < args.length; i++) {
+                scriptArgs.add(args[i]);
+            }
         }
-        final String scriptFilePath = scriptFile.getCanonicalFile().getParent();
-        final String scriptFileName = scriptFile.getName();
-        int p = scriptFileName.lastIndexOf('.');
-        if (p == -1) {
-            System.err.println("Script file name " + scriptFileName + " has no extension");
-            System.exit(1);
-        }
-        final String extension = scriptFileName.substring(p + 1);
-        final ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
-        final ScriptEngine scriptEngine = scriptEngineManager.getEngineByExtension(extension);
-        if (scriptEngine == null) {
-            System.err.println("Script file language " + extension + " not supported");
-            System.exit(1);
-        }
-        scriptEngine.put(ScriptEngine.FILENAME, scriptFileName);
 
-        // Load the default platform descriptors so that they don't get blocked by older versions of them which might be
-        // contained in the configuration. Do this by loading and initialising (but not instantiating) the DefaultPlugin
-        // class
+        bootstrapWorldPainter();
+
+        int failures = 0;
+        for (String scriptPath : scripts) {
+            final int code = runOneScript(scriptPath, scriptArgs);
+            if (code != 0) {
+                failures++;
+                if (scripts.size() == 1) {
+                    System.exit(code);
+                    return;
+                }
+            }
+        }
+        if (failures > 0) {
+            fail(2, "queue_failures", failures + " of " + scripts.size() + " scripts failed");
+        }
+    }
+
+    private static void bootstrapWorldPainter() throws IOException, ClassNotFoundException {
         try {
             Class.forName("org.pepsoft.worldpainter.DefaultPlugin");
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
 
-        // Initialise WorldPainter configuration
         Configuration config = Configuration.load();
         if (config == null) {
             logger.info("Creating new configuration");
             config = new Configuration();
         }
         Configuration.setInstance(config);
-        
-        // Load trusted WorldPainter root certificate
+
         X509Certificate trustedCert = null;
         try {
             final CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
@@ -116,8 +120,7 @@ public class ScriptingTool {
         } catch (CertificateException e) {
             logger.error("Certificate exception while loading trusted root certificate", e);
         }
-        
-        // Load the plugins
+
         if (trustedCert != null) {
             final File pluginsDir = new File(Configuration.getConfigDir(), "plugins");
             if (pluginsDir.isDirectory()) {
@@ -127,82 +130,102 @@ public class ScriptingTool {
             logger.error("Trusted root certificate not available; not loading plugins");
         }
         WPPluginManager.initialise(config.getUuid(), WPContext.INSTANCE);
+    }
 
-        if (args.length > 1) {
-            System.err.print("Executing script \"" + scriptFileName + "\" with arguments ");
-            for (int i = 1; i < args.length; i++) {
-                if (i > 1) {
-                    System.err.print(", ");
-                }
-                System.err.print("\"" + args[i] + "\"");
-            }
-            System.err.println("\n");
-        } else {
-            System.err.println("Executing script \"" + scriptFileName + "\" with no arguments.\n");
+    private static int runOneScript(String scriptPath, List<String> extraArgs) {
+        final File scriptFile = new File(scriptPath);
+        if (! scriptFile.isFile()) {
+            reportError(1, "not_found", scriptPath + " does not exist or is not a regular file");
+            return 1;
         }
+        final String scriptFilePath;
+        try {
+            scriptFilePath = scriptFile.getCanonicalFile().getParent();
+        } catch (IOException e) {
+            reportError(1, "io", e.getMessage());
+            return 1;
+        }
+        final String scriptFileName = scriptFile.getName();
+        int p = scriptFileName.lastIndexOf('.');
+        if (p == -1) {
+            reportError(1, "no_extension", "Script file name " + scriptFileName + " has no extension");
+            return 1;
+        }
+        final String extension = scriptFileName.substring(p + 1);
+        final ScriptEngine scriptEngine = new ScriptEngineManager().getEngineByExtension(extension);
+        if (scriptEngine == null) {
+            reportError(1, "unsupported_language", "Script file language " + extension + " not supported");
+            return 1;
+        }
+        scriptEngine.put(ScriptEngine.FILENAME, scriptFileName);
 
-        // Parse arguments
         final List<String> argList = new ArrayList<>();
+        argList.add(scriptFile.getAbsolutePath());
         final Map<String, String> paramMap = new HashMap<>();
-        for (String arg: args) {
-            if (arg.startsWith("--") && (arg.length() > 2) && (arg.charAt(2) != '-')) {
-                p = arg.indexOf('=');
-                if (p != -1) {
-                    final String key = arg.substring(2, p);
-                    final String value = arg.substring(p + 1);
-                    paramMap.put(key, value);
-                } else {
-                    paramMap.put(arg.substring(2), "true");
-                }
-            } else if (arg.startsWith("-") && (arg.length() > 1) && (arg.charAt(1) != '-')) {
-                try {
-                    // It might just be a negative number
-                    Integer.parseInt(arg);
-                    argList.add(arg);
-                    continue;
-                } catch (NumberFormatException e) {
-                    // Apparently not. Continue
-                }
-                for (int i = 1; i < arg.length(); i++) {
-                    paramMap.put(arg.substring(i, i + 1), "true");
-                }
+        for (String arg : extraArgs) {
+            if (arg.contains("=")) {
+                final int eq = arg.indexOf('=');
+                paramMap.put(arg.substring(0, eq), arg.substring(eq + 1));
             } else {
                 argList.add(arg);
             }
         }
 
-        // Initialise script context
         final Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
         final ScriptingContext context = new ScriptingContext(true);
         bindings.put("wp", context);
-        final String[] argArray = argList.toArray(new String[argList.size()]);
+        final String[] argArray = argList.toArray(new String[0]);
         bindings.put("argc", argArray.length);
         bindings.put("argv", argArray);
-        final String[] scriptArgs = new String[argArray.length - 1];
-        System.arraycopy(argArray, 1, scriptArgs, 0, scriptArgs.length);
-        bindings.put("arguments", scriptArgs);
+        final String[] scriptArgsArr = new String[Math.max(0, argArray.length - 1)];
+        if (argArray.length > 1) {
+            System.arraycopy(argArray, 1, scriptArgsArr, 0, scriptArgsArr.length);
+        }
+        bindings.put("arguments", scriptArgsArr);
         bindings.put("params", paramMap);
         final Map<String, Layer.DataSize> dataSizes = new HashMap<>();
-        for (Layer.DataSize dataSize: Layer.DataSize.values()) {
+        for (Layer.DataSize dataSize : Layer.DataSize.values()) {
             dataSizes.put(dataSize.name(), dataSize);
         }
         bindings.put("DataSize", dataSizes);
         bindings.put("scriptDir", scriptFilePath);
 
-        // Execute script
         try {
             scriptEngine.eval(new FileReader(scriptFile));
-
-            // Check that go() was invoked on the last operation:
             context.checkGoCalled(null);
+            System.err.println("WP_OK script=" + scriptFileName);
+            return 0;
         } catch (RuntimeException e) {
             logger.error(e.getClass().getSimpleName() + " occurred while executing " + scriptFileName, e);
-            System.exit(2);
+            reportError(2, "runtime", e.getClass().getSimpleName() + ": " + e.getMessage());
+            return 2;
         } catch (ScriptException e) {
             logger.error("ScriptException occurred while executing " + scriptFileName, e);
-            System.exit(2);
+            reportError(2, "script", e.getMessage());
+            return 2;
+        } catch (IOException e) {
+            reportError(1, "io", e.getMessage());
+            return 1;
         }
     }
-    
+
+    private static void printUsage() {
+        System.err.println("Usage:\n" +
+                "\n" +
+                "    wpscript <scriptfile> [<scriptarg> ...]\n" +
+                "    wpscript --queue <script1> <script2> [...] [-- <scriptarg> ...]\n" +
+                "\n" +
+                "Errors: WP_ERROR code=<n> kind=<kind> message=<text>");
+    }
+
+    private static void reportError(int code, String kind, String message) {
+        System.err.println("WP_ERROR code=" + code + " kind=" + kind + " message=" + message);
+    }
+
+    private static void fail(int code, String kind, String message) {
+        reportError(code, kind, message);
+        System.exit(code);
+    }
+
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ScriptingTool.class);
 }

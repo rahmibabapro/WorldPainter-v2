@@ -47,18 +47,21 @@ public class ResourcesExporter extends AbstractLayerExporter<Resources> implemen
         }
         this.activeMaterials = activeMaterials.toArray(new Material[activeMaterials.size()]);
         noiseGenerators = new PerlinNoise[this.activeMaterials.length];
-        final long[] seedOffsets = new long[this.activeMaterials.length];
+        seedOffsets = new long[this.activeMaterials.length];
         minLevels = new int[this.activeMaterials.length];
         maxLevels = new int[this.activeMaterials.length];
+        chancePromille = new int[this.activeMaterials.length];
         chances = new float[this.activeMaterials.length][16];
+        this.legacyNoise = resolveLegacyNoise(resourcesSettings);
         for (int i = 0; i < this.activeMaterials.length; i++) {
             noiseGenerators[i] = new PerlinNoise(0);
             seedOffsets[i] = resourcesSettings.getSeedOffset(this.activeMaterials[i]);
             minLevels[i] = resourcesSettings.getMinLevel(this.activeMaterials[i]);
             maxLevels[i] = resourcesSettings.getMaxLevel(this.activeMaterials[i]);
+            chancePromille[i] = resourcesSettings.getChance(this.activeMaterials[i]);
             chances[i] = new float[16];
             for (int j = 0; j < 16; j++) {
-                chances[i][j] = PerlinNoise.getLevelForPromillage(Math.min(resourcesSettings.getChance(this.activeMaterials[i]) * j / 8f, 1000f));
+                chances[i][j] = PerlinNoise.getLevelForPromillage(Math.min(chancePromille[i] * j / 8f, 1000f));
             }
         }
         for (int i = 0; i < this.activeMaterials.length; i++) {
@@ -68,6 +71,14 @@ public class ResourcesExporter extends AbstractLayerExporter<Resources> implemen
         }
     }
 
+    private static boolean resolveLegacyNoise(ResourcesExporterSettings resourcesSettings) {
+        final String prop = System.getProperty("org.pepsoft.worldpainter.resources.legacyNoise");
+        if (prop != null) {
+            return Boolean.parseBoolean(prop);
+        }
+        return resourcesSettings.isLegacyNoise();
+    }
+
     @Override
     public void render(Tile tile, Chunk chunk) {
         render(tile, chunk, null);
@@ -75,11 +86,20 @@ public class ResourcesExporter extends AbstractLayerExporter<Resources> implemen
 
     @Override
     public void render(Tile tile, Chunk chunk, HeightMap minHeightField) {
-        final int minimumLevel = ((ResourcesExporterSettings) super.settings).getMinimumLevel();
+        final ResourcesExporterSettings resourcesSettings = (ResourcesExporterSettings) super.settings;
+        final int minimumLevel = resourcesSettings.getMinimumLevel();
+        final boolean coverSteepTerrain = dimension.isCoverSteepTerrain();
+        final boolean nether = (dimension.getAnchor().dim == DIM_NETHER);
+
+        if (! legacyNoise) {
+            OreClusterPlacer.render(tile, chunk, dimension, minHeightField, activeMaterials, minLevels, maxLevels,
+                    chancePromille, seedOffsets, minimumLevel, coverSteepTerrain, nether,
+                    ORE_TO_DEEPSLATE_VARIANT, minZ, maxZ);
+            return;
+        }
+
         final int xOffset = (chunk.getxPos() & 7) << 4;
         final int zOffset = (chunk.getzPos() & 7) << 4;
-        final boolean coverSteepTerrain = dimension.isCoverSteepTerrain(), nether = (dimension.getAnchor().dim == DIM_NETHER);
-//        int[] counts = new int[256];
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
                 final int localX = xOffset + x, localY = zOffset + z;
@@ -101,11 +121,8 @@ public class ResourcesExporter extends AbstractLayerExporter<Resources> implemen
                     }
                     final double dx = worldX / TINY_BLOBS, dy = worldY / TINY_BLOBS;
                     final double dirtX = worldX / SMALL_BLOBS, dirtY = worldY / SMALL_BLOBS;
-                    // Capping to maxY really shouldn't be necessary, but we've had several reports from the wild of
-                    // this going higher than maxHeight, so there must be some obscure way in which the terrainHeight
-                    // can be raised too high
-                    final int minZ = (minHeightField != null) ? (int) floor(minHeightField.getHeight(worldX, worldY)) : this.minZ;
-                    for (int y = Math.min(subsurfaceMaxHeight, maxZ); y >= minZ; y--) {
+                    final int columnMinZ = (minHeightField != null) ? (int) floor(minHeightField.getHeight(worldX, worldY)) : this.minZ;
+                    for (int y = Math.min(subsurfaceMaxHeight, maxZ); y >= columnMinZ; y--) {
                         final double dz = y / TINY_BLOBS;
                         final double dirtZ = y / SMALL_BLOBS;
                         for (int i = 0; i < activeMaterials.length; i++) {
@@ -116,7 +133,6 @@ public class ResourcesExporter extends AbstractLayerExporter<Resources> implemen
                                     && (activeMaterials[i].isNamedOneOf(MC_DIRT, MC_GRAVEL)
                                         ? (noiseGenerators[i].getPerlinNoise(dirtX, dirtY, dirtZ) >= chance)
                                         : (noiseGenerators[i].getPerlinNoise(dx, dy, dz) >= chance))) {
-//                                counts[oreType]++;
                                 final Material existingMaterial = chunk.getMaterial(x, y, z);
                                 if (existingMaterial.isNamed(MC_DEEPSLATE) && ORE_TO_DEEPSLATE_VARIANT.containsKey(activeMaterials[i].name)) {
                                     chunk.setMaterial(x, y, z, ORE_TO_DEEPSLATE_VARIANT.get(activeMaterials[i].name));
@@ -132,21 +148,16 @@ public class ResourcesExporter extends AbstractLayerExporter<Resources> implemen
                 }
             }
         }
-//        System.out.println("Tile " + tile.getX() + "," + tile.getY());
-//        for (i = 0; i < 256; i++) {
-//            if (counts[i] > 0) {
-//                System.out.printf("Exported %6d of ore type %3d%n", counts[i], i);
-//            }
-//        }
-//        System.out.println();
     }
 
 //  TODO: resource frequenties onderzoeken met Statistics tool!
 
     private final Material[] activeMaterials;
     private final PerlinNoise[] noiseGenerators;
-    private final int[] minLevels, maxLevels;
+    private final long[] seedOffsets;
+    private final int[] minLevels, maxLevels, chancePromille;
     private final float[][] chances;
+    private final boolean legacyNoise;
 
     private static final Map<String, Material> ORE_TO_DEEPSLATE_VARIANT = ImmutableMap.of(
             MC_COAL_ORE, DEEPSLATE_COAL_ORE,
@@ -192,6 +203,17 @@ public class ResourcesExporter extends AbstractLayerExporter<Resources> implemen
         public void setMinimumLevel(int minimumLevel) {
             this.minimumLevel = minimumLevel;
         }
+
+        /**
+         * When true, use the legacy per-block 3D Perlin path. When false (v2 default), use ore clusters.
+         */
+        public boolean isLegacyNoise() {
+            return legacyNoise;
+        }
+
+        public void setLegacyNoise(boolean legacyNoise) {
+            this.legacyNoise = legacyNoise;
+        }
         
         public Set<Material> getMaterials() {
             return settings.keySet();
@@ -223,6 +245,10 @@ public class ResourcesExporter extends AbstractLayerExporter<Resources> implemen
 
         public long getSeedOffset(Material material) {
             return settings.get(material).seedOffset;
+        }
+
+        public void setSeedOffset(Material material, long seedOffset) {
+            settings.get(material).seedOffset = seedOffset;
         }
         
         @Override
@@ -326,6 +352,8 @@ public class ResourcesExporter extends AbstractLayerExporter<Resources> implemen
                     throw new IllegalArgumentException("Dimension " + anchor.dim + " not supported");
             }
             final ResourcesExporterSettings result = new ResourcesExporterSettings(settings);
+            // v2 default: cluster placer. Upstream-compatible worlds can set legacyNoise=true.
+            result.setLegacyNoise(! Branding.isV2());
             if (anchor.role == CAVE_FLOOR) {
                 result.setMinimumLevel(0);
             }
@@ -407,10 +435,12 @@ public class ResourcesExporter extends AbstractLayerExporter<Resources> implemen
                     settings.remove(LAVA);
                 }
             }
-            version = 3;
+            version = 4;
         }
         
         private int minimumLevel = 8;
+        /** False = ore-cluster path (v2 default); true = legacy per-block Perlin. */
+        private boolean legacyNoise;
         private Map<Material, ResourceSettings> settings;
         /** @deprecated */
         @Deprecated private Map<Integer, Integer> maxLevels = null;
@@ -420,7 +450,7 @@ public class ResourcesExporter extends AbstractLayerExporter<Resources> implemen
         @Deprecated private Map<Integer, Long> seedOffsets = null;
         /** @deprecated */
         @Deprecated private Map<Integer, Integer> minLevels = null;
-        private int version = 3;
+        private int version = 4;
 
         @Serial
         private static final long serialVersionUID = 1L;

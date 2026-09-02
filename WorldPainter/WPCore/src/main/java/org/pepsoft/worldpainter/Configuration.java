@@ -670,6 +670,30 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
         this.showBiomes = showBiomes;
     }
 
+    /**
+     * Whether biome paint operations should snap to Minecraft's 4×4 biome grid.
+     * Overridable at runtime via system property {@code org.pepsoft.worldpainter.biomeGridSnap}.
+     */
+    public synchronized boolean isBiomeGridSnap() {
+        return biomeGridSnap;
+    }
+
+    public synchronized void setBiomeGridSnap(boolean biomeGridSnap) {
+        this.biomeGridSnap = biomeGridSnap;
+    }
+
+    /**
+     * Effective biome grid snap setting: system property overrides config when set.
+     */
+    public static boolean isBiomeGridSnapEnabled() {
+        final String prop = System.getProperty("org.pepsoft.worldpainter.biomeGridSnap");
+        if ((prop != null) && (! prop.isEmpty())) {
+            return Boolean.parseBoolean(prop);
+        }
+        final Configuration config = getInstance();
+        return (config != null) && config.isBiomeGridSnap();
+    }
+
     public synchronized Platform getDefaultPlatform() {
         return Platform.getById(defaultPlatformId);
     }
@@ -1416,6 +1440,7 @@ public final class Configuration implements Serializable, EventLogger, Minecraft
     private TiledImageViewer.BackgroundImageMode backgroundImageMode = TiledImageViewer.BackgroundImageMode.REPEAT;
     private int backgroundColour = -1;
     private boolean showBorders = true, showBiomes = true;
+    private boolean biomeGridSnap;
     private GameType defaultGameTypeObj = GameType.SURVIVAL;
     @Deprecated
     private Platform defaultPlatform;

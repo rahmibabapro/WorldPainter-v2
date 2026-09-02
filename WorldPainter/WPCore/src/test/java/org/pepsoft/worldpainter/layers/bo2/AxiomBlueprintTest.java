@@ -81,7 +81,7 @@ public class AxiomBlueprintTest {
      * Build a minimal Version=2 blueprint: one section at (0,0,0) with oak_log at local Y=0
      * and oak_leaves at local Y=3 (same X/Z).
      */
-    private static byte[] buildSyntheticBlueprint(Material trunk, Material leaves) throws Exception {
+    static byte[] buildSyntheticBlueprint(Material trunk, Material leaves) throws Exception {
         final Material voidAir = Material.get(MC_VOID_AIR);
 
         final PackedArrayCube<Material> cube = new PackedArrayCube<>(16, 4, false, Material.class);

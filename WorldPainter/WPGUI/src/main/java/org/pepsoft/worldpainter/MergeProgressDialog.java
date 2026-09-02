@@ -9,7 +9,9 @@ import org.pepsoft.util.DesktopUtils;
 import org.pepsoft.util.ProgressReceiver;
 import org.pepsoft.util.TaskbarProgressReceiver;
 import org.pepsoft.util.swing.ProgressTask;
+import org.pepsoft.worldpainter.exporting.ExportPlan;
 import org.pepsoft.worldpainter.merging.JavaWorldMerger;
+import org.pepsoft.worldpainter.util.FileInUseException;
 
 import javax.swing.*;
 import java.awt.*;
@@ -17,6 +19,8 @@ import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
 import java.io.File;
 import java.io.IOException;
+
+import static org.pepsoft.util.ExceptionUtils.chainContains;
 
 /**
  *
@@ -32,6 +36,14 @@ public class MergeProgressDialog extends MultiProgressDialog<Void> implements Wi
         JButton minimiseButton = new JButton("Minimize");
         minimiseButton.addActionListener(e -> App.getInstance().setState(Frame.ICONIFIED));
         addButton(minimiseButton);
+    }
+
+    public boolean isAllowRetry() {
+        return allowRetry;
+    }
+
+    public String getUnfinishedRegionsReport() {
+        return unfinishedRegionsReport;
     }
 
     // WindowListener
@@ -86,15 +98,41 @@ public class MergeProgressDialog extends MultiProgressDialog<Void> implements Wi
             public Void execute(ProgressReceiver progressReceiver) throws ProgressReceiver.OperationCancelled {
                 progressReceiver = new TaskbarProgressReceiver(App.getInstance(), progressReceiver);
                 try {
+                    saveMergePlan();
                     merger.merge(backupDir, progressReceiver);
                 } catch (IOException e) {
                     throw new RuntimeException("I/O error while merging world " + merger.getWorld().getName() + " with map " + merger.getMapDir(), e);
+                } catch (RuntimeException e) {
+                    if (chainContains(e, FileInUseException.class)) {
+                        allowRetry = true;
+                        unfinishedRegionsReport = "Map folder locked during merge.\n"
+                                + "Target: " + merger.getMapDir() + "\n"
+                                + "Close Minecraft and Retry (merge settings stay on the dialog).";
+                    }
+                    throw e;
                 }
                 return null;
+            }
+
+            private void saveMergePlan() {
+                try {
+                    final ExportPlan plan = new ExportPlan();
+                    plan.worldName = merger.getWorld().getName();
+                    plan.baseDir = merger.getMapDir() != null && merger.getMapDir().getParentFile() != null
+                            ? merger.getMapDir().getParentFile().getAbsolutePath() : "";
+                    plan.mapName = merger.getMapDir() != null ? merger.getMapDir().getName() : "";
+                    plan.platformId = "merge";
+                    plan.savedAtEpochMs = System.currentTimeMillis();
+                    plan.save(ExportPlan.pathForConfigDir(Configuration.getConfigDir()));
+                } catch (Exception ex) {
+                    // best-effort
+                }
             }
         };
     }
 
     private final File backupDir;
     private final JavaWorldMerger merger;
+    private volatile boolean allowRetry;
+    private volatile String unfinishedRegionsReport;
 }

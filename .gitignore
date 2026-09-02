@@ -5,3 +5,11 @@ exporttimings.csv
 target
 *.code-workspace
 exports
+# Local packaged builds / jpackage staging (regenerate with build-v2.ps1)
+dist/
+jpackage-input/
+# Machine-local JDK path
+toolchains.xml
+# Scratch harness logs
+docs/baselines/*-err.txt
+docs/baselines/*-out.txt

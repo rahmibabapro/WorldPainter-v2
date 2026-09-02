@@ -29,6 +29,7 @@ import org.pepsoft.worldpainter.brushes.SymmetricBrush;
 import org.pepsoft.worldpainter.dnd.WPTransferHandler;
 import org.pepsoft.worldpainter.dynmap.DynmapColourScheme;
 import org.pepsoft.worldpainter.exporting.HeightMapExporter;
+import org.pepsoft.worldpainter.exporting.HeightMapSizeCheck;
 import org.pepsoft.worldpainter.gardenofeden.GardenOfEdenOperation;
 import org.pepsoft.worldpainter.history.HistoryEntry;
 import org.pepsoft.worldpainter.history.WorldHistoryDialog;
@@ -2110,17 +2111,14 @@ public final class App extends JFrame implements BrushControl,
             return;
         }
         final List<Brush> brushes = new ArrayList<>();
-        BufferedImage icon = null;
+        File deferredIconFile = null;
         for (File file: files) {
             if (file.isDirectory()) {
                 loadCustomBrushes(file.getName(), file);
             } else if (file.isFile()) {
                 if (file.getName().equalsIgnoreCase("icon.png")) {
-                    try {
-                        icon = ImageIO.read(file);
-                    } catch (Exception e) {
-                        logger.error("There was an error loading the brush group icon file icon.png; skipping icon file", e);
-                    }
+                    // Defer ImageIO until first icon paint (#491)
+                    deferredIconFile = file;
                 } else {
                     try {
                         brushes.add(new BitmapBrush(file));
@@ -2133,7 +2131,7 @@ public final class App extends JFrame implements BrushControl,
             }
         }
         if (! brushes.isEmpty()) {
-            customBrushes.put(category, new BrushGroup(category, icon, brushes));
+            customBrushes.put(category, new BrushGroup(category, deferredIconFile, brushes));
         }
     }
     
@@ -3811,8 +3809,9 @@ public final class App extends JFrame implements BrushControl,
         constraints.insets = new Insets(1, 1, 1, 1);
         customBrushesPanel.add(customBrushPanel, constraints);
 
-        if (brushGroup.icon != null) {
-            customBrushesPanel.putClientProperty(KEY_ICON, new ImageIcon(scaleIcon(brushGroup.icon, 16)));
+        final BufferedImage groupIcon = brushGroup.getIcon();
+        if (groupIcon != null) {
+            customBrushesPanel.putClientProperty(KEY_ICON, new ImageIcon(scaleIcon(groupIcon, 16)));
         } else {
             customBrushesPanel.putClientProperty(KEY_ICON, createScaledLetterIcon(title.charAt(0), darkMode ? WHITE : BLACK));
         }
@@ -5902,8 +5901,9 @@ public final class App extends JFrame implements BrushControl,
             DesktopUtils.beep();
             return;
         }
-        if (! imageFitsInJavaArray(dimension)) {
-            beepAndShowError(this, "The dimension is too large to export to a height map.\nThe area (width x height) may not be more than " + INT_NUMBER_FORMAT.format(Integer.MAX_VALUE), "Dimension Too Large");
+        if (! HeightMapSizeCheck.fitsInJavaArray(dimension)) {
+            final HeightMapExporter probe = new HeightMapExporter(dimension, format);
+            beepAndShowError(this, HeightMapSizeCheck.describeTooLarge(dimension, format, probe.getBitsRequired()), "Dimension Too Large");
             return;
         }
         final HeightMapExporter heightMapExporter = new HeightMapExporter(dimension, format);
@@ -5983,7 +5983,11 @@ public final class App extends JFrame implements BrushControl,
 
                         @Override
                         public Boolean execute(ProgressReceiver progressReceiver) {
-                            return heightMapExporter.exportToFile(file);
+                            try {
+                                return heightMapExporter.exportToFile(file);
+                            } catch (IllegalArgumentException e) {
+                                throw new RuntimeException(e.getMessage(), e);
+                            }
                         }
                     }, NOT_CANCELABLE)) {
                 MessageUtils.showInfo(App.this, "Dimension exported to " + selectedFile.getName() + "\n" + heightMapExporter.getFormatDescription(), "Export Succeeded");
@@ -5994,8 +5998,7 @@ public final class App extends JFrame implements BrushControl,
     }
 
     private boolean imageFitsInJavaArray(Dimension dimension) {
-        final long areaInTiles = (long) dimension.getWidth() * dimension.getHeight();
-        return (areaInTiles >= 0L) && (areaInTiles <= 131071L);
+        return HeightMapSizeCheck.fitsInJavaArray(dimension);
     }
 
     void importLayers(String paletteName, Function<Layer, Boolean> filter) {
@@ -7273,15 +7276,33 @@ public final class App extends JFrame implements BrushControl,
     public enum Mode { WORLDPAINTER, MINECRAFTMAPEDITOR }
 
     class BrushGroup {
-        BrushGroup(String name, BufferedImage icon, List<Brush> brushes) {
+        BrushGroup(String name, File iconFile, List<Brush> brushes) {
             this.name = name;
-            this.icon = icon;
+            this.iconFile = iconFile;
             this.brushes = brushes;
         }
 
+        /** Lazily decode palette icon (#491). */
+        synchronized BufferedImage getIcon() {
+            if (iconLoaded) {
+                return icon;
+            }
+            iconLoaded = true;
+            if (iconFile != null && iconFile.isFile()) {
+                try {
+                    icon = ImageIO.read(iconFile);
+                } catch (Exception e) {
+                    logger.error("There was an error loading the brush group icon file {}; skipping icon file", iconFile, e);
+                }
+            }
+            return icon;
+        }
+
         final String name;
-        final BufferedImage icon;
+        final File iconFile;
         final List<Brush> brushes;
+        private BufferedImage icon;
+        private boolean iconLoaded;
     }
 
     public enum TerrainMode { SHOW_TERRAIN, HIDE_TERRAIN, DEFAULT_COLOUR_RAMP, DEFAULT_GREYSCALE_RAMP }

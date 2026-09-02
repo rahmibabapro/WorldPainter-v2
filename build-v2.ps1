@@ -1,6 +1,6 @@
 param(
     [switch]$SkipExe,
-    [string]$JdkHome = "C:\Program Files\Eclipse Adoptium\jdk-21.0.9.10-hotspot",
+    [string]$JdkHome = "C:\Program Files\Eclipse Adoptium\jdk-21.0.12.8-hotspot",
     [string]$MavenHome = "$env:USERPROFILE\.maven\maven-3.9.12"
 )
 

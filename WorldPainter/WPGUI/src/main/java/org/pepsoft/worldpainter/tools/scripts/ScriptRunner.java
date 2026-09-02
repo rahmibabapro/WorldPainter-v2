@@ -380,6 +380,7 @@ public class ScriptRunner extends WorldPainterDialog {
             params = null;
             scriptName = scriptFileName;
         }
+        // GUI ScriptRunner uses ScriptingContext(false) and must never call System.exit (#462).
         context = new ScriptingContext(false);
         new Thread(scriptFileName) {
             @Override

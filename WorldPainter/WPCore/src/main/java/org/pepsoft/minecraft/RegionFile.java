@@ -60,9 +60,10 @@ package org.pepsoft.minecraft;
 
 import org.pepsoft.util.mdc.MDCCapturingRuntimeException;
 
+import org.pepsoft.minecraft.compression.FastDeflaterOutputStream;
+
 import java.io.*;
 import java.util.ArrayList;
-import java.util.zip.DeflaterOutputStream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -264,7 +265,7 @@ public final class RegionFile implements AutoCloseable {
             return null;
         }
 
-        return new DataOutputStream(new DeflaterOutputStream(new ChunkBuffer(x, z)));
+        return new DataOutputStream(new FastDeflaterOutputStream(new ChunkBuffer(x, z)));
     }
 
     public boolean containsChunk(int x, int z) {

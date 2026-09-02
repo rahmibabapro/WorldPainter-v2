@@ -139,6 +139,7 @@
         <!-- Test dependencies -->
         <junit.version>4.13.2</junit.version>
         <flatlaf.version>3.6</flatlaf.version>
+        <zstd-jni.version>1.5.6-9</zstd-jni.version>
 
         <!-- Build dependencies -->
         <lombok.version>1.18.34</lombok.version>

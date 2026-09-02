@@ -264,10 +264,24 @@ public class JavaExportSettings extends BlockBasedExportSettings {
 
     /**
      * Aggressive export preset: no lighting, no fluid flow simulation, floating sand/gravel.
+     * Callers should also set {@code -Dorg.pepsoft.worldpainter.deflateLevel=1} for turbo I/O
+     * (see {@link #applyTurboDeflateHint()}). Normal export keeps JDK {@code DEFAULT_COMPRESSION}.
      */
     public static JavaExportSettings turboExportPreset() {
         return new JavaExportSettings(LEAVE_FLOATING, LEAVE_FLOATING, LEAVE_FLOATING, LEAVE_FLOATING, LEAVE_FLOATING,
                 false, false, false, false, false, false, false, false, true);
+    }
+
+    /** Opt-in fast MCA zlib for turbo exports. Does not change the default compressor for normal export. */
+    public static void applyTurboDeflateHint() {
+        System.setProperty("org.pepsoft.worldpainter.deflateLevel", "1");
+        org.pepsoft.minecraft.compression.ChunkCompressors.resetForTests();
+    }
+
+    /** Restore default (JDK DEFAULT_COMPRESSION) after a turbo session if desired. */
+    public static void clearTurboDeflateHint() {
+        System.clearProperty("org.pepsoft.worldpainter.deflateLevel");
+        org.pepsoft.minecraft.compression.ChunkCompressors.resetForTests();
     }
 
 

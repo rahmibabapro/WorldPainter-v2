@@ -1,6 +1,6 @@
 /*
  * WorldPainter, a graphical and interactive map generator for Minecraft.
- * Copyright � 2011-2015  pepsoft.org, The Netherlands
+ * Copyright © 2011-2015  pepsoft.org, The Netherlands
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,8 +18,10 @@
 
 package org.pepsoft.worldpainter.painting;
 
+import org.pepsoft.worldpainter.Configuration;
 import org.pepsoft.worldpainter.Dimension;
 import org.pepsoft.worldpainter.Tile;
+import org.pepsoft.worldpainter.layers.Biome;
 import org.pepsoft.worldpainter.layers.Layer;
 
 import java.awt.*;
@@ -40,6 +42,7 @@ public final class DiscreteLayerPaint extends LayerPaint {
         }
         this.value = value;
         defaultValue = layer.getDefaultValue();
+        biomeGridSnap = layer == Biome.INSTANCE;
     }
 
     public int getValue() {
@@ -62,7 +65,9 @@ public final class DiscreteLayerPaint extends LayerPaint {
         final Rectangle boundingBox = brush.getBoundingBox();
         final int x1 = centreX + boundingBox.x, y1 = centreY + boundingBox.y, x2 = x1 + boundingBox.width - 1, y2 = y1 + boundingBox.height - 1;
         final int tileX1 = x1 >> TILE_SIZE_BITS, tileY1 = y1 >> TILE_SIZE_BITS, tileX2 = x2 >> TILE_SIZE_BITS, tileY2 = y2 >> TILE_SIZE_BITS;
-        if ((tileX1 == tileX2) && (tileY1 == tileY2)) {
+        final boolean snap = biomeGridSnap && Configuration.isBiomeGridSnapEnabled();
+        // When snapping, always paint via the dimension so 4×4 cells can cross tile boundaries
+        if ((! snap) && (tileX1 == tileX2) && (tileY1 == tileY2)) {
             // The bounding box of the brush is entirely on one tile; optimize by painting directly to the tile
             final Tile tile = dimension.getTileForEditing(tileX1, tileY1);
             if (tile == null) {
@@ -96,7 +101,7 @@ public final class DiscreteLayerPaint extends LayerPaint {
                     for (int x = x1; x <= x2; x++) {
                         final float strength = dynamicLevel * getStrength(centreX, centreY, x, y);
                         if ((strength > 0.95f) || (Math.random() < strength)) {
-                            dimension.setLayerValueAt(layer, x, y, value);
+                            setLayerValue(dimension, x, y, value, snap);
                         }
                     }
                 }
@@ -105,7 +110,7 @@ public final class DiscreteLayerPaint extends LayerPaint {
                     for (int x = x1; x <= x2; x++) {
                         final float strength = dynamicLevel * getFullStrength(centreX, centreY, x, y);
                         if (strength > 0.75f) {
-                            dimension.setLayerValueAt(layer, x, y, value);
+                            setLayerValue(dimension, x, y, value, snap);
                         }
                     }
                 }
@@ -124,7 +129,8 @@ public final class DiscreteLayerPaint extends LayerPaint {
         final Rectangle boundingBox = brush.getBoundingBox();
         final int x1 = centreX + boundingBox.x, y1 = centreY + boundingBox.y, x2 = x1 + boundingBox.width - 1, y2 = y1 + boundingBox.height - 1;
         final int tileX1 = x1 >> TILE_SIZE_BITS, tileY1 = y1 >> TILE_SIZE_BITS, tileX2 = x2 >> TILE_SIZE_BITS, tileY2 = y2 >> TILE_SIZE_BITS;
-        if ((tileX1 == tileX2) && (tileY1 == tileY2)) {
+        final boolean snap = biomeGridSnap && Configuration.isBiomeGridSnapEnabled();
+        if ((! snap) && (tileX1 == tileX2) && (tileY1 == tileY2)) {
             // The bounding box of the brush is entirely on one tile; optimize by painting directly to the tile
             final Tile tile = dimension.getTileForEditing(tileX1, tileY1);
             if (tile == null) {
@@ -158,7 +164,7 @@ public final class DiscreteLayerPaint extends LayerPaint {
                     for (int x = x1; x <= x2; x++) {
                         final float strength = dynamicLevel * getFullStrength(centreX, centreY, x, y);
                         if ((strength > 0.95f) || (Math.random() < strength)) {
-                            dimension.setLayerValueAt(layer, x, y, defaultValue);
+                            setLayerValue(dimension, x, y, defaultValue, snap);
                         }
                     }
                 }
@@ -167,7 +173,7 @@ public final class DiscreteLayerPaint extends LayerPaint {
                     for (int x = x1; x <= x2; x++) {
                         final float strength = dynamicLevel * getFullStrength(centreX, centreY, x, y);
                         if (strength > 0.75f) {
-                            dimension.setLayerValueAt(layer, x, y, defaultValue);
+                            setLayerValue(dimension, x, y, defaultValue, snap);
                         }
                     }
                 }
@@ -177,13 +183,30 @@ public final class DiscreteLayerPaint extends LayerPaint {
 
     @Override
     public void applyPixel(Dimension dimension, int x, int y) {
-        dimension.setLayerValueAt(layer, x, y, value);
+        setLayerValue(dimension, x, y, value, biomeGridSnap && Configuration.isBiomeGridSnapEnabled());
     }
 
     @Override
     public void removePixel(Dimension dimension, int x, int y) {
-        dimension.setLayerValueAt(layer, x, y, defaultValue);
+        setLayerValue(dimension, x, y, defaultValue, biomeGridSnap && Configuration.isBiomeGridSnapEnabled());
+    }
+
+    private void setLayerValue(Dimension dimension, int x, int y, int layerValue, boolean snap) {
+        if (! snap) {
+            dimension.setLayerValueAt(layer, x, y, layerValue);
+            return;
+        }
+        final int sx = x & ~BIOME_GRID_MASK, sy = y & ~BIOME_GRID_MASK;
+        for (int dy = 0; dy < BIOME_GRID; dy++) {
+            for (int dx = 0; dx < BIOME_GRID; dx++) {
+                dimension.setLayerValueAt(layer, sx + dx, sy + dy, layerValue);
+            }
+        }
     }
 
     private final int value, defaultValue;
+    private final boolean biomeGridSnap;
+
+    private static final int BIOME_GRID = 4;
+    private static final int BIOME_GRID_MASK = BIOME_GRID - 1;
 }

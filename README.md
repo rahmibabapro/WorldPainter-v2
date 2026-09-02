@@ -35,8 +35,13 @@ Repo: [rahmibabapro/WorldPainter-v2](https://github.com/rahmibabapro/WorldPainte
 - Script Library sadeleştirildi (şu an “Taş Çimen” / stone-grass slope)
 
 ### Performans / bellek
-- Turbo / hollow export, export bellek bütçesi
+- Turbo / hollow export, export bellek bütçesi (ölçümsüz thread artışı yok)
+- MCA: pluggable `ChunkCompressor` (varsayılan JDK `DEFAULT_COMPRESSION`; hızlı yol: `-Dorg.pepsoft.worldpainter.deflateLevel=1`)
+- Region flush: `parallelStream` varsayılan; VT opt-in (`virtualThreads=true`) ve hata fail-fast
 - Idle memory guard, tile cache, optimize game rules
+- Baseline: `docs/PERFORMANCE.md`, `scripts/run-baseline.ps1` (interactive ölçüm kapısı)
+- Height blend helper (scalar); **experimental/unwired:** off-heap grid, GPU panel stub, GPU compute
+- Opsiyonel Linear `.linear` (slot = ham NBT); Anvil varsayılan
 - Ayrı config: `%APPDATA%\WorldPainter [V2]`
 
 ## Derleme / çalıştırma

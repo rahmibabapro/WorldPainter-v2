@@ -309,7 +309,7 @@ public class MergeWorldDialog extends WorldPainterDialog {
         }
 
         synchronized (merger) {
-            if (! merger.isAborted()) {
+            if (! merger.isAborted() && ! dialog.isAllowRetry()) {
                 if (! radioButtonExportEverything.isSelected()) {
                     world.setExportSettings(exportSettings);
                 }
@@ -328,7 +328,7 @@ public class MergeWorldDialog extends WorldPainterDialog {
                         (Integer) spinnerSurfaceThickness.getValue()));
             }
 
-            if (merger.getWarnings() != null) {
+            if (merger.getWarnings() != null && ! dialog.isAllowRetry()) {
                 DesktopUtils.beep();
                 ImportWarningsDialog warningsDialog = new ImportWarningsDialog(MergeWorldDialog.this, "Merge Warnings", "<html>The merge process generated warnings! The existing map may have had pre-<br>existing damage or corruption. Not all chunks may have been merged correctly.<br>Please review the warnings below:</html>");
                 warningsDialog.setWarnings(merger.getWarnings());
@@ -336,7 +336,20 @@ public class MergeWorldDialog extends WorldPainterDialog {
             }
         }
 
-        ok();
+        if (dialog.isAllowRetry()) {
+            fieldSelectedMapDir.setEnabled(true);
+            buttonSelectDirectory.setEnabled(true);
+            buttonMerge.setText("Retry");
+            buttonMerge.setEnabled(true);
+            radioButtonAll.setEnabled(true);
+            radioButtonReplaceChunks.setEnabled(true);
+            radioButtonExportEverything.setEnabled(true);
+            radioButtonExportSelection.setEnabled(true);
+            setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+            setControlStates();
+        } else {
+            ok();
+        }
     }
 
     private void setControlStates() {

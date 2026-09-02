@@ -54,6 +54,48 @@ public class WorldExportSettings implements Serializable {
         this.hollowInterior = hollowInterior;
     }
 
+    /**
+     * When true, post-process Anvil regions into Linear ({@code .linear}) for AgeOfMC LinearPaper forks.
+     * Default export remains Anvil {@code .mca}.
+     */
+    public boolean isLinearRegionFormat() {
+        return linearRegionFormat;
+    }
+
+    public void setLinearRegionFormat(boolean linearRegionFormat) {
+        this.linearRegionFormat = linearRegionFormat;
+    }
+
+    /** Zstd level for Linear export (1 = fastest). */
+    public int getLinearCompressionLevel() {
+        return linearCompressionLevel;
+    }
+
+    public void setLinearCompressionLevel(int linearCompressionLevel) {
+        this.linearCompressionLevel = Math.max(1, Math.min(22, linearCompressionLevel));
+    }
+
+    /**
+     * When true, export only tiles that differ from the last {@code .wpexport-manifest.json}
+     * (expanded by a halo). Falls back to full export when no manifest exists.
+     */
+    public boolean isDeltaExport() {
+        return deltaExport;
+    }
+
+    public void setDeltaExport(boolean deltaExport) {
+        this.deltaExport = deltaExport;
+    }
+
+    /** Halo tiles around dirty tiles for cross-tile layers/objects. */
+    public int getDeltaBorderExpansion() {
+        return deltaBorderExpansion;
+    }
+
+    public void setDeltaBorderExpansion(int deltaBorderExpansion) {
+        this.deltaBorderExpansion = Math.max(0, Math.min(8, deltaBorderExpansion));
+    }
+
     /** Shell thickness preserved before clearing interiors ({@code //hollow <n>}); default 2. */
     public int getHollowThickness() {
         return hollowThickness;
@@ -80,6 +122,15 @@ public class WorldExportSettings implements Serializable {
 
     /** When true, enclosed terrain blocks are replaced with air before second-pass layers (trees, etc.). */
     private boolean hollowInterior;
+
+    /** When true, also write Linear region files for AgeOfMC servers (Anvil remains primary). */
+    private boolean linearRegionFormat;
+
+    private int linearCompressionLevel = 1;
+
+    private boolean deltaExport;
+
+    private int deltaBorderExpansion = 1;
 
     /** Layers of solid terrain kept from air / export bounds before hollowing (WorldEdit {@code //hollow n}). */
     private int hollowThickness = ChunkInteriorHollower.DEFAULT_HOLLOW_THICKNESS;

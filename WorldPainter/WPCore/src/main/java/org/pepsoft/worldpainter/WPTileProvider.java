@@ -11,10 +11,12 @@ import org.pepsoft.worldpainter.biomeschemes.CustomBiomeManager;
 import org.pepsoft.worldpainter.layers.Layer;
 import org.pepsoft.worldpainter.layers.renderers.VoidRenderer;
 import org.pepsoft.worldpainter.ramps.ColourRamp;
+import org.pepsoft.worldpainter.view.TilePyramidCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -43,6 +45,8 @@ public class WPTileProvider implements org.pepsoft.util.swing.TileProvider, Dime
         this.effect = effect;
         this.transparentVoid = transparentVoid;
         this.colourRamp = colourRamp;
+        this.pyramidCache = new TilePyramidCache(256);
+        this.pyramidRendererRef = createPyramidRendererRef();
     }
 
     public WPTileProvider(TileProvider tileProvider, ColourScheme colourScheme, CustomBiomeManager customBiomeManager, Set<Layer> hiddenLayers, boolean contourLines, int contourSeparation, TileRenderer.LightOrigin lightOrigin, ColourRamp colourRamp) {
@@ -58,6 +62,8 @@ public class WPTileProvider implements org.pepsoft.util.swing.TileProvider, Dime
             this.hiddenLayers.addAll(hiddenLayers);
         }
         tileRendererRef = createNewTileRendererRef();
+        pyramidRendererRef = createPyramidRendererRef();
+        pyramidCache.clear();
     }
 
     public synchronized Set<Layer> getHiddenLayers() {
@@ -72,6 +78,8 @@ public class WPTileProvider implements org.pepsoft.util.swing.TileProvider, Dime
         if (hideAllLayers != this.hideAllLayers) {
             this.hideAllLayers = hideAllLayers;
             tileRendererRef = createNewTileRendererRef();
+            pyramidRendererRef = createPyramidRendererRef();
+            pyramidCache.clear();
         }
     }
 
@@ -109,12 +117,23 @@ public class WPTileProvider implements org.pepsoft.util.swing.TileProvider, Dime
                     g2.setBackground(new Color(0x00ffffff & VoidRenderer.getColour(), true));
                     final int scale = 1 << -zoom;
                     final int subSize = TILE_SIZE / scale;
+                    final int lod = TilePyramidCache.selectLodForZoom(zoom);
                     for (int dx = 0; dx < scale; dx++) {
                         for (int dy = 0; dy < scale; dy++) {
-                            if (isUnzoomedTilePresent(x * scale + dx, y * scale + dy)) {
-                                final Tile tile = tileProvider.getTile(x * scale + dx, y * scale + dy);
-                                final TileRenderer tileRenderer = tileRendererRef.get();
-                                tileRenderer.renderTile(tile, tileImage, dx * subSize, dy * subSize);
+                            final int worldTileX = x * scale + dx;
+                            final int worldTileY = y * scale + dy;
+                            if (isUnzoomedTilePresent(worldTileX, worldTileY)) {
+                                BufferedImage cached = pyramidCache.getTileImage(worldTileX, worldTileY, lod);
+                                if (cached == null) {
+                                    ensurePyramidTile(worldTileX, worldTileY);
+                                    cached = pyramidCache.getTileImage(worldTileX, worldTileY, lod);
+                                }
+                                if (cached != null) {
+                                    g2.drawImage(cached, imageX + dx * subSize, imageY + dy * subSize, subSize, subSize, null);
+                                } else {
+                                    final Tile tile = tileProvider.getTile(worldTileX, worldTileY);
+                                    tileRendererRef.get().renderTile(tile, tileImage, dx * subSize, dy * subSize);
+                                }
                             } else {
                                 g2.clearRect(imageX + dx * subSize, imageY + dy * subSize, subSize, subSize);
                             }
@@ -196,6 +215,8 @@ public class WPTileProvider implements org.pepsoft.util.swing.TileProvider, Dime
             }
             this.zoom = zoom;
             tileRendererRef = createNewTileRendererRef();
+            // LOD set changes; drop cached mipmaps so zoom-out does not show stale LODs
+            pyramidCache.clear();
         }
     }
     
@@ -277,16 +298,51 @@ public class WPTileProvider implements org.pepsoft.util.swing.TileProvider, Dime
             return false;
         }
     }
+
+    private void ensurePyramidTile(int worldTileX, int worldTileY) {
+        synchronized (pyramidCache) {
+            if (pyramidCache.getTileImage(worldTileX, worldTileY, 0) != null) {
+                return;
+            }
+            final Tile tile = tileProvider.getTile(worldTileX, worldTileY);
+            if (tile == null) {
+                return;
+            }
+            final BufferedImage full = new BufferedImage(TILE_SIZE, TILE_SIZE, BufferedImage.TYPE_INT_ARGB);
+            pyramidRendererRef.get().renderTile(tile, full, 0, 0);
+            pyramidCache.putTileImage(worldTileX, worldTileY, full);
+        }
+    }
     
+    /**
+     * Coalesce paint-stroke invalidations into one {@link TileListener#tilesChanged} bbox flush
+     * at the end of the EDT queue (covers Dimension dirty-tile release batches).
+     */
     private void fireTileChanged(Tile tile) {
-        Point coords = getTileCoordinates(tile);
-        for (TileListener listener: listeners) {
-            listener.tileChanged(this, coords.x, coords.y);
+        pendingDirtyTiles.add(tile);
+        if (dirtyFlushScheduled.compareAndSet(false, true)) {
+            javax.swing.SwingUtilities.invokeLater(this::flushDirtyTiles);
+        }
+    }
+
+    private void flushDirtyTiles() {
+        dirtyFlushScheduled.set(false);
+        final Set<Tile> batch = new HashSet<>(pendingDirtyTiles);
+        pendingDirtyTiles.clear();
+        if (! batch.isEmpty()) {
+            fireTilesChanged(batch);
+        }
+        // More tiles arrived while flushing — schedule another coalesced pass
+        if ((! pendingDirtyTiles.isEmpty()) && dirtyFlushScheduled.compareAndSet(false, true)) {
+            javax.swing.SwingUtilities.invokeLater(this::flushDirtyTiles);
         }
     }
     
     private void fireTilesChanged(Set<Tile> tiles) {
         Set<Point> coords = tiles.stream().map(this::getTileCoordinates).collect(Collectors.toSet());
+        for (Tile tile : tiles) {
+            pyramidCache.invalidate(tile.getX(), tile.getY());
+        }
         for (TileListener listener: listeners) {
             listener.tilesChanged(this, coords);
         }
@@ -341,6 +397,24 @@ public class WPTileProvider implements org.pepsoft.util.swing.TileProvider, Dime
         });
     }
 
+    @NotNull
+    private ThreadLocal<TileRenderer> createPyramidRendererRef() {
+        return ThreadLocal.withInitial(() -> {
+            TileRenderer tileRenderer = new TileRenderer(tileProvider, colourScheme, customBiomeManager, 0, transparentVoid, colourRamp);
+            synchronized (WPTileProvider.this) {
+                if (hideAllLayers) {
+                    tileRenderer.setHideAllLayers(true);
+                } else if (hiddenLayers != null) {
+                    tileRenderer.addHiddenLayers(hiddenLayers);
+                }
+            }
+            tileRenderer.setContourLines(contourLines);
+            tileRenderer.setContourSeparation(contourSeparation);
+            tileRenderer.setLightOrigin(lightOrigin);
+            return tileRenderer;
+        });
+    }
+
     private void applyEffects(Graphics2D g2) {
         if (effect == null) {
             return;
@@ -367,8 +441,12 @@ public class WPTileProvider implements org.pepsoft.util.swing.TileProvider, Dime
     private final TileRenderer.LightOrigin lightOrigin;
     private final List<TileListener> listeners = new ArrayList<>();
     private final CustomBiomeManager customBiomeManager;
+    private final Set<Tile> pendingDirtyTiles = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.concurrent.atomic.AtomicBoolean dirtyFlushScheduled = new java.util.concurrent.atomic.AtomicBoolean();
     private final Effect effect;
     private final ColourRamp colourRamp;
+    private final TilePyramidCache pyramidCache;
+    private volatile ThreadLocal<TileRenderer> pyramidRendererRef;
 
     private int zoom = 0;
     private boolean hideAllLayers;
