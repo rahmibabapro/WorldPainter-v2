@@ -7,6 +7,7 @@ target
 exports
 # Local packaged builds / jpackage staging (regenerate with build-v2.ps1)
 dist/
+dist-staging/
 jpackage-input/
 # Machine-local JDK path
 toolchains.xml

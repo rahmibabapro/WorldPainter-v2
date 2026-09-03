@@ -68,6 +68,42 @@
 // script.param.avoidLayer.optional=true
 // script.param.avoidLayer.default=avoid
 
+// script.param.shallowGraniteDetail.type=boolean
+// script.param.shallowGraniteDetail.displayName=Sığ yatak granit detayı
+// script.param.shallowGraniteDetail.description=Sığ su altındaki seçili taban ve kıyıları granite çevirir. Exporttaki 2x2x2 yumuşatıcı granite slab/stair yönünü güvenli olarak üretir.
+// script.param.shallowGraniteDetail.default=false
+// script.param.shallowGraniteDetail.optional=false
+
+// script.param.shallowGraniteMaxDepth.type=float
+// script.param.shallowGraniteMaxDepth.displayName=En fazla sığ su derinliği
+// script.param.shallowGraniteMaxDepth.description=Yalnızca bu derinlikte veya daha sığ su altına granite uygulanır.
+// script.param.shallowGraniteMaxDepth.default=1.25
+// script.param.shallowGraniteMaxDepth.optional=false
+
+// script.param.shallowGraniteFloorCoverage.type=float
+// script.param.shallowGraniteFloorCoverage.displayName=Taban granit oranı
+// script.param.shallowGraniteFloorCoverage.description=Sığ yatağın iç kısmında granite uygulanma oranı (0-1).
+// script.param.shallowGraniteFloorCoverage.default=0.20
+// script.param.shallowGraniteFloorCoverage.optional=false
+
+// script.param.shallowGraniteBankCoverage.type=float
+// script.param.shallowGraniteBankCoverage.displayName=Kıyı granit oranı
+// script.param.shallowGraniteBankCoverage.description=Sığ yatağın suya yakın kenarında granite uygulanma oranı (0-1).
+// script.param.shallowGraniteBankCoverage.default=0.40
+// script.param.shallowGraniteBankCoverage.optional=false
+
+// script.param.shallowGraniteClusterSize.type=integer
+// script.param.shallowGraniteClusterSize.displayName=Granit küme boyutu
+// script.param.shallowGraniteClusterSize.description=Benzer granite hücrelerinin birlikte oluştuğu ortalama blok ölçeği.
+// script.param.shallowGraniteClusterSize.default=5
+// script.param.shallowGraniteClusterSize.optional=false
+
+// script.param.shallowGraniteSeed.type=integer
+// script.param.shallowGraniteSeed.displayName=Granit seed
+// script.param.shallowGraniteSeed.description=Aynı seed aynı granit dağılımını verir.
+// script.param.shallowGraniteSeed.default=1337
+// script.param.shallowGraniteSeed.optional=false
+
 
 //################################################################# \/ priority que \/ #################################################################
 
@@ -155,24 +191,6 @@ PriorityQueue.prototype.poll = function () {
 
 //################################################################# /\ priority que /\ #################################################################
 
-// ############# \/ save last entered value \/ ###############
-var fs = Java.type('java.nio.file.Files');
-var Paths = Java.type('java.nio.file.Paths');
-var StandardOpenOption = Java.type('java.nio.file.StandardOpenOption');
-var StandardCharsets = Java.type('java.nio.charset.StandardCharsets');
-var System = Java.type('java.lang.System');
-var isWindows = java.lang.System.getProperty("os.name").toLowerCase().indexOf("win") >= 0;
-var fileSeparator = "/"
-if (isWindows) {
-	fileSeparator = "\\"
-}
-print("using windows:", isWindows)
-
-
-var scriptFilePath = scriptDir + fileSeparator + __FILE__
-
-// ############# /\ save last entered value /\ ###############
-
 var app = org.pepsoft.worldpainter.App.getInstance();
 var d = new Date();
 var startTime = d.getTime();
@@ -210,6 +228,12 @@ var manualStartCoords = params['manualStartCoords'];
 var manualSourceLayer = params['manualSourceLayer'];
 var manualSourceTerrain = params['manualSourceTerrain'];
 var deltaSeaLevel = params['deltaSeaLevel'];
+var shallowGraniteDetail = params['shallowGraniteDetail'];
+var shallowGraniteMaxDepth = params['shallowGraniteMaxDepth'];
+var shallowGraniteFloorCoverage = params['shallowGraniteFloorCoverage'];
+var shallowGraniteBankCoverage = params['shallowGraniteBankCoverage'];
+var shallowGraniteClusterSize = params['shallowGraniteClusterSize'];
+var shallowGraniteSeed = params['shallowGraniteSeed'];
 var randomness = 1000;
 var noiseSize = 100;
 var endWidth = 18;
@@ -238,6 +262,7 @@ var lavaLayer = org.pepsoft.worldpainter.layers.FloodWithLava.INSTANCE
 var HashMap = Java.type('java.util.HashMap');
 var maskMap = new HashMap(); //stores [x,y,width_of_river]
 var newWaterMap = new HashMap();//stores [x,y,[new_height1,...]]
+var riverWaterCapMap = new HashMap();// pre-carve terrain height per generated river cell
 var randomMap = new HashMap();// used to give the same random values each time.
 var waterfallMap = new HashMap();// stores [x,y,strength]
 var junctionBoostMap = new HashMap();// stores [x,y,strength] for natural confluence widening
@@ -254,6 +279,10 @@ var enableBendAsymmetry = false;
 var fantasyMapRiverStyle = true;// smoother, fewer trunk rivers with thin tributaries
 var riverBoundaryMargin = Math.max(64, Math.min(220, parseInt(Math.min(worldWidth, worldHeight) * 0.045)));
 var interruptProbeCounter = 0;
+var shallowGraniteCells = 0;
+var shallowGraniteFloorCells = 0;
+var shallowGraniteBankCells = 0;
+var shallowGraniteMarked = new HashMap();
 
 function checkForAbort(forceCheck) {
 	interruptProbeCounter++;
@@ -277,6 +306,7 @@ for (var i = 0; i < terrainEnum.length; i++) {
 	terrainMap.put(terrainEnum[i].toString().replaceAll(" ", "").toLocaleLowerCase(), terrainEnum[i]) // add the name to the and the terrain to the enum 
 	terrainMap.put(terrainEnum[i].getName().replaceAll(" ", "").toLocaleLowerCase(), terrainEnum[i]) // also add the custom name so instead of custom4 you can also use the name of the custom layer.
 }
+var graniteTerrain = terrainMap.get("granite");
 
 var terrain; //used to store the terrain
 var applyRiverTerrain = false; //do not change this value. will be done in the terrain section.  
@@ -330,30 +360,35 @@ if (disableBranching == null) {
 if (manualSourceTerrain == null) {
 	manualSourceTerrain = "river";
 }
+if (shallowGraniteDetail == null) {
+	shallowGraniteDetail = false;
+}
+if (shallowGraniteMaxDepth == null) {
+	shallowGraniteMaxDepth = 1.25;
+}
+if (shallowGraniteFloorCoverage == null) {
+	shallowGraniteFloorCoverage = 0.20;
+}
+if (shallowGraniteBankCoverage == null) {
+	shallowGraniteBankCoverage = 0.40;
+}
+if (shallowGraniteClusterSize == null) {
+	shallowGraniteClusterSize = 5;
+}
+if (shallowGraniteSeed == null) {
+	shallowGraniteSeed = 1337;
+}
+shallowGraniteMaxDepth = Math.max(0.25, Number(shallowGraniteMaxDepth));
+shallowGraniteFloorCoverage = clampBetweenZeroAndOne(Number(shallowGraniteFloorCoverage));
+shallowGraniteBankCoverage = clampBetweenZeroAndOne(Number(shallowGraniteBankCoverage));
+shallowGraniteClusterSize = Math.max(1, Math.floor(Number(shallowGraniteClusterSize)));
+shallowGraniteSeed = Math.floor(Number(shallowGraniteSeed));
 
 applyStyleProfile(styleProfile);
 applyRiverModeSettings();
 var avoidLayer = layerMap.get(avoidLayerName.replaceAll(" ", "").toLocaleLowerCase());
 //var maskLayer = layerMap.get("mask".replaceAll(" ", "").toLocaleLowerCase());
 
-
-// ############# \/ save last entered value \/ ###############
-var paramDefaults = [
-	["// script.param.riverMode.default=",riverMode],
-	["// script.param.riverLayoutPreset.default=",riverLayoutPreset],
-	["// script.param.modeRiverCount.default=",modeRiverCount],
-	["// script.param.manualSourceTerrain.default=",manualSourceTerrain],
-	["// script.param.deltaSeaLevel.default=",deltaSeaLevel],
-	["// script.param.styleProfile.default=",styleProfile],
-	["// script.param.enableWaterfalls.default=",enableWaterfalls],
-	["// script.param.disableBranching.default=",disableBranching],
-    ["// script.param.avoidLayer.default=",avoidLayerName]
-]
-
-var str = readFile(scriptFilePath);
-newStr = replaceParamValue(str,paramDefaults)
-createAndWriteFile(scriptFilePath, newStr);
-// ############# /\ save last entered value /\ ###############
 
 for (var i = 0; i < arguments.length; i++)//loop trough all arguments
 {
@@ -808,6 +843,7 @@ if (runScript) {
 			width = widthSum / widthArr.length;
 
 			var localGround = dimension.getHeightAt(x, y);
+			riverWaterCapMap.put(toCoordinate(x, y), Math.floor(localGround));
 			var overlapCount = heightsArr.length;
 			var confluence = getConfluenceStrengthAt(x, y);
 			var innerLimit = 0.35;
@@ -911,6 +947,15 @@ if (runScript) {
 				if ((((dist < 0.4) && depthMultiplier == 1) || (Math.random() * 0.5 + 0.5) * depthMultiplier > dist + (0.25 * (1 - (width / endWidth) * (width / endWidth)))) && newHeight - newWaterLevel < 1.5) {
 					dimension.setTerrainAt(x, y, terrain)
 				}
+			}
+
+			// Keep the source script's normal terrain behaviour intact. This extra pass only
+			// marks shallow water cells as full granite; SurfaceSmoother owns safe 2x2x2
+			// slab/stair orientation and waterlogging during export.
+			var actualWaterDepth = Math.max(0, dimension.getWaterLevelAt(x, y) - newHeight);
+			if (shouldPlaceShallowGranite(x, y, dist, actualWaterDepth, slope, waterfallStrength)) {
+				dimension.setTerrainAt(x, y, graniteTerrain);
+				markShallowGranite(x, y, dist >= 0.45);
 			}
 
 
@@ -1104,10 +1149,17 @@ if (runScript) {
 		}
 	}
 
+	// The legacy generator may calculate a water surface far above a later valley.
+	// Re-anchor every generated water cell to its final carved bed before exporting.
+	stabiliseGeneratedRiverWater(dimension);
 
 
 
 	print("\n\n=============  Report:  =============\n" + report);
+	if (shallowGraniteDetail) {
+		print("Sığ yatak granite hücreleri: " + shallowGraniteCells
+			+ " (taban=" + shallowGraniteFloorCells + ", kıyı=" + shallowGraniteBankCells + ")");
+	}
 
 
 	d = new Date();
@@ -1154,6 +1206,46 @@ if (runScript) {
 }
 
 print("\nDone! generated " + numberOfRivers + " rivers -- script provided by sijmen_v_b");
+
+// River editing stores full granite terrain, not individual stairs/slabs. The export
+// smoother reads the surrounding 2x2 heights, then picks the valid bottom partial
+// and waterlogs it if water occupies the same block.
+function shouldPlaceShallowGranite(x, y, dist, actualWaterDepth, slope, waterfallStrength) {
+	if (!shallowGraniteDetail || graniteTerrain == null || actualWaterDepth <= 0.05
+			|| actualWaterDepth > shallowGraniteMaxDepth
+			|| slope > 0.55 || waterfallStrength > 0.02) {
+		return false;
+	}
+	var coverage = dist >= 0.45 ? shallowGraniteBankCoverage : shallowGraniteFloorCoverage;
+	return clusteredGraniteNoise(x, y) < coverage;
+}
+
+function markShallowGranite(x, y, bank) {
+	var key = toCoordinate(x, y);
+	if (shallowGraniteMarked.get(key) != null) {
+		return;
+	}
+	shallowGraniteMarked.put(key, true);
+	shallowGraniteCells++;
+	if (bank) {
+		shallowGraniteBankCells++;
+	} else {
+		shallowGraniteFloorCells++;
+	}
+}
+
+function clusteredGraniteNoise(x, y) {
+	var gridX = Math.floor(x / shallowGraniteClusterSize);
+	var gridY = Math.floor(y / shallowGraniteClusterSize);
+	// The coarse value creates short connected stretches; the fine value breaks the
+	// square grid edge without turning the bed into isolated salt-and-pepper blocks.
+	return 0.78 * graniteHash(gridX, gridY, 0) + 0.22 * graniteHash(x, y, 1);
+}
+
+function graniteHash(x, y, salt) {
+	var n = Math.sin(x * 12.9898 + y * 78.233 + (shallowGraniteSeed + salt * 101) * 37.719) * 43758.5453123;
+	return n - Math.floor(n);
+}
 
 
 
@@ -1644,6 +1736,41 @@ function pathFindDown(x, y, distanceTarget) {
 	}
 	return [[d.x, d.y]];
 
+}
+
+function stabiliseGeneratedRiverWater(dimension) {
+	var groundedWaterCells = 0;
+	var dryBankCells = 0;
+	for (key in newWaterMap) {
+		checkForAbort(false);
+		var arr = newWaterMap.get(key);
+		var x = arr[0];
+		var y = arr[1];
+		var widthArr = arr[4];
+		var width = 1;
+		if (widthArr != null && widthArr.length > 0) {
+			var widthSum = 0;
+			for (var wi = 0; wi < widthArr.length; wi++) {
+				widthSum += widthArr[wi];
+			}
+			width = widthSum / widthArr.length;
+		}
+		var bedHeight = dimension.getHeightAt(x, y);
+		if (arr[3] <= getWaterEdgeLimit(arr[6], width)) {
+			// Keep the intended depth up to this cell's original ground level. The cap
+			// prevents the old global water interpolation from spanning a lower valley.
+			var originalSurfaceCap = riverWaterCapMap.get(toCoordinate(x, y));
+			var waterSurface = Math.max(Math.floor(bedHeight) + 1,
+				originalSurfaceCap != null ? originalSurfaceCap : Math.floor(bedHeight));
+			dimension.setWaterLevelAt(x, y, waterSurface);
+			groundedWaterCells++;
+		} else if (dimension.getWaterLevelAt(x, y) > bedHeight) {
+			// Do not leave the mask's dry lip flooded after the channel has been carved.
+			dimension.setWaterLevelAt(x, y, Math.floor(bedHeight));
+			dryBankCells++;
+		}
+	}
+	print("Grounded river water: " + groundedWaterCells + " cells; cleared dry banks: " + dryBankCells);
 }
 
 function smoothRiverBedCenter(dimension) {
@@ -5868,77 +5995,6 @@ function initRandom(global) {
 	};
 
 }
-
-//###################### \/ functions for saving the last entered values \/ ########################################
-function createAndWriteFile(filePath, content) {
-    var path = Paths.get(filePath);
-    
-    try {
-        // Create the file if it doesn't exist, truncate it if it does
-        var writer = fs.newBufferedWriter(path, [StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING]);
-        
-        // Write the content to the file
-        writer.write(content);
-        writer.newLine();
-        
-        // Close the writer
-        writer.close();
-        
-        print("File updated successfully:", filePath);
-    } catch (e) {
-        print("Error updating file:", e);
-    }
-}
-
-
-
-function readFile(filePath) {
-    var path = Paths.get(filePath);
-    if (!fs.exists(path)) {
-        print("ERROR:", filePath, "does not exist.")
-        return null;
-    }
-    var content = new java.lang.String(fs.readAllBytes(path), StandardCharsets.UTF_8).toString();
-    return content;
-}
-
-function replaceParamValue(inputString, patternsAndValues) {
-    var lines = inputString.split('\n'); // Split inputString into lines
-    var updatedLines = [];
-
-    lines.forEach(function(line) {
-        var lineUpdated = false;
-        patternsAndValues.forEach(function(tuple) {
-            var pattern = tuple[0];
-            var newValue = tuple[1];
-            if (newValue == undefined){
-                newValue = "";
-            }
-
-            if (line.startsWith(pattern)) {
-                var newLine = pattern + newValue;
-                updatedLines.push(newLine);
-                lineUpdated = true;
-            }
-        });
-
-        if (!lineUpdated) {
-            updatedLines.push(line); // Push lines that don't match any pattern unchanged
-        }
-    });
-
-    // Join the updated lines back into a single string
-    var updatedString = updatedLines.join('\n');
-    return updatedString;
-}
-//###################### /\ functions for saving the last entered values /\ ########################################
-
-
-
-
-
-
-
 
 
 

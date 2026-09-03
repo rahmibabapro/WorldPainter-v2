@@ -47,6 +47,11 @@ public final class ScriptLibraryActions {
             GlobalSlopeTerrainOp.run(parent, app, dimension, degreesAbove);
             return;
         }
+        if (category == Category.GLOBALS && "axiom_blueprint_texture".equals(scriptId)) {
+            final App app = parent instanceof App ? (App) parent : null;
+            AxiomBlueprintTextureOp.run(parent, app, world, dimension);
+            return;
+        }
         try {
             final File scriptFile = BundledScriptCatalog.materialise(script);
             final ScriptRunner dialog = new ScriptRunner(parent, world, dimension, undoManagers, scriptFile, presetParams);

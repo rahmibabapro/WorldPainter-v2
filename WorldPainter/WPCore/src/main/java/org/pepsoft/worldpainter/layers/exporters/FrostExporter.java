@@ -13,6 +13,7 @@ import org.pepsoft.worldpainter.exporting.Fixup;
 import org.pepsoft.worldpainter.exporting.MinecraftWorld;
 import org.pepsoft.worldpainter.exporting.SecondPassLayerExporter;
 import org.pepsoft.worldpainter.layers.Frost;
+import org.pepsoft.worldpainter.layers.SnowDepth;
 
 import java.awt.*;
 import java.util.List;
@@ -22,6 +23,7 @@ import java.util.Set;
 import static java.util.Collections.singleton;
 import static org.pepsoft.minecraft.Constants.MC_SNOW;
 import static org.pepsoft.minecraft.Constants.MC_WATER;
+import static org.pepsoft.minecraft.Constants.MC_LAVA;
 import static org.pepsoft.minecraft.Material.*;
 import static org.pepsoft.worldpainter.exporting.SecondPassLayerExporter.Stage.ADD_FEATURES;
 
@@ -51,7 +53,15 @@ public class FrostExporter extends AbstractLayerExporter<Frost> implements Secon
         }
         for (int x = area.x; x < area.x + area.width; x++) {
             for (int y = area.y; y < area.y + area.height; y++) {
-                if (frostEverywhere || dimension.getBitLayerValueAt(Frost.INSTANCE, x, y)) {
+                final boolean paintedFrost = dimension.getBitLayerValueAt(Frost.INSTANCE, x, y);
+                if (frostEverywhere || paintedFrost) {
+                    final int explicitDepth = paintedFrost ? dimension.getLayerValueAt(SnowDepth.INSTANCE, x, y) : 0;
+                    if (explicitDepth > 0) {
+                        placeExplicitSurfaceSnow(minecraftWorld, x, y, explicitDepth);
+                        // A protected/unsupported surface must not fall through to legacy Frost,
+                        // which scans tree canopies and freezes water.
+                        continue;
+                    }
                     int highestNonAirBlock = minecraftWorld.getHighestNonAirBlock(x, y);
                     Material previousMaterial = (highestNonAirBlock == maxZ) ? minecraftWorld.getMaterialAt(x, y, maxZ) : AIR;
                     int leafBlocksEncountered = 0;
@@ -120,6 +130,38 @@ public class FrostExporter extends AbstractLayerExporter<Frost> implements Secon
             }
         }
         return null;
+    }
+
+    /**
+     * Export the requested snow block state directly above the actual terrain block. Unlike
+     * ordinary Frost this mode never scans upwards to trees, changes the bed, freezes fluids,
+     * or replaces the snow material with full snow/ice blocks.
+     */
+    private void placeExplicitSurfaceSnow(MinecraftWorld minecraftWorld, int x, int y, int layers) {
+        if (layers < 1 || layers > 8) {
+            return; // Nibble values 9-15 are reserved; do not turn invalid data into legacy Frost.
+        }
+        final int surfaceHeight = dimension.getIntHeightAt(x, y);
+        final int lowerBound = Math.max(minHeight, minecraftWorld.getMinHeight());
+        final int upperBound = Math.min(maxHeight, minecraftWorld.getMaxHeight());
+        if (surfaceHeight < lowerBound || surfaceHeight >= upperBound - 1
+                || dimension.getWaterLevelAt(x, y) >= surfaceHeight) {
+            return;
+        }
+        final Material supportingBlock = minecraftWorld.getMaterialAt(x, y, surfaceHeight);
+        if (supportingBlock == null || ! supportingBlock.canSupportSnow || supportingBlock.leafBlock
+                || supportingBlock.containsWater() || supportingBlock.isNamed(MC_WATER)
+                || supportingBlock.isNamed(MC_LAVA)) {
+            return;
+        }
+        final Material existing = minecraftWorld.getMaterialAt(x, y, surfaceHeight + 1);
+        if (existing == null || existing.containsWater() || existing.isNamed(MC_WATER) || existing.isNamed(MC_LAVA)) {
+            return;
+        }
+        if (existing.empty || existing.isNamed(MC_SNOW) || existing == GRASS || existing == SHORT_GRASS || existing == FERN) {
+            // Explicit depth is authoritative, including when reducing previously thicker snow.
+            minecraftWorld.setMaterialAt(x, y, surfaceHeight + 1, SNOW.withProperty(LAYERS, layers));
+        }
     }
 
     /**

@@ -1,0 +1,1144 @@
+population	block	count	percent
+side_above_neighbor_east	minecraft:stone	8722	17.82255098
+side_above_neighbor_east	minecraft:acacia_wood	7878	16.09791982
+side_above_neighbor_east	minecraft:pale_moss_block	6825	13.94621766
+side_above_neighbor_east	minecraft:cyan_terracotta	5918	12.09285218
+side_above_neighbor_east	minecraft:mud	3671	7.50132821
+side_above_neighbor_east	minecraft:snow_block	2369	4.84081900
+side_above_neighbor_east	minecraft:grass_block	2367	4.83673219
+side_above_neighbor_east	minecraft:moss_block	2023	4.13380195
+side_above_neighbor_east	minecraft:pale_oak_wood	1751	3.57799665
+side_above_neighbor_east	minecraft:basalt	1638	3.34709224
+side_above_neighbor_east	minecraft:smooth_basalt	1053	2.15170215
+side_above_neighbor_east	minecraft:cobblestone	778	1.58976664
+side_above_neighbor_east	minecraft:light_gray_wool	729	1.48963995
+side_above_neighbor_east	minecraft:birch_wood	614	1.25464874
+side_above_neighbor_east	minecraft:blackstone	573	1.17086926
+side_above_neighbor_east	minecraft:white_concrete_powder	445	0.90931383
+side_above_neighbor_east	minecraft:diorite	399	0.81531734
+side_above_neighbor_east	minecraft:gray_wool	243	0.49654665
+side_above_neighbor_east	minecraft:packed_ice	211	0.43115779
+side_above_neighbor_east	minecraft:dirt	185	0.37802934
+side_above_neighbor_east	minecraft:andesite	140	0.28607626
+side_above_neighbor_east	minecraft:diamond_block	137	0.27994605
+side_above_neighbor_east	minecraft:white_concrete	67	0.13690792
+side_above_neighbor_east	minecraft:black_wool	63	0.12873432
+side_above_neighbor_east	minecraft:spruce_log	33	0.06743226
+side_above_neighbor_east	minecraft:tuff	31	0.06334546
+side_above_neighbor_east	minecraft:gravel	23	0.04699824
+side_above_neighbor_east	minecraft:calcite	10	0.02043402
+side_above_neighbor_east	minecraft:white_wool	10	0.02043402
+side_above_neighbor_east	minecraft:ice	9	0.01839062
+side_above_neighbor_east	minecraft:coal_ore	6	0.01226041
+side_above_neighbor_east	minecraft:iron_ore	6	0.01226041
+side_above_neighbor_east	minecraft:dripstone_block	5	0.01021701
+side_above_neighbor_east	minecraft:powder_snow	5	0.01021701
+side_above_neighbor_east	minecraft:packed_mud	1	0.00204340
+side_above_neighbor_north	minecraft:stone	6376	16.58559426
+side_above_neighbor_north	minecraft:acacia_wood	6253	16.26564004
+side_above_neighbor_north	minecraft:pale_moss_block	5663	14.73090029
+side_above_neighbor_north	minecraft:cyan_terracotta	4560	11.86171735
+side_above_neighbor_north	minecraft:mud	2909	7.56704732
+side_above_neighbor_north	minecraft:moss_block	1478	3.84465312
+side_above_neighbor_north	minecraft:grass_block	1424	3.70418542
+side_above_neighbor_north	minecraft:pale_oak_wood	1396	3.63135031
+side_above_neighbor_north	minecraft:snow_block	1330	3.45966756
+side_above_neighbor_north	minecraft:birch_wood	1225	3.18653591
+side_above_neighbor_north	minecraft:basalt	1136	2.95502432
+side_above_neighbor_north	minecraft:smooth_basalt	949	2.46858986
+side_above_neighbor_north	minecraft:white_concrete_powder	877	2.28129959
+side_above_neighbor_north	minecraft:diorite	800	2.08100304
+side_above_neighbor_north	minecraft:cobblestone	515	1.33964571
+side_above_neighbor_north	minecraft:light_gray_wool	374	0.97286892
+side_above_neighbor_north	minecraft:blackstone	352	0.91564134
+side_above_neighbor_north	minecraft:tuff	127	0.33035923
+side_above_neighbor_north	minecraft:andesite	126	0.32775798
+side_above_neighbor_north	minecraft:diamond_block	122	0.31735296
+side_above_neighbor_north	minecraft:dirt	122	0.31735296
+side_above_neighbor_north	minecraft:gray_wool	78	0.20289780
+side_above_neighbor_north	minecraft:black_wool	56	0.14567021
+side_above_neighbor_north	minecraft:white_concrete	47	0.12225893
+side_above_neighbor_north	minecraft:packed_ice	38	0.09884764
+side_above_neighbor_north	minecraft:spruce_log	31	0.08063887
+side_above_neighbor_north	minecraft:dripstone_block	26	0.06763260
+side_above_neighbor_north	minecraft:packed_mud	16	0.04162006
+side_above_neighbor_north	minecraft:light_gray_terracotta	15	0.03901881
+side_above_neighbor_north	minecraft:coarse_dirt	12	0.03121505
+side_above_neighbor_north	minecraft:granite	6	0.01560752
+side_above_neighbor_north	minecraft:coal_ore	1	0.00260125
+side_above_neighbor_north	minecraft:gravel	1	0.00260125
+side_above_neighbor_north	minecraft:iron_ore	1	0.00260125
+side_above_neighbor_north	minecraft:powder_snow	1	0.00260125
+side_above_neighbor_south	minecraft:stone	11317	25.97131383
+side_above_neighbor_south	minecraft:pale_moss_block	7454	17.10613884
+side_above_neighbor_south	minecraft:cobblestone	4330	9.93689042
+side_above_neighbor_south	minecraft:acacia_wood	3582	8.22030981
+side_above_neighbor_south	minecraft:cyan_terracotta	2268	5.20481928
+side_above_neighbor_south	minecraft:grass_block	2084	4.78255881
+side_above_neighbor_south	minecraft:mud	2043	4.68846816
+side_above_neighbor_south	minecraft:snow_block	1860	4.26850258
+side_above_neighbor_south	minecraft:moss_block	1595	3.66035571
+side_above_neighbor_south	minecraft:andesite	1074	2.46471601
+side_above_neighbor_south	minecraft:birch_wood	1062	2.43717728
+side_above_neighbor_south	minecraft:white_concrete_powder	918	2.10671256
+side_above_neighbor_south	minecraft:light_gray_wool	804	1.84509466
+side_above_neighbor_south	minecraft:diorite	733	1.68215720
+side_above_neighbor_south	minecraft:pale_oak_wood	683	1.56741251
+side_above_neighbor_south	minecraft:basalt	541	1.24153758
+side_above_neighbor_south	minecraft:smooth_basalt	300	0.68846816
+side_above_neighbor_south	minecraft:packed_ice	253	0.58060815
+side_above_neighbor_south	minecraft:blackstone	171	0.39242685
+side_above_neighbor_south	minecraft:dirt	105	0.24096386
+side_above_neighbor_south	minecraft:diamond_block	104	0.23866896
+side_above_neighbor_south	minecraft:gray_wool	73	0.16752725
+side_above_neighbor_south	minecraft:white_wool	55	0.12621916
+side_above_neighbor_south	minecraft:white_concrete	46	0.10556512
+side_above_neighbor_south	minecraft:tuff	39	0.08950086
+side_above_neighbor_south	minecraft:spruce_log	28	0.06425703
+side_above_neighbor_south	minecraft:black_wool	16	0.03671830
+side_above_neighbor_south	minecraft:calcite	10	0.02294894
+side_above_neighbor_south	minecraft:ice	8	0.01835915
+side_above_neighbor_south	minecraft:coal_ore	7	0.01606426
+side_above_neighbor_south	minecraft:dripstone_block	6	0.01376936
+side_above_neighbor_south	minecraft:powder_snow	3	0.00688468
+side_above_neighbor_south	minecraft:light_gray_terracotta	2	0.00458979
+side_above_neighbor_south	minecraft:gravel	1	0.00229489
+side_above_neighbor_west	minecraft:stone	9317	25.86977648
+side_above_neighbor_west	minecraft:pale_moss_block	6194	17.19838956
+side_above_neighbor_west	minecraft:cobblestone	4046	11.23420797
+side_above_neighbor_west	minecraft:acacia_wood	2811	7.80508122
+side_above_neighbor_west	minecraft:mud	1810	5.02568374
+side_above_neighbor_west	minecraft:cyan_terracotta	1649	4.57864779
+side_above_neighbor_west	minecraft:grass_block	1469	4.07885603
+side_above_neighbor_west	minecraft:birch_wood	1316	3.65403304
+side_above_neighbor_west	minecraft:moss_block	1184	3.28751909
+side_above_neighbor_west	minecraft:white_concrete_powder	1058	2.93766486
+side_above_neighbor_west	minecraft:andesite	925	2.56837429
+side_above_neighbor_west	minecraft:diorite	913	2.53505484
+side_above_neighbor_west	minecraft:snow_block	679	1.88532556
+side_above_neighbor_west	minecraft:pale_oak_wood	569	1.57989727
+side_above_neighbor_west	minecraft:smooth_basalt	433	1.20227683
+side_above_neighbor_west	minecraft:light_gray_wool	398	1.10509510
+side_above_neighbor_west	minecraft:basalt	319	0.88574205
+side_above_neighbor_west	minecraft:blackstone	230	0.63862280
+side_above_neighbor_west	minecraft:tuff	178	0.49423851
+side_above_neighbor_west	minecraft:dirt	132	0.36651395
+side_above_neighbor_west	minecraft:white_concrete	71	0.19714008
+side_above_neighbor_west	minecraft:gray_wool	46	0.12772456
+side_above_neighbor_west	minecraft:diamond_block	45	0.12494794
+side_above_neighbor_west	minecraft:white_wool	43	0.11939470
+side_above_neighbor_west	minecraft:spruce_log	35	0.09718173
+side_above_neighbor_west	minecraft:light_gray_terracotta	30	0.08329863
+side_above_neighbor_west	minecraft:dripstone_block	27	0.07496876
+side_above_neighbor_west	minecraft:black_wool	25	0.06941552
+side_above_neighbor_west	minecraft:packed_mud	22	0.06108566
+side_above_neighbor_west	minecraft:coarse_dirt	17	0.04720255
+side_above_neighbor_west	minecraft:granite	13	0.03609607
+side_above_neighbor_west	minecraft:packed_ice	11	0.03054283
+side_internal_east	minecraft:stone	17095	18.18094803
+side_internal_east	minecraft:mud	11685	12.42728153
+side_internal_east	minecraft:acacia_wood	8211	8.73259808
+side_internal_east	minecraft:pale_moss_block	6978	7.42127261
+side_internal_east	minecraft:cyan_terracotta	6140	6.53003924
+side_internal_east	minecraft:spruce_leaves	5696	6.05783445
+side_internal_east	minecraft:short_grass	4600	4.89221181
+side_internal_east	minecraft:smooth_basalt	4574	4.86456018
+side_internal_east	minecraft:grass_block	2591	2.75559148
+side_internal_east	minecraft:blackstone	2477	2.63434971
+side_internal_east	minecraft:snow_block	2422	2.57585587
+side_internal_east	minecraft:dark_oak_fence	2190	2.32911823
+side_internal_east	minecraft:moss_block	2167	2.30465717
+side_internal_east	minecraft:pale_oak_wood	1849	1.96645644
+side_internal_east	minecraft:basalt	1687	1.79416551
+side_internal_east	minecraft:pointed_dripstone	1284	1.36556521
+side_internal_east	minecraft:tall_grass	1204	1.28048327
+side_internal_east	minecraft:dripstone_block	870	0.92526615
+side_internal_east	minecraft:black_concrete	798	0.84869240
+side_internal_east	minecraft:cobblestone	797	0.84762887
+side_internal_east	minecraft:calcite	767	0.81572314
+side_internal_east	minecraft:light_gray_wool	739	0.78594446
+side_internal_east	minecraft:black_wool	702	0.74659406
+side_internal_east	minecraft:birch_wood	645	0.68597318
+side_internal_east	minecraft:potted_spruce_sapling	594	0.63173344
+side_internal_east	minecraft:dirt	565	0.60089123
+side_internal_east	minecraft:dark_prismarine_stairs	494	0.52538101
+side_internal_east	minecraft:white_concrete_powder	486	0.51687281
+side_internal_east	minecraft:diamond_block	461	0.49028471
+side_internal_east	minecraft:diorite	443	0.47114127
+side_internal_east	minecraft:snow	434	0.46156955
+side_internal_east	minecraft:gray_wool	310	0.32969254
+side_internal_east	minecraft:cobbled_deepslate_wall	279	0.29672328
+side_internal_east	minecraft:dark_prismarine_slab	243	0.25843641
+side_internal_east	minecraft:packed_ice	211	0.22440363
+side_internal_east	minecraft:andesite	175	0.18611675
+side_internal_east	minecraft:birch_leaves	161	0.17122741
+side_internal_east	minecraft:gravel	144	0.15314750
+side_internal_east	minecraft:water	128	0.13613111
+side_internal_east	minecraft:gray_concrete	94	0.09997128
+side_internal_east	minecraft:white_concrete	94	0.09997128
+side_internal_east	minecraft:coal_ore	85	0.09039957
+side_internal_east	minecraft:glow_lichen	68	0.07231965
+side_internal_east	minecraft:granite	59	0.06274793
+side_internal_east	minecraft:spruce_log	47	0.04998564
+side_internal_east	minecraft:tuff	45	0.04785859
+side_internal_east	minecraft:pink_petals	44	0.04679507
+side_internal_east	minecraft:iron_ore	43	0.04573155
+side_internal_east	minecraft:copper_ore	35	0.03722335
+side_internal_east	minecraft:dark_oak_fence_gate	26	0.02765163
+side_internal_east	minecraft:dandelion	14	0.01488934
+side_internal_east	minecraft:large_fern	12	0.01276229
+side_internal_east	minecraft:fern	11	0.01169877
+side_internal_east	minecraft:azure_bluet	10	0.01063524
+side_internal_east	minecraft:white_wool	10	0.01063524
+side_internal_east	minecraft:ice	9	0.00957172
+side_internal_east	minecraft:powder_snow	8	0.00850819
+side_internal_east	minecraft:tuff_wall	6	0.00638115
+side_internal_east	minecraft:lava	4	0.00425410
+side_internal_east	minecraft:red_banner	2	0.00212705
+side_internal_east	minecraft:cornflower	1	0.00106352
+side_internal_east	minecraft:oxeye_daisy	1	0.00106352
+side_internal_east	minecraft:packed_mud	1	0.00106352
+side_internal_east	minecraft:sweet_berry_bush	1	0.00106352
+side_internal_east	minecraft:yellow_banner	1	0.00106352
+side_internal_north	minecraft:stone	14630	17.48452327
+side_internal_north	minecraft:mud	11253	13.44862203
+side_internal_north	minecraft:acacia_wood	6594	7.88058417
+side_internal_north	minecraft:pale_moss_block	5817	6.95198030
+side_internal_north	minecraft:spruce_leaves	5743	6.86354184
+side_internal_north	minecraft:cyan_terracotta	4782	5.71503693
+side_internal_north	minecraft:smooth_basalt	4623	5.52501374
+side_internal_north	minecraft:short_grass	4309	5.14974783
+side_internal_north	minecraft:blackstone	2394	2.86110381
+side_internal_north	minecraft:dark_oak_fence	2199	2.62805651
+side_internal_north	minecraft:grass_block	1697	2.02810909
+side_internal_north	minecraft:moss_block	1613	1.92771948
+side_internal_north	minecraft:pale_oak_wood	1506	1.79984224
+side_internal_north	minecraft:snow_block	1379	1.64806272
+side_internal_north	minecraft:pointed_dripstone	1280	1.52974640
+side_internal_north	minecraft:birch_wood	1261	1.50703922
+side_internal_north	minecraft:basalt	1186	1.41740565
+side_internal_north	minecraft:tall_grass	1166	1.39350336
+side_internal_north	minecraft:white_concrete_powder	904	1.08038339
+side_internal_north	minecraft:diorite	867	1.03616416
+side_internal_north	minecraft:black_concrete	860	1.02779836
+side_internal_north	minecraft:dripstone_block	809	0.96684753
+side_internal_north	minecraft:black_wool	806	0.96326218
+side_internal_north	minecraft:calcite	605	0.72304420
+side_internal_north	minecraft:potted_spruce_sapling	605	0.72304420
+side_internal_north	minecraft:cobblestone	526	0.62863016
+side_internal_north	minecraft:dark_prismarine_stairs	507	0.60592299
+side_internal_north	minecraft:diamond_block	474	0.56648421
+side_internal_north	minecraft:dirt	442	0.52824055
+side_internal_north	minecraft:light_gray_wool	394	0.47087506
+side_internal_north	minecraft:cobbled_deepslate_wall	312	0.37287568
+side_internal_north	minecraft:snow	261	0.31192485
+side_internal_north	minecraft:dark_prismarine_slab	255	0.30475416
+side_internal_north	minecraft:andesite	178	0.21273036
+side_internal_north	minecraft:gray_wool	169	0.20197433
+side_internal_north	minecraft:birch_leaves	168	0.20077921
+side_internal_north	minecraft:tuff	146	0.17448670
+side_internal_north	minecraft:water	128	0.15297464
+side_internal_north	minecraft:gravel	123	0.14699907
+side_internal_north	minecraft:coal_ore	91	0.10875541
+side_internal_north	minecraft:white_concrete	91	0.10875541
+side_internal_north	minecraft:glow_lichen	75	0.08963358
+side_internal_north	minecraft:granite	55	0.06573129
+side_internal_north	minecraft:gray_concrete	54	0.06453618
+side_internal_north	minecraft:iron_ore	48	0.05736549
+side_internal_north	minecraft:spruce_log	46	0.05497526
+side_internal_north	minecraft:packed_ice	38	0.04541435
+side_internal_north	minecraft:pink_petals	35	0.04182900
+side_internal_north	minecraft:dark_oak_fence_gate	33	0.03943877
+side_internal_north	minecraft:copper_ore	25	0.02987786
+side_internal_north	minecraft:packed_mud	16	0.01912183
+side_internal_north	minecraft:dandelion	15	0.01792672
+side_internal_north	minecraft:light_gray_terracotta	15	0.01792672
+side_internal_north	minecraft:large_fern	14	0.01673160
+side_internal_north	minecraft:coarse_dirt	12	0.01434137
+side_internal_north	minecraft:azure_bluet	11	0.01314626
+side_internal_north	minecraft:fern	11	0.01314626
+side_internal_north	minecraft:tuff_wall	11	0.01314626
+side_internal_north	minecraft:lava	2	0.00239023
+side_internal_north	minecraft:red_banner	2	0.00239023
+side_internal_north	minecraft:powder_snow	1	0.00119511
+side_internal_north	minecraft:white_banner	1	0.00119511
+side_internal_north	minecraft:yellow_banner	1	0.00119511
+side_internal_south	minecraft:stone	20102	22.42700791
+side_internal_south	minecraft:mud	9817	10.95243939
+side_internal_south	minecraft:pale_moss_block	7587	8.46451642
+side_internal_south	minecraft:spruce_leaves	5562	6.20530385
+side_internal_south	minecraft:short_grass	4556	5.08294936
+side_internal_south	minecraft:cobblestone	4349	4.85200763
+side_internal_south	minecraft:acacia_wood	4125	4.60209967
+side_internal_south	minecraft:smooth_basalt	3646	4.06769828
+side_internal_south	minecraft:cyan_terracotta	2711	3.02455569
+side_internal_south	minecraft:grass_block	2401	2.67870092
+side_internal_south	minecraft:dark_oak_fence	2235	2.49350128
+side_internal_south	minecraft:blackstone	2063	2.30160767
+side_internal_south	minecraft:snow_block	1907	2.12756462
+side_internal_south	minecraft:moss_block	1701	1.89773856
+side_internal_south	minecraft:pointed_dripstone	1284	1.43250812
+side_internal_south	minecraft:tall_grass	1151	1.28412527
+side_internal_south	minecraft:andesite	1131	1.26181206
+side_internal_south	minecraft:birch_wood	1088	1.21383865
+side_internal_south	minecraft:white_concrete_powder	952	1.06210882
+side_internal_south	minecraft:dripstone_block	898	1.00186315
+side_internal_south	minecraft:pale_oak_wood	866	0.96616202
+side_internal_south	minecraft:light_gray_wool	828	0.92376692
+side_internal_south	minecraft:diorite	827	0.92265126
+side_internal_south	minecraft:black_concrete	816	0.91037899
+side_internal_south	minecraft:black_wool	756	0.84343936
+side_internal_south	minecraft:basalt	674	0.75195520
+side_internal_south	minecraft:calcite	644	0.71848538
+side_internal_south	minecraft:snow	636	0.70956010
+side_internal_south	minecraft:potted_spruce_sapling	604	0.67385896
+side_internal_south	minecraft:dark_prismarine_stairs	501	0.55894592
+side_internal_south	minecraft:dirt	463	0.51655082
+side_internal_south	minecraft:diamond_block	460	0.51320384
+side_internal_south	minecraft:cobbled_deepslate_wall	267	0.29788136
+side_internal_south	minecraft:packed_ice	253	0.28226211
+side_internal_south	minecraft:dark_prismarine_slab	237	0.26441154
+side_internal_south	minecraft:gravel	191	0.21309116
+side_internal_south	minecraft:water	188	0.20974418
+side_internal_south	minecraft:gray_concrete	178	0.19858757
+side_internal_south	minecraft:gray_wool	163	0.18185267
+side_internal_south	minecraft:birch_leaves	159	0.17739002
+side_internal_south	minecraft:coal_ore	93	0.10375643
+side_internal_south	minecraft:glow_lichen	85	0.09483114
+side_internal_south	minecraft:white_concrete	84	0.09371548
+side_internal_south	minecraft:tuff	58	0.06470831
+side_internal_south	minecraft:white_wool	55	0.06136133
+side_internal_south	minecraft:spruce_log	43	0.04797340
+side_internal_south	minecraft:pink_petals	40	0.04462642
+side_internal_south	minecraft:granite	35	0.03904812
+side_internal_south	minecraft:copper_ore	30	0.03346982
+side_internal_south	minecraft:dark_oak_fence_gate	28	0.03123849
+side_internal_south	minecraft:iron_ore	27	0.03012283
+side_internal_south	minecraft:dandelion	13	0.01450359
+side_internal_south	minecraft:large_fern	13	0.01450359
+side_internal_south	minecraft:azure_bluet	11	0.01227227
+side_internal_south	minecraft:tuff_wall	11	0.01227227
+side_internal_south	minecraft:ice	8	0.00892528
+side_internal_south	minecraft:fern	6	0.00669396
+side_internal_south	minecraft:lava	3	0.00334698
+side_internal_south	minecraft:powder_snow	3	0.00334698
+side_internal_south	minecraft:light_gray_terracotta	2	0.00223132
+side_internal_south	minecraft:red_banner	2	0.00223132
+side_internal_south	minecraft:cornflower	1	0.00111566
+side_internal_south	minecraft:oxeye_daisy	1	0.00111566
+side_internal_south	minecraft:poppy	1	0.00111566
+side_internal_south	minecraft:sweet_berry_bush	1	0.00111566
+side_internal_south	minecraft:white_banner	1	0.00111566
+side_internal_south	minecraft:yellow_banner	1	0.00111566
+side_internal_west	minecraft:stone	17396	21.42839546
+side_internal_west	minecraft:mud	9689	11.93491168
+side_internal_west	minecraft:pale_moss_block	6313	7.77635436
+side_internal_west	minecraft:spruce_leaves	5622	6.92518046
+side_internal_west	minecraft:short_grass	4343	5.34970806
+side_internal_west	minecraft:cobblestone	4073	5.01712202
+side_internal_west	minecraft:smooth_basalt	3888	4.78923899
+side_internal_west	minecraft:acacia_wood	3277	4.03660910
+side_internal_west	minecraft:blackstone	2292	2.82328595
+side_internal_west	minecraft:dark_oak_fence	2216	2.72966914
+side_internal_west	minecraft:cyan_terracotta	1990	2.45128230
+side_internal_west	minecraft:grass_block	1723	2.12239166
+side_internal_west	minecraft:birch_wood	1340	1.65061220
+side_internal_west	minecraft:moss_block	1304	1.60626740
+side_internal_west	minecraft:pointed_dripstone	1262	1.55453179
+side_internal_west	minecraft:tall_grass	1143	1.40794757
+side_internal_west	minecraft:white_concrete_powder	1085	1.33650317
+side_internal_west	minecraft:andesite	1018	1.25397256
+side_internal_west	minecraft:diorite	953	1.17390555
+side_internal_west	minecraft:black_concrete	871	1.07289793
+side_internal_west	minecraft:dripstone_block	865	1.06550713
+side_internal_west	minecraft:black_wool	844	1.03963933
+side_internal_west	minecraft:snow_block	727	0.89551871
+side_internal_west	minecraft:pale_oak_wood	695	0.85610111
+side_internal_west	minecraft:calcite	694	0.85486931
+side_internal_west	minecraft:potted_spruce_sapling	594	0.73168929
+side_internal_west	minecraft:snow	560	0.68980809
+side_internal_west	minecraft:dark_prismarine_stairs	499	0.61466828
+side_internal_west	minecraft:light_gray_wool	446	0.54938287
+side_internal_west	minecraft:dirt	405	0.49887906
+side_internal_west	minecraft:diamond_block	399	0.49148826
+side_internal_west	minecraft:basalt	378	0.46562046
+side_internal_west	minecraft:cobbled_deepslate_wall	283	0.34859944
+side_internal_west	minecraft:water	277	0.34120864
+side_internal_west	minecraft:dark_prismarine_slab	233	0.28700944
+side_internal_west	minecraft:gravel	209	0.25744623
+side_internal_west	minecraft:tuff	194	0.23896923
+side_internal_west	minecraft:gray_wool	159	0.19585622
+side_internal_west	minecraft:birch_leaves	152	0.18723362
+side_internal_west	minecraft:white_concrete	145	0.17861102
+side_internal_west	minecraft:gray_concrete	89	0.10963021
+side_internal_west	minecraft:glow_lichen	81	0.09977581
+side_internal_west	minecraft:coal_ore	71	0.08745781
+side_internal_west	minecraft:granite	63	0.07760341
+side_internal_west	minecraft:spruce_log	52	0.06405361
+side_internal_west	minecraft:white_wool	43	0.05296741
+side_internal_west	minecraft:iron_ore	30	0.03695400
+side_internal_west	minecraft:light_gray_terracotta	30	0.03695400
+side_internal_west	minecraft:pink_petals	26	0.03202680
+side_internal_west	minecraft:dark_oak_fence_gate	25	0.03079500
+side_internal_west	minecraft:packed_mud	22	0.02709960
+side_internal_west	minecraft:coarse_dirt	17	0.02094060
+side_internal_west	minecraft:copper_ore	14	0.01724520
+side_internal_west	minecraft:large_fern	14	0.01724520
+side_internal_west	minecraft:packed_ice	11	0.01354980
+side_internal_west	minecraft:tuff_wall	11	0.01354980
+side_internal_west	minecraft:azure_bluet	8	0.00985440
+side_internal_west	minecraft:dandelion	8	0.00985440
+side_internal_west	minecraft:fern	6	0.00739080
+side_internal_west	minecraft:mangrove_leaves	1	0.00123180
+side_internal_west	minecraft:oxeye_daisy	1	0.00123180
+side_internal_west	minecraft:red_banner	1	0.00123180
+side_internal_west	minecraft:white_banner	1	0.00123180
+side_internal_west	minecraft:yellow_banner	1	0.00123180
+top_substrate_name	minecraft:stone	22818	17.86900138
+top_substrate_name	minecraft:grass_block	17918	14.03176294
+top_substrate_name	minecraft:pale_moss_block	17131	13.41545546
+top_substrate_name	minecraft:acacia_wood	12336	9.66044355
+top_substrate_name	minecraft:moss_block	10966	8.58758301
+top_substrate_name	minecraft:cyan_terracotta	8307	6.50529382
+top_substrate_name	minecraft:cobblestone	5891	4.61330034
+top_substrate_name	minecraft:mud	5563	4.35644030
+top_substrate_name	minecraft:snow_block	4793	3.75344568
+top_substrate_name	minecraft:birch_wood	4213	3.29924195
+top_substrate_name	minecraft:white_concrete_powder	3323	2.60227415
+top_substrate_name	minecraft:diorite	3006	2.35402832
+top_substrate_name	minecraft:pale_oak_wood	2587	2.02590528
+top_substrate_name	minecraft:basalt	2177	1.70483022
+top_substrate_name	minecraft:andesite	1445	1.13159379
+top_substrate_name	minecraft:smooth_basalt	1394	1.09165518
+top_substrate_name	minecraft:light_gray_wool	1321	1.03448816
+top_substrate_name	minecraft:blackstone	632	0.49492545
+top_substrate_name	minecraft:diamond_block	421	0.32968926
+top_substrate_name	minecraft:gray_wool	283	0.22162010
+top_substrate_name	minecraft:tuff	276	0.21613833
+top_substrate_name	minecraft:dirt	226	0.17698283
+top_substrate_name	minecraft:packed_ice	136	0.10650294
+top_substrate_name	minecraft:white_concrete	127	0.09945496
+top_substrate_name	minecraft:black_wool	85	0.06656434
+top_substrate_name	minecraft:white_wool	82	0.06421501
+top_substrate_name	minecraft:dripstone_block	66	0.05168525
+top_substrate_name	minecraft:light_gray_terracotta	32	0.02505952
+top_substrate_name	minecraft:calcite	29	0.02271019
+top_substrate_name	minecraft:packed_mud	23	0.01801153
+top_substrate_name	minecraft:spruce_log	23	0.01801153
+top_substrate_name	minecraft:coarse_dirt	18	0.01409598
+top_substrate_name	minecraft:granite	12	0.00939732
+top_substrate_name	minecraft:ice	12	0.00939732
+top_substrate_name	minecraft:coal_ore	8	0.00626488
+top_substrate_name	minecraft:gravel	7	0.00548177
+top_substrate_name	minecraft:powder_snow	6	0.00469866
+top_substrate_name	minecraft:iron_ore	3	0.00234933
+top_substrate_state	minecraft:stone	22818	17.86900138
+top_substrate_state	minecraft:grass_block[snowy=false]	17912	14.02706428
+top_substrate_state	minecraft:pale_moss_block	17131	13.41545546
+top_substrate_state	minecraft:acacia_wood[axis=y]	12333	9.65809422
+top_substrate_state	minecraft:moss_block	10966	8.58758301
+top_substrate_state	minecraft:cyan_terracotta	8307	6.50529382
+top_substrate_state	minecraft:cobblestone	5891	4.61330034
+top_substrate_state	minecraft:mud	5563	4.35644030
+top_substrate_state	minecraft:snow_block	4793	3.75344568
+top_substrate_state	minecraft:birch_wood[axis=y]	4209	3.29610951
+top_substrate_state	minecraft:white_concrete_powder	3323	2.60227415
+top_substrate_state	minecraft:diorite	3006	2.35402832
+top_substrate_state	minecraft:pale_oak_wood[axis=y]	2568	2.01102619
+top_substrate_state	minecraft:basalt[axis=y]	2177	1.70483022
+top_substrate_state	minecraft:andesite	1445	1.13159379
+top_substrate_state	minecraft:smooth_basalt	1394	1.09165518
+top_substrate_state	minecraft:light_gray_wool	1321	1.03448816
+top_substrate_state	minecraft:blackstone	632	0.49492545
+top_substrate_state	minecraft:diamond_block	421	0.32968926
+top_substrate_state	minecraft:gray_wool	283	0.22162010
+top_substrate_state	minecraft:tuff	276	0.21613833
+top_substrate_state	minecraft:dirt	226	0.17698283
+top_substrate_state	minecraft:packed_ice	136	0.10650294
+top_substrate_state	minecraft:white_concrete	127	0.09945496
+top_substrate_state	minecraft:black_wool	85	0.06656434
+top_substrate_state	minecraft:white_wool	82	0.06421501
+top_substrate_state	minecraft:dripstone_block	66	0.05168525
+top_substrate_state	minecraft:light_gray_terracotta	32	0.02505952
+top_substrate_state	minecraft:calcite	29	0.02271019
+top_substrate_state	minecraft:packed_mud	23	0.01801153
+top_substrate_state	minecraft:spruce_log[axis=y]	23	0.01801153
+top_substrate_state	minecraft:coarse_dirt	18	0.01409598
+top_substrate_state	minecraft:pale_oak_wood[axis=z]	13	0.01018043
+top_substrate_state	minecraft:granite	12	0.00939732
+top_substrate_state	minecraft:ice	12	0.00939732
+top_substrate_state	minecraft:coal_ore	8	0.00626488
+top_substrate_state	minecraft:gravel	7	0.00548177
+top_substrate_state	minecraft:grass_block[snowy=true]	6	0.00469866
+top_substrate_state	minecraft:pale_oak_wood[axis=x]	6	0.00469866
+top_substrate_state	minecraft:powder_snow	6	0.00469866
+top_substrate_state	minecraft:birch_wood[axis=x]	4	0.00313244
+top_substrate_state	minecraft:acacia_wood[axis=z]	3	0.00234933
+top_substrate_state	minecraft:iron_ore	3	0.00234933
+top_support_including_shapes_name	minecraft:stone	22806	17.81955416
+top_support_including_shapes_name	minecraft:pale_moss_block	17130	13.38459014
+top_support_including_shapes_name	minecraft:grass_block	16917	13.21816179
+top_support_including_shapes_name	minecraft:acacia_wood	12333	9.63643609
+top_support_including_shapes_name	minecraft:moss_block	10809	8.44565294
+top_support_including_shapes_name	minecraft:cyan_terracotta	8307	6.49070580
+top_support_including_shapes_name	minecraft:cobblestone	5890	4.60217373
+top_support_including_shapes_name	minecraft:mud	5563	4.34667104
+top_support_including_shapes_name	minecraft:snow_block	4791	3.74346593
+top_support_including_shapes_name	minecraft:birch_wood	4213	3.29184345
+top_support_including_shapes_name	minecraft:white_concrete_powder	3321	2.59487588
+top_support_including_shapes_name	minecraft:diorite	3006	2.34874944
+top_support_including_shapes_name	minecraft:pale_oak_wood	2587	2.02136221
+top_support_including_shapes_name	minecraft:basalt	2177	1.70100717
+top_support_including_shapes_name	minecraft:andesite	1445	1.12905620
+top_support_including_shapes_name	minecraft:smooth_basalt	1394	1.08920716
+top_support_including_shapes_name	minecraft:light_gray_wool	1320	1.03138698
+top_support_including_shapes_name	minecraft:dark_oak_fence	785	0.61336271
+top_support_including_shapes_name	minecraft:blackstone	632	0.49381558
+top_support_including_shapes_name	minecraft:dark_prismarine_stairs	581	0.45396654
+top_support_including_shapes_name	minecraft:diamond_block	420	0.32816858
+top_support_including_shapes_name	minecraft:gray_wool	283	0.22112312
+top_support_including_shapes_name	minecraft:tuff	276	0.21565364
+top_support_including_shapes_name	minecraft:dirt	198	0.15470805
+top_support_including_shapes_name	minecraft:packed_ice	136	0.10626411
+top_support_including_shapes_name	minecraft:white_concrete	126	0.09845058
+top_support_including_shapes_name	minecraft:black_wool	85	0.06641507
+top_support_including_shapes_name	minecraft:dark_prismarine_slab	85	0.06641507
+top_support_including_shapes_name	minecraft:white_wool	82	0.06407101
+top_support_including_shapes_name	minecraft:dripstone_block	60	0.04688123
+top_support_including_shapes_name	minecraft:light_gray_terracotta	32	0.02500332
+top_support_including_shapes_name	minecraft:calcite	29	0.02265926
+top_support_including_shapes_name	minecraft:packed_mud	23	0.01797114
+top_support_including_shapes_name	minecraft:cobbled_deepslate_wall	22	0.01718978
+top_support_including_shapes_name	minecraft:spruce_log	22	0.01718978
+top_support_including_shapes_name	minecraft:coarse_dirt	18	0.01406437
+top_support_including_shapes_name	minecraft:dark_oak_fence_gate	17	0.01328301
+top_support_including_shapes_name	minecraft:granite	12	0.00937625
+top_support_including_shapes_name	minecraft:ice	12	0.00937625
+top_support_including_shapes_name	minecraft:pointed_dripstone	10	0.00781354
+top_support_including_shapes_name	minecraft:coal_ore	8	0.00625083
+top_support_including_shapes_name	minecraft:gravel	7	0.00546948
+top_support_including_shapes_name	minecraft:powder_snow	6	0.00468812
+top_support_including_shapes_name	minecraft:iron_ore	3	0.00234406
+top_support_including_shapes_name	minecraft:red_banner	2	0.00156271
+top_support_including_shapes_name	minecraft:white_banner	1	0.00078135
+top_support_including_shapes_name	minecraft:yellow_banner	1	0.00078135
+top_support_including_shapes_state	minecraft:stone	22806	17.81955416
+top_support_including_shapes_state	minecraft:pale_moss_block	17130	13.38459014
+top_support_including_shapes_state	minecraft:grass_block[snowy=false]	16911	13.21347366
+top_support_including_shapes_state	minecraft:acacia_wood[axis=y]	12330	9.63409203
+top_support_including_shapes_state	minecraft:moss_block	10809	8.44565294
+top_support_including_shapes_state	minecraft:cyan_terracotta	8307	6.49070580
+top_support_including_shapes_state	minecraft:cobblestone	5890	4.60217373
+top_support_including_shapes_state	minecraft:mud	5563	4.34667104
+top_support_including_shapes_state	minecraft:snow_block	4791	3.74346593
+top_support_including_shapes_state	minecraft:birch_wood[axis=y]	4209	3.28871803
+top_support_including_shapes_state	minecraft:white_concrete_powder	3321	2.59487588
+top_support_including_shapes_state	minecraft:diorite	3006	2.34874944
+top_support_including_shapes_state	minecraft:pale_oak_wood[axis=y]	2568	2.00651649
+top_support_including_shapes_state	minecraft:basalt[axis=y]	2177	1.70100717
+top_support_including_shapes_state	minecraft:andesite	1445	1.12905620
+top_support_including_shapes_state	minecraft:smooth_basalt	1394	1.08920716
+top_support_including_shapes_state	minecraft:light_gray_wool	1320	1.03138698
+top_support_including_shapes_state	minecraft:dark_oak_fence[east=false, north=false, south=false, waterlogged=false, west=false]	640	0.50006642
+top_support_including_shapes_state	minecraft:blackstone	632	0.49381558
+top_support_including_shapes_state	minecraft:diamond_block	420	0.32816858
+top_support_including_shapes_state	minecraft:gray_wool	283	0.22112312
+top_support_including_shapes_state	minecraft:tuff	276	0.21565364
+top_support_including_shapes_state	minecraft:dirt	198	0.15470805
+top_support_including_shapes_state	minecraft:dark_oak_fence[east=true, north=true, south=true, waterlogged=false, west=true]	139	0.10860817
+top_support_including_shapes_state	minecraft:packed_ice	136	0.10626411
+top_support_including_shapes_state	minecraft:white_concrete	126	0.09845058
+top_support_including_shapes_state	minecraft:dark_prismarine_stairs[facing=south, half=top, shape=straight, waterlogged=false]	112	0.08751162
+top_support_including_shapes_state	minecraft:dark_prismarine_stairs[facing=east, half=top, shape=straight, waterlogged=false]	109	0.08516756
+top_support_including_shapes_state	minecraft:dark_prismarine_stairs[facing=north, half=top, shape=straight, waterlogged=false]	104	0.08126079
+top_support_including_shapes_state	minecraft:dark_prismarine_stairs[facing=west, half=top, shape=straight, waterlogged=false]	104	0.08126079
+top_support_including_shapes_state	minecraft:black_wool	85	0.06641507
+top_support_including_shapes_state	minecraft:white_wool	82	0.06407101
+top_support_including_shapes_state	minecraft:dark_prismarine_slab[type=bottom, waterlogged=false]	75	0.05860153
+top_support_including_shapes_state	minecraft:dripstone_block	60	0.04688123
+top_support_including_shapes_state	minecraft:dark_prismarine_stairs[facing=east, half=bottom, shape=straight, waterlogged=false]	40	0.03125415
+top_support_including_shapes_state	minecraft:dark_prismarine_stairs[facing=north, half=bottom, shape=straight, waterlogged=false]	39	0.03047280
+top_support_including_shapes_state	minecraft:dark_prismarine_stairs[facing=west, half=bottom, shape=straight, waterlogged=false]	39	0.03047280
+top_support_including_shapes_state	minecraft:dark_prismarine_stairs[facing=south, half=bottom, shape=straight, waterlogged=false]	34	0.02656603
+top_support_including_shapes_state	minecraft:light_gray_terracotta	32	0.02500332
+top_support_including_shapes_state	minecraft:calcite	29	0.02265926
+top_support_including_shapes_state	minecraft:packed_mud	23	0.01797114
+top_support_including_shapes_state	minecraft:cobbled_deepslate_wall[east=none, north=none, south=none, up=true, waterlogged=false, west=none]	22	0.01718978
+top_support_including_shapes_state	minecraft:spruce_log[axis=y]	22	0.01718978
+top_support_including_shapes_state	minecraft:coarse_dirt	18	0.01406437
+top_support_including_shapes_state	minecraft:pale_oak_wood[axis=z]	13	0.01015760
+top_support_including_shapes_state	minecraft:granite	12	0.00937625
+top_support_including_shapes_state	minecraft:ice	12	0.00937625
+top_support_including_shapes_state	minecraft:dark_prismarine_slab[type=top, waterlogged=false]	10	0.00781354
+top_support_including_shapes_state	minecraft:pointed_dripstone[thickness=tip, vertical_direction=up, waterlogged=false]	10	0.00781354
+top_support_including_shapes_state	minecraft:coal_ore	8	0.00625083
+top_support_including_shapes_state	minecraft:gravel	7	0.00546948
+top_support_including_shapes_state	minecraft:grass_block[snowy=true]	6	0.00468812
+top_support_including_shapes_state	minecraft:pale_oak_wood[axis=x]	6	0.00468812
+top_support_including_shapes_state	minecraft:powder_snow	6	0.00468812
+top_support_including_shapes_state	minecraft:birch_wood[axis=x]	4	0.00312542
+top_support_including_shapes_state	minecraft:acacia_wood[axis=z]	3	0.00234406
+top_support_including_shapes_state	minecraft:dark_oak_fence_gate[facing=north, in_wall=true, open=false, powered=false]	3	0.00234406
+top_support_including_shapes_state	minecraft:iron_ore	3	0.00234406
+top_support_including_shapes_state	minecraft:dark_oak_fence[east=false, north=false, south=false, waterlogged=false, west=true]	2	0.00156271
+top_support_including_shapes_state	minecraft:dark_oak_fence[east=true, north=true, south=false, waterlogged=false, west=false]	2	0.00156271
+top_support_including_shapes_state	minecraft:dark_oak_fence_gate[facing=east, in_wall=false, open=true, powered=false]	2	0.00156271
+top_support_including_shapes_state	minecraft:dark_oak_fence_gate[facing=north, in_wall=false, open=true, powered=false]	2	0.00156271
+top_support_including_shapes_state	minecraft:dark_oak_fence_gate[facing=south, in_wall=false, open=true, powered=false]	2	0.00156271
+top_support_including_shapes_state	minecraft:dark_oak_fence_gate[facing=south, in_wall=true, open=false, powered=false]	2	0.00156271
+top_support_including_shapes_state	minecraft:dark_oak_fence_gate[facing=west, in_wall=false, open=false, powered=false]	2	0.00156271
+top_support_including_shapes_state	minecraft:dark_oak_fence[east=false, north=true, south=false, waterlogged=false, west=false]	1	0.00078135
+top_support_including_shapes_state	minecraft:dark_oak_fence[east=true, north=false, south=false, waterlogged=false, west=false]	1	0.00078135
+top_support_including_shapes_state	minecraft:dark_oak_fence_gate[facing=east, in_wall=false, open=false, powered=false]	1	0.00078135
+top_support_including_shapes_state	minecraft:dark_oak_fence_gate[facing=north, in_wall=false, open=false, powered=false]	1	0.00078135
+top_support_including_shapes_state	minecraft:dark_oak_fence_gate[facing=west, in_wall=false, open=true, powered=false]	1	0.00078135
+top_support_including_shapes_state	minecraft:dark_oak_fence_gate[facing=west, in_wall=true, open=false, powered=false]	1	0.00078135
+top_support_including_shapes_state	minecraft:red_banner[rotation=0]	1	0.00078135
+top_support_including_shapes_state	minecraft:red_banner[rotation=14]	1	0.00078135
+top_support_including_shapes_state	minecraft:white_banner[rotation=0]	1	0.00078135
+top_support_including_shapes_state	minecraft:yellow_banner[rotation=1]	1	0.00078135
+top_visible_category	substrate	116051	89.79912407
+top_visible_category	plant	8413	6.50989678
+top_visible_category	leaves	3374	2.61076806
+top_visible_category	snow_layer	723	0.55945030
+top_visible_category	shaped_detail	669	0.51766563
+top_visible_category	fluid	4	0.00309516
+top_visible_name	minecraft:stone	22539	17.44045685
+top_visible_name	minecraft:pale_moss_block	16955	13.11961249
+top_visible_name	minecraft:acacia_wood	12274	9.49750066
+top_visible_name	minecraft:grass_block	10464	8.09694043
+top_visible_name	minecraft:cyan_terracotta	8276	6.40388752
+top_visible_name	minecraft:moss_block	7744	5.99223115
+top_visible_name	minecraft:short_grass	6938	5.36855626
+top_visible_name	minecraft:cobblestone	5820	4.50345884
+top_visible_name	minecraft:mud	5540	4.28679759
+top_visible_name	minecraft:snow_block	4767	3.68865778
+top_visible_name	minecraft:birch_wood	4165	3.22283610
+top_visible_name	minecraft:spruce_leaves	3283	2.54035316
+top_visible_name	minecraft:white_concrete_powder	3280	2.53803179
+top_visible_name	minecraft:diorite	2971	2.29893062
+top_visible_name	minecraft:pale_oak_wood	2580	1.99637866
+top_visible_name	minecraft:basalt	2166	1.67602953
+top_visible_name	minecraft:andesite	1426	1.10342480
+top_visible_name	minecraft:smooth_basalt	1389	1.07479456
+top_visible_name	minecraft:light_gray_wool	1311	1.01443892
+top_visible_name	minecraft:tall_grass	773	0.59813981
+top_visible_name	minecraft:snow	723	0.55945030
+top_visible_name	minecraft:blackstone	631	0.48826160
+top_visible_name	minecraft:potted_spruce_sapling	609	0.47123822
+top_visible_name	minecraft:dark_prismarine_stairs	420	0.32499188
+top_visible_name	minecraft:diamond_block	417	0.32267050
+top_visible_name	minecraft:tuff	276	0.21356609
+top_visible_name	minecraft:gray_wool	268	0.20737577
+top_visible_name	minecraft:dirt	167	0.12922296
+top_visible_name	minecraft:dark_oak_fence	165	0.12767538
+top_visible_name	minecraft:packed_ice	136	0.10523546
+top_visible_name	minecraft:white_concrete	113	0.08743829
+top_visible_name	minecraft:birch_leaves	91	0.07041491
+top_visible_name	minecraft:black_wool	85	0.06577217
+top_visible_name	minecraft:white_wool	82	0.06345079
+top_visible_name	minecraft:dripstone_block	58	0.04487983
+top_visible_name	minecraft:pink_petals	50	0.03868951
+top_visible_name	minecraft:dark_prismarine_slab	49	0.03791572
+top_visible_name	minecraft:light_gray_terracotta	32	0.02476129
+top_visible_name	minecraft:calcite	29	0.02243992
+top_visible_name	minecraft:packed_mud	23	0.01779717
+top_visible_name	minecraft:cobbled_deepslate_wall	22	0.01702338
+top_visible_name	minecraft:dandelion	19	0.01470201
+top_visible_name	minecraft:coarse_dirt	18	0.01392822
+top_visible_name	minecraft:azure_bluet	15	0.01160685
+top_visible_name	minecraft:granite	12	0.00928548
+top_visible_name	minecraft:ice	12	0.00928548
+top_visible_name	minecraft:pointed_dripstone	9	0.00696411
+top_visible_name	minecraft:coal_ore	8	0.00619032
+top_visible_name	minecraft:gravel	7	0.00541653
+top_visible_name	minecraft:powder_snow	6	0.00464274
+top_visible_name	minecraft:water	4	0.00309516
+top_visible_name	minecraft:fern	3	0.00232137
+top_visible_name	minecraft:iron_ore	3	0.00232137
+top_visible_name	minecraft:large_fern	2	0.00154758
+top_visible_name	minecraft:red_banner	2	0.00154758
+top_visible_name	minecraft:cornflower	1	0.00077379
+top_visible_name	minecraft:oxeye_daisy	1	0.00077379
+top_visible_name	minecraft:poppy	1	0.00077379
+top_visible_name	minecraft:spruce_log	1	0.00077379
+top_visible_name	minecraft:sweet_berry_bush	1	0.00077379
+top_visible_name	minecraft:white_banner	1	0.00077379
+top_visible_name	minecraft:yellow_banner	1	0.00077379
+top_visible_state	minecraft:stone	22539	17.44045685
+top_visible_state	minecraft:pale_moss_block	16955	13.11961249
+top_visible_state	minecraft:acacia_wood[axis=y]	12271	9.49517929
+top_visible_state	minecraft:grass_block[snowy=false]	10458	8.09229769
+top_visible_state	minecraft:cyan_terracotta	8276	6.40388752
+top_visible_state	minecraft:moss_block	7744	5.99223115
+top_visible_state	minecraft:short_grass	6938	5.36855626
+top_visible_state	minecraft:cobblestone	5820	4.50345884
+top_visible_state	minecraft:mud	5540	4.28679759
+top_visible_state	minecraft:snow_block	4767	3.68865778
+top_visible_state	minecraft:birch_wood[axis=y]	4161	3.21974094
+top_visible_state	minecraft:white_concrete_powder	3280	2.53803179
+top_visible_state	minecraft:spruce_leaves[distance=7, persistent=true, waterlogged=false]	2975	2.30202578
+top_visible_state	minecraft:diorite	2971	2.29893062
+top_visible_state	minecraft:pale_oak_wood[axis=y]	2561	1.98167665
+top_visible_state	minecraft:basalt[axis=y]	2166	1.67602953
+top_visible_state	minecraft:andesite	1426	1.10342480
+top_visible_state	minecraft:smooth_basalt	1389	1.07479456
+top_visible_state	minecraft:light_gray_wool	1311	1.01443892
+top_visible_state	minecraft:tall_grass[half=upper]	773	0.59813981
+top_visible_state	minecraft:snow[layers=1]	723	0.55945030
+top_visible_state	minecraft:blackstone	631	0.48826160
+top_visible_state	minecraft:potted_spruce_sapling	609	0.47123822
+top_visible_state	minecraft:diamond_block	417	0.32267050
+top_visible_state	minecraft:tuff	276	0.21356609
+top_visible_state	minecraft:gray_wool	268	0.20737577
+top_visible_state	minecraft:dirt	167	0.12922296
+top_visible_state	minecraft:dark_oak_fence[east=false, north=false, south=false, waterlogged=false, west=false]	165	0.12767538
+top_visible_state	minecraft:packed_ice	136	0.10523546
+top_visible_state	minecraft:spruce_leaves[distance=2, persistent=false, waterlogged=false]	129	0.09981893
+top_visible_state	minecraft:white_concrete	113	0.08743829
+top_visible_state	minecraft:dark_prismarine_stairs[facing=south, half=top, shape=straight, waterlogged=false]	109	0.08434313
+top_visible_state	minecraft:spruce_leaves[distance=3, persistent=false, waterlogged=false]	104	0.08047418
+top_visible_state	minecraft:dark_prismarine_stairs[facing=east, half=top, shape=straight, waterlogged=false]	102	0.07892660
+top_visible_state	minecraft:dark_prismarine_stairs[facing=north, half=top, shape=straight, waterlogged=false]	101	0.07815281
+top_visible_state	minecraft:dark_prismarine_stairs[facing=west, half=top, shape=straight, waterlogged=false]	100	0.07737902
+top_visible_state	minecraft:birch_leaves[distance=7, persistent=true, waterlogged=false]	91	0.07041491
+top_visible_state	minecraft:black_wool	85	0.06577217
+top_visible_state	minecraft:white_wool	82	0.06345079
+top_visible_state	minecraft:dripstone_block	58	0.04487983
+top_visible_state	minecraft:dark_prismarine_slab[type=bottom, waterlogged=false]	49	0.03791572
+top_visible_state	minecraft:spruce_leaves[distance=4, persistent=false, waterlogged=false]	40	0.03095161
+top_visible_state	minecraft:light_gray_terracotta	32	0.02476129
+top_visible_state	minecraft:calcite	29	0.02243992
+top_visible_state	minecraft:packed_mud	23	0.01779717
+top_visible_state	minecraft:cobbled_deepslate_wall[east=none, north=none, south=none, up=true, waterlogged=false, west=none]	22	0.01702338
+top_visible_state	minecraft:spruce_leaves[distance=5, persistent=false, waterlogged=false]	22	0.01702338
+top_visible_state	minecraft:dandelion	19	0.01470201
+top_visible_state	minecraft:coarse_dirt	18	0.01392822
+top_visible_state	minecraft:azure_bluet	15	0.01160685
+top_visible_state	minecraft:pale_oak_wood[axis=z]	13	0.01005927
+top_visible_state	minecraft:spruce_leaves[distance=1, persistent=false, waterlogged=false]	13	0.01005927
+top_visible_state	minecraft:granite	12	0.00928548
+top_visible_state	minecraft:ice	12	0.00928548
+top_visible_state	minecraft:pointed_dripstone[thickness=tip, vertical_direction=up, waterlogged=false]	9	0.00696411
+top_visible_state	minecraft:coal_ore	8	0.00619032
+top_visible_state	minecraft:gravel	7	0.00541653
+top_visible_state	minecraft:grass_block[snowy=true]	6	0.00464274
+top_visible_state	minecraft:pale_oak_wood[axis=x]	6	0.00464274
+top_visible_state	minecraft:pink_petals[facing=north, flower_amount=1]	6	0.00464274
+top_visible_state	minecraft:powder_snow	6	0.00464274
+top_visible_state	minecraft:pink_petals[facing=east, flower_amount=1]	5	0.00386895
+top_visible_state	minecraft:pink_petals[facing=east, flower_amount=3]	5	0.00386895
+top_visible_state	minecraft:pink_petals[facing=south, flower_amount=3]	5	0.00386895
+top_visible_state	minecraft:birch_wood[axis=x]	4	0.00309516
+top_visible_state	minecraft:pink_petals[facing=north, flower_amount=3]	4	0.00309516
+top_visible_state	minecraft:pink_petals[facing=west, flower_amount=1]	4	0.00309516
+top_visible_state	minecraft:pink_petals[facing=west, flower_amount=3]	4	0.00309516
+top_visible_state	minecraft:water[level=0]	4	0.00309516
+top_visible_state	minecraft:acacia_wood[axis=z]	3	0.00232137
+top_visible_state	minecraft:dark_prismarine_stairs[facing=east, half=bottom, shape=straight, waterlogged=false]	3	0.00232137
+top_visible_state	minecraft:fern	3	0.00232137
+top_visible_state	minecraft:iron_ore	3	0.00232137
+top_visible_state	minecraft:pink_petals[facing=north, flower_amount=4]	3	0.00232137
+top_visible_state	minecraft:pink_petals[facing=south, flower_amount=4]	3	0.00232137
+top_visible_state	minecraft:dark_prismarine_stairs[facing=north, half=bottom, shape=straight, waterlogged=false]	2	0.00154758
+top_visible_state	minecraft:dark_prismarine_stairs[facing=west, half=bottom, shape=straight, waterlogged=false]	2	0.00154758
+top_visible_state	minecraft:large_fern[half=upper]	2	0.00154758
+top_visible_state	minecraft:pink_petals[facing=east, flower_amount=2]	2	0.00154758
+top_visible_state	minecraft:pink_petals[facing=east, flower_amount=4]	2	0.00154758
+top_visible_state	minecraft:pink_petals[facing=north, flower_amount=2]	2	0.00154758
+top_visible_state	minecraft:pink_petals[facing=west, flower_amount=4]	2	0.00154758
+top_visible_state	minecraft:cornflower	1	0.00077379
+top_visible_state	minecraft:dark_prismarine_stairs[facing=south, half=bottom, shape=straight, waterlogged=false]	1	0.00077379
+top_visible_state	minecraft:oxeye_daisy	1	0.00077379
+top_visible_state	minecraft:pink_petals[facing=south, flower_amount=1]	1	0.00077379
+top_visible_state	minecraft:pink_petals[facing=south, flower_amount=2]	1	0.00077379
+top_visible_state	minecraft:pink_petals[facing=west, flower_amount=2]	1	0.00077379
+top_visible_state	minecraft:poppy	1	0.00077379
+top_visible_state	minecraft:red_banner[rotation=0]	1	0.00077379
+top_visible_state	minecraft:red_banner[rotation=14]	1	0.00077379
+top_visible_state	minecraft:spruce_log[axis=y]	1	0.00077379
+top_visible_state	minecraft:sweet_berry_bush[age=3]	1	0.00077379
+top_visible_state	minecraft:white_banner[rotation=0]	1	0.00077379
+top_visible_state	minecraft:yellow_banner[rotation=1]	1	0.00077379
+up_faces_all_name	minecraft:stone	31653	19.12094285
+up_faces_all_name	minecraft:pale_moss_block	17024	10.28385717
+up_faces_all_name	minecraft:grass_block	13005	7.85605983
+up_faces_all_name	minecraft:acacia_wood	12702	7.67302360
+up_faces_all_name	minecraft:mud	12421	7.50327713
+up_faces_all_name	minecraft:cyan_terracotta	8569	5.17636114
+up_faces_all_name	minecraft:moss_block	8413	5.08212467
+up_faces_all_name	minecraft:short_grass	7768	4.69249310
+up_faces_all_name	minecraft:spruce_leaves	5983	3.61421038
+up_faces_all_name	minecraft:cobblestone	5835	3.52480654
+up_faces_all_name	minecraft:snow_block	4863	2.93764083
+up_faces_all_name	minecraft:smooth_basalt	4446	2.68573948
+up_faces_all_name	minecraft:birch_wood	4296	2.59512749
+up_faces_all_name	minecraft:white_concrete_powder	3384	2.04420657
+up_faces_all_name	minecraft:diorite	3078	1.85935810
+up_faces_all_name	minecraft:pale_oak_wood	2699	1.63041180
+up_faces_all_name	minecraft:blackstone	2252	1.36038806
+up_faces_all_name	minecraft:basalt	2231	1.34770238
+up_faces_all_name	minecraft:andesite	1491	0.90068321
+up_faces_all_name	minecraft:light_gray_wool	1349	0.81490386
+up_faces_all_name	minecraft:water	1312	0.79255290
+up_faces_all_name	minecraft:black_concrete	1087	0.65663491
+up_faces_all_name	minecraft:diamond_block	910	0.54971276
+up_faces_all_name	minecraft:tall_grass	865	0.52252916
+up_faces_all_name	minecraft:dripstone_block	862	0.52071692
+up_faces_all_name	minecraft:snow	724	0.43735389
+up_faces_all_name	minecraft:calcite	646	0.39023565
+up_faces_all_name	minecraft:potted_spruce_sapling	619	0.37392549
+up_faces_all_name	minecraft:black_wool	581	0.35097045
+up_faces_all_name	minecraft:pointed_dripstone	581	0.35097045
+up_faces_all_name	minecraft:dark_prismarine_stairs	564	0.34070110
+up_faces_all_name	minecraft:dirt	411	0.24827686
+up_faces_all_name	minecraft:lava	406	0.24525646
+up_faces_all_name	minecraft:gray_wool	354	0.21384430
+up_faces_all_name	minecraft:tuff	293	0.17699543
+up_faces_all_name	minecraft:gray_concrete	278	0.16793423
+up_faces_all_name	minecraft:dark_prismarine_slab	230	0.13893839
+up_faces_all_name	minecraft:white_concrete	173	0.10450583
+up_faces_all_name	minecraft:dark_oak_fence	167	0.10088135
+up_faces_all_name	minecraft:gravel	144	0.08698751
+up_faces_all_name	minecraft:birch_leaves	140	0.08457119
+up_faces_all_name	minecraft:packed_ice	136	0.08215487
+up_faces_all_name	minecraft:coal_ore	92	0.05557536
+up_faces_all_name	minecraft:white_wool	82	0.04953456
+up_faces_all_name	minecraft:glow_lichen	76	0.04591008
+up_faces_all_name	minecraft:granite	54	0.03262032
+up_faces_all_name	minecraft:pink_petals	53	0.03201624
+up_faces_all_name	minecraft:light_gray_terracotta	32	0.01933056
+up_faces_all_name	minecraft:iron_ore	31	0.01872648
+up_faces_all_name	minecraft:packed_mud	23	0.01389384
+up_faces_all_name	minecraft:cobbled_deepslate_wall	22	0.01328976
+up_faces_all_name	minecraft:dandelion	20	0.01208160
+up_faces_all_name	minecraft:coarse_dirt	18	0.01087344
+up_faces_all_name	minecraft:copper_ore	18	0.01087344
+up_faces_all_name	minecraft:azure_bluet	15	0.00906120
+up_faces_all_name	minecraft:fern	14	0.00845712
+up_faces_all_name	minecraft:ice	12	0.00724896
+up_faces_all_name	minecraft:dark_oak_fence_gate	10	0.00604080
+up_faces_all_name	minecraft:powder_snow	8	0.00483264
+up_faces_all_name	minecraft:large_fern	6	0.00362448
+up_faces_all_name	minecraft:red_banner	2	0.00120816
+up_faces_all_name	minecraft:cornflower	1	0.00060408
+up_faces_all_name	minecraft:mangrove_leaves	1	0.00060408
+up_faces_all_name	minecraft:oxeye_daisy	1	0.00060408
+up_faces_all_name	minecraft:poppy	1	0.00060408
+up_faces_all_name	minecraft:spruce_log	1	0.00060408
+up_faces_all_name	minecraft:sweet_berry_bush	1	0.00060408
+up_faces_all_name	minecraft:white_banner	1	0.00060408
+up_faces_all_name	minecraft:yellow_banner	1	0.00060408
+up_faces_substrate_name	minecraft:stone	31653	21.68652411
+up_faces_substrate_name	minecraft:pale_moss_block	17024	11.66370917
+up_faces_substrate_name	minecraft:grass_block	13005	8.91015847
+up_faces_substrate_name	minecraft:acacia_wood	12702	8.70256308
+up_faces_substrate_name	minecraft:mud	12421	8.51004063
+up_faces_substrate_name	minecraft:cyan_terracotta	8569	5.87090718
+up_faces_substrate_name	minecraft:moss_block	8413	5.76402639
+up_faces_substrate_name	minecraft:cobblestone	5835	3.99775276
+up_faces_substrate_name	minecraft:snow_block	4863	3.33180320
+up_faces_substrate_name	minecraft:smooth_basalt	4446	3.04610262
+up_faces_substrate_name	minecraft:birch_wood	4296	2.94333263
+up_faces_substrate_name	minecraft:white_concrete_powder	3384	2.31849106
+up_faces_substrate_name	minecraft:diorite	3078	2.10884027
+up_faces_substrate_name	minecraft:pale_oak_wood	2699	1.84917476
+up_faces_substrate_name	minecraft:blackstone	2252	1.54292018
+up_faces_substrate_name	minecraft:basalt	2231	1.52853238
+up_faces_substrate_name	minecraft:andesite	1491	1.02153374
+up_faces_substrate_name	minecraft:light_gray_wool	1349	0.92424481
+up_faces_substrate_name	minecraft:black_concrete	1087	0.74473989
+up_faces_substrate_name	minecraft:diamond_block	910	0.62347130
+up_faces_substrate_name	minecraft:dripstone_block	862	0.59058490
+up_faces_substrate_name	minecraft:calcite	646	0.44259611
+up_faces_substrate_name	minecraft:black_wool	581	0.39806244
+up_faces_substrate_name	minecraft:dirt	411	0.28158978
+up_faces_substrate_name	minecraft:gray_wool	354	0.24253719
+up_faces_substrate_name	minecraft:tuff	293	0.20074405
+up_faces_substrate_name	minecraft:gray_concrete	278	0.19046706
+up_faces_substrate_name	minecraft:white_concrete	173	0.11852806
+up_faces_substrate_name	minecraft:gravel	144	0.09865919
+up_faces_substrate_name	minecraft:packed_ice	136	0.09317813
+up_faces_substrate_name	minecraft:coal_ore	92	0.06303226
+up_faces_substrate_name	minecraft:white_wool	82	0.05618093
+up_faces_substrate_name	minecraft:granite	54	0.03699720
+up_faces_substrate_name	minecraft:light_gray_terracotta	32	0.02192427
+up_faces_substrate_name	minecraft:iron_ore	31	0.02123913
+up_faces_substrate_name	minecraft:packed_mud	23	0.01575807
+up_faces_substrate_name	minecraft:coarse_dirt	18	0.01233240
+up_faces_substrate_name	minecraft:copper_ore	18	0.01233240
+up_faces_substrate_name	minecraft:ice	12	0.00822160
+up_faces_substrate_name	minecraft:powder_snow	8	0.00548107
+up_faces_substrate_name	minecraft:spruce_log	1	0.00068513
+volume_category	substrate	6011142	99.31658060
+volume_category	fluid	11799	0.19494404
+volume_category	plant	11086	0.18316380
+volume_category	leaves	9922	0.16393210
+volume_category	shaped_detail	7833	0.12941747
+volume_category	snow_layer	724	0.01196199
+volume_name	minecraft:stone	4028807	66.56427932
+volume_name	minecraft:cobblestone	1260932	20.83322181
+volume_name	minecraft:dirt	249431	4.12111942
+volume_name	minecraft:coal_ore	67168	1.10975520
+volume_name	minecraft:gravel	65641	1.08452598
+volume_name	minecraft:mud	41638	0.68794645
+volume_name	minecraft:diamond_block	33620	0.55547239
+volume_name	minecraft:moss_block	22016	0.36375016
+volume_name	minecraft:iron_ore	21731	0.35904136
+volume_name	minecraft:pale_moss_block	21291	0.35177165
+volume_name	minecraft:grass_block	19163	0.31661266
+volume_name	minecraft:acacia_wood	18755	0.30987165
+volume_name	minecraft:diorite	18420	0.30433675
+volume_name	minecraft:snow_block	18217	0.30098277
+volume_name	minecraft:granite	18103	0.29909925
+volume_name	minecraft:dripstone_block	17444	0.28821120
+volume_name	minecraft:smooth_basalt	16363	0.27035083
+volume_name	minecraft:cyan_terracotta	13172	0.21762886
+volume_name	minecraft:water	11194	0.18494819
+volume_name	minecraft:packed_ice	10105	0.16695564
+volume_name	minecraft:spruce_leaves	9719	0.16057811
+volume_name	minecraft:blackstone	9292	0.15352319
+volume_name	minecraft:short_grass	8247	0.13625761
+volume_name	minecraft:copper_ore	5031	0.08312259
+volume_name	minecraft:birch_wood	4581	0.07568766
+volume_name	minecraft:pale_oak_wood	4123	0.06812054
+volume_name	minecraft:black_wool	4076	0.06734401
+volume_name	minecraft:black_concrete	4044	0.06681530
+volume_name	minecraft:dark_oak_fence	3756	0.06205694
+volume_name	minecraft:white_concrete_powder	3630	0.05997516
+volume_name	minecraft:basalt	3362	0.05554724
+volume_name	minecraft:calcite	2957	0.04885580
+volume_name	minecraft:pointed_dripstone	2428	0.04011561
+volume_name	minecraft:andesite	2319	0.03831471
+volume_name	minecraft:tall_grass	1816	0.03000410
+volume_name	minecraft:light_gray_wool	1808	0.02987192
+volume_name	minecraft:gray_wool	974	0.01609251
+volume_name	minecraft:dark_prismarine_stairs	733	0.01211069
+volume_name	minecraft:snow	724	0.01196199
+volume_name	minecraft:potted_spruce_sapling	624	0.01030978
+volume_name	minecraft:lava	573	0.00946715
+volume_name	minecraft:ice	540	0.00892192
+volume_name	minecraft:cobbled_deepslate_wall	470	0.00776538
+volume_name	minecraft:gray_concrete	439	0.00725319
+volume_name	minecraft:tuff	424	0.00700536
+volume_name	minecraft:dark_prismarine_slab	383	0.00632796
+volume_name	minecraft:netherrack	321	0.00530359
+volume_name	minecraft:powder_snow	296	0.00489054
+volume_name	minecraft:white_concrete	247	0.00408095
+volume_name	minecraft:emerald_ore	243	0.00401487
+volume_name	minecraft:birch_leaves	202	0.00333746
+volume_name	minecraft:glow_lichen	152	0.00251136
+volume_name	minecraft:spruce_log	142	0.00234614
+volume_name	minecraft:white_wool	100	0.00165221
+volume_name	minecraft:pink_petals	97	0.00160264
+volume_name	minecraft:magma_block	57	0.00094176
+volume_name	minecraft:dandelion	49	0.00080958
+volume_name	minecraft:azure_bluet	47	0.00077654
+volume_name	minecraft:dark_oak_fence_gate	42	0.00069393
+volume_name	minecraft:mossy_cobblestone	38	0.00062784
+volume_name	minecraft:light_gray_terracotta	35	0.00057827
+volume_name	minecraft:bubble_column	32	0.00052871
+volume_name	minecraft:packed_mud	26	0.00042957
+volume_name	minecraft:coarse_dirt	19	0.00031392
+volume_name	minecraft:large_fern	18	0.00029740
+volume_name	minecraft:poppy	17	0.00028088
+volume_name	minecraft:tuff_wall	17	0.00028088
+volume_name	minecraft:fern	16	0.00026435
+volume_name	minecraft:red_banner	2	0.00003304
+volume_name	minecraft:cornflower	1	0.00001652
+volume_name	minecraft:mangrove_leaves	1	0.00001652
+volume_name	minecraft:oxeye_daisy	1	0.00001652
+volume_name	minecraft:stone_bricks	1	0.00001652
+volume_name	minecraft:sweet_berry_bush	1	0.00001652
+volume_name	minecraft:white_banner	1	0.00001652
+volume_name	minecraft:yellow_banner	1	0.00001652
+volume_state	minecraft:stone	4028807	66.56427932
+volume_state	minecraft:cobblestone	1260932	20.83322181
+volume_state	minecraft:dirt	249431	4.12111942
+volume_state	minecraft:coal_ore	67168	1.10975520
+volume_state	minecraft:gravel	65641	1.08452598
+volume_state	minecraft:mud	41638	0.68794645
+volume_state	minecraft:diamond_block	33620	0.55547239
+volume_state	minecraft:moss_block	22016	0.36375016
+volume_state	minecraft:iron_ore	21731	0.35904136
+volume_state	minecraft:pale_moss_block	21291	0.35177165
+volume_state	minecraft:grass_block[snowy=false]	19157	0.31651352
+volume_state	minecraft:acacia_wood[axis=y]	18746	0.30972295
+volume_state	minecraft:diorite	18420	0.30433675
+volume_state	minecraft:snow_block	18217	0.30098277
+volume_state	minecraft:granite	18103	0.29909925
+volume_state	minecraft:dripstone_block	17444	0.28821120
+volume_state	minecraft:smooth_basalt	16363	0.27035083
+volume_state	minecraft:cyan_terracotta	13172	0.21762886
+volume_state	minecraft:water[level=0]	10445	0.17257315
+volume_state	minecraft:packed_ice	10105	0.16695564
+volume_state	minecraft:blackstone	9292	0.15352319
+volume_state	minecraft:short_grass	8247	0.13625761
+volume_state	minecraft:spruce_leaves[distance=7, persistent=true, waterlogged=false]	7394	0.12216427
+volume_state	minecraft:copper_ore	5031	0.08312259
+volume_state	minecraft:birch_wood[axis=y]	4577	0.07562157
+volume_state	minecraft:pale_oak_wood[axis=y]	4104	0.06780662
+volume_state	minecraft:black_wool	4076	0.06734401
+volume_state	minecraft:black_concrete	4044	0.06681530
+volume_state	minecraft:white_concrete_powder	3630	0.05997516
+volume_state	minecraft:dark_oak_fence[east=false, north=false, south=false, waterlogged=false, west=false]	3465	0.05724901
+volume_state	minecraft:basalt[axis=y]	3361	0.05553072
+volume_state	minecraft:calcite	2957	0.04885580
+volume_state	minecraft:andesite	2319	0.03831471
+volume_state	minecraft:light_gray_wool	1808	0.02987192
+volume_state	minecraft:gray_wool	974	0.01609251
+volume_state	minecraft:tall_grass[half=upper]	922	0.01523336
+volume_state	minecraft:tall_grass[half=lower]	894	0.01477074
+volume_state	minecraft:spruce_leaves[distance=2, persistent=false, waterlogged=false]	828	0.01368028
+volume_state	minecraft:snow[layers=1]	724	0.01196199
+volume_state	minecraft:spruce_leaves[distance=3, persistent=false, waterlogged=false]	710	0.01173068
+volume_state	minecraft:pointed_dripstone[thickness=tip, vertical_direction=up, waterlogged=false]	642	0.01060718
+volume_state	minecraft:potted_spruce_sapling	624	0.01030978
+volume_state	minecraft:lava[level=0]	556	0.00918628
+volume_state	minecraft:ice	540	0.00892192
+volume_state	minecraft:pointed_dripstone[thickness=tip, vertical_direction=down, waterlogged=false]	506	0.00836017
+volume_state	minecraft:cobbled_deepslate_wall[east=none, north=none, south=none, up=true, waterlogged=false, west=none]	459	0.00758364
+volume_state	minecraft:gray_concrete	439	0.00725319
+volume_state	minecraft:tuff	424	0.00700536
+volume_state	minecraft:spruce_leaves[distance=1, persistent=false, waterlogged=false]	387	0.00639405
+volume_state	minecraft:water[level=8]	353	0.00583229
+volume_state	minecraft:netherrack	321	0.00530359
+volume_state	minecraft:powder_snow	296	0.00489054
+volume_state	minecraft:spruce_leaves[distance=4, persistent=false, waterlogged=false]	286	0.00472532
+volume_state	minecraft:pointed_dripstone[thickness=frustum, vertical_direction=down, waterlogged=false]	280	0.00462618
+volume_state	minecraft:white_concrete	247	0.00408095
+volume_state	minecraft:emerald_ore	243	0.00401487
+volume_state	minecraft:dark_prismarine_slab[type=bottom, waterlogged=false]	226	0.00373399
+volume_state	minecraft:water[level=1]	210	0.00346964
+volume_state	minecraft:pointed_dripstone[thickness=frustum, vertical_direction=up, waterlogged=false]	206	0.00340355
+volume_state	minecraft:birch_leaves[distance=7, persistent=true, waterlogged=false]	202	0.00333746
+volume_state	minecraft:dark_prismarine_slab[type=top, waterlogged=false]	157	0.00259397
+volume_state	minecraft:spruce_log[axis=y]	142	0.00234614
+volume_state	minecraft:dark_oak_fence[east=true, north=true, south=true, waterlogged=false, west=true]	140	0.00231309
+volume_state	minecraft:pointed_dripstone[thickness=base, vertical_direction=down, waterlogged=false]	135	0.00223048
+volume_state	minecraft:pointed_dripstone[thickness=tip, vertical_direction=up, waterlogged=true]	135	0.00223048
+volume_state	minecraft:spruce_leaves[distance=5, persistent=false, waterlogged=false]	114	0.00188352
+volume_state	minecraft:dark_prismarine_stairs[facing=east, half=top, shape=straight, waterlogged=false]	113	0.00186700
+volume_state	minecraft:dark_prismarine_stairs[facing=south, half=top, shape=straight, waterlogged=false]	112	0.00185047
+volume_state	minecraft:dark_prismarine_stairs[facing=north, half=top, shape=straight, waterlogged=false]	106	0.00175134
+volume_state	minecraft:dark_prismarine_stairs[facing=west, half=top, shape=straight, waterlogged=false]	106	0.00175134
+volume_state	minecraft:white_wool	100	0.00165221
+volume_state	minecraft:pointed_dripstone[thickness=tip, vertical_direction=down, waterlogged=true]	87	0.00143742
+volume_state	minecraft:pointed_dripstone[thickness=base, vertical_direction=up, waterlogged=false]	84	0.00138785
+volume_state	minecraft:pointed_dripstone[thickness=middle, vertical_direction=down, waterlogged=false]	82	0.00135481
+volume_state	minecraft:dark_prismarine_stairs[facing=east, half=bottom, shape=straight, waterlogged=false]	77	0.00127220
+volume_state	minecraft:dark_prismarine_stairs[facing=south, half=bottom, shape=straight, waterlogged=false]	74	0.00122263
+volume_state	minecraft:dark_prismarine_stairs[facing=north, half=bottom, shape=straight, waterlogged=false]	73	0.00120611
+volume_state	minecraft:dark_prismarine_stairs[facing=west, half=bottom, shape=straight, waterlogged=false]	72	0.00118959
+volume_state	minecraft:water[level=2]	72	0.00118959
+volume_state	minecraft:magma_block	57	0.00094176
+volume_state	minecraft:pointed_dripstone[thickness=middle, vertical_direction=up, waterlogged=false]	53	0.00087567
+volume_state	minecraft:dandelion	49	0.00080958
+volume_state	minecraft:azure_bluet	47	0.00077654
+volume_state	minecraft:pointed_dripstone[thickness=frustum, vertical_direction=down, waterlogged=true]	45	0.00074349
+volume_state	minecraft:pointed_dripstone[thickness=tip_merge, vertical_direction=up, waterlogged=false]	42	0.00069393
+volume_state	minecraft:pointed_dripstone[thickness=tip_merge, vertical_direction=down, waterlogged=false]	39	0.00064436
+volume_state	minecraft:mossy_cobblestone	38	0.00062784
+volume_state	minecraft:dark_oak_fence[east=true, north=false, south=true, waterlogged=false, west=false]	37	0.00061132
+volume_state	minecraft:dark_oak_fence[east=false, north=false, south=true, waterlogged=false, west=true]	36	0.00059479
+volume_state	minecraft:dark_oak_fence[east=false, north=true, south=false, waterlogged=false, west=true]	36	0.00059479
+volume_state	minecraft:light_gray_terracotta	35	0.00057827
+volume_state	minecraft:water[level=3]	35	0.00057827
+volume_state	minecraft:bubble_column[drag=true]	32	0.00052871
+volume_state	minecraft:pointed_dripstone[thickness=frustum, vertical_direction=up, waterlogged=true]	32	0.00052871
+volume_state	minecraft:dark_oak_fence[east=true, north=true, south=false, waterlogged=false, west=false]	30	0.00049566
+volume_state	minecraft:water[level=4]	29	0.00047914
+volume_state	minecraft:glow_lichen[down=false, east=false, north=true, south=false, up=false, waterlogged=false, west=false]	26	0.00042957
+volume_state	minecraft:packed_mud	26	0.00042957
+volume_state	minecraft:glow_lichen[down=false, east=true, north=false, south=false, up=false, waterlogged=false, west=false]	25	0.00041305
+volume_state	minecraft:glow_lichen[down=false, east=false, north=false, south=false, up=false, waterlogged=false, west=true]	23	0.00038001
+volume_state	minecraft:pointed_dripstone[thickness=base, vertical_direction=down, waterlogged=true]	20	0.00033044
+volume_state	minecraft:water[level=5]	20	0.00033044
+volume_state	minecraft:coarse_dirt	19	0.00031392
+volume_state	minecraft:glow_lichen[down=false, east=false, north=false, south=false, up=true, waterlogged=false, west=false]	18	0.00029740
+volume_state	minecraft:glow_lichen[down=false, east=false, north=false, south=true, up=false, waterlogged=false, west=false]	17	0.00028088
+volume_state	minecraft:poppy	17	0.00028088
+volume_state	minecraft:tuff_wall[east=none, north=none, south=none, up=true, waterlogged=false, west=none]	17	0.00028088
+volume_state	minecraft:fern	16	0.00026435
+volume_state	minecraft:water[level=6]	16	0.00026435
+volume_state	minecraft:water[level=7]	14	0.00023131
+volume_state	minecraft:glow_lichen[down=false, east=false, north=false, south=false, up=true, waterlogged=true, west=false]	13	0.00021479
+volume_state	minecraft:pale_oak_wood[axis=z]	13	0.00021479
+volume_state	minecraft:dark_oak_fence_gate[facing=east, in_wall=false, open=true, powered=false]	12	0.00019826
+volume_state	minecraft:pointed_dripstone[thickness=middle, vertical_direction=down, waterlogged=true]	12	0.00019826
+volume_state	minecraft:pink_petals[facing=west, flower_amount=3]	11	0.00018174
+volume_state	minecraft:dark_oak_fence_gate[facing=west, in_wall=false, open=true, powered=false]	10	0.00016522
+volume_state	minecraft:large_fern[half=upper]	10	0.00016522
+volume_state	minecraft:pink_petals[facing=north, flower_amount=3]	10	0.00016522
+volume_state	minecraft:pointed_dripstone[thickness=tip_merge, vertical_direction=up, waterlogged=true]	10	0.00016522
+volume_state	minecraft:acacia_wood[axis=z]	9	0.00014870
+volume_state	minecraft:pink_petals[facing=south, flower_amount=3]	9	0.00014870
+volume_state	minecraft:pointed_dripstone[thickness=tip_merge, vertical_direction=down, waterlogged=true]	9	0.00014870
+volume_state	minecraft:large_fern[half=lower]	8	0.00013218
+volume_state	minecraft:lava[level=2]	8	0.00013218
+volume_state	minecraft:pink_petals[facing=east, flower_amount=1]	8	0.00013218
+volume_state	minecraft:pink_petals[facing=east, flower_amount=3]	7	0.00011565
+volume_state	minecraft:pink_petals[facing=north, flower_amount=1]	7	0.00011565
+volume_state	minecraft:pink_petals[facing=west, flower_amount=1]	7	0.00011565
+volume_state	minecraft:pointed_dripstone[thickness=base, vertical_direction=up, waterlogged=true]	7	0.00011565
+volume_state	minecraft:cobbled_deepslate_wall[east=low, north=none, south=none, up=true, waterlogged=false, west=none]	6	0.00009913
+volume_state	minecraft:dark_oak_fence_gate[facing=south, in_wall=false, open=true, powered=false]	6	0.00009913
+volume_state	minecraft:grass_block[snowy=true]	6	0.00009913
+volume_state	minecraft:lava[level=8]	6	0.00009913
+volume_state	minecraft:pale_oak_wood[axis=x]	6	0.00009913
+volume_state	minecraft:pink_petals[facing=north, flower_amount=4]	6	0.00009913
+volume_state	minecraft:pink_petals[facing=west, flower_amount=2]	6	0.00009913
+volume_state	minecraft:pink_petals[facing=east, flower_amount=4]	5	0.00008261
+volume_state	minecraft:birch_wood[axis=x]	4	0.00006609
+volume_state	minecraft:dark_oak_fence[east=false, north=false, south=false, waterlogged=false, west=true]	4	0.00006609
+volume_state	minecraft:dark_oak_fence_gate[facing=north, in_wall=true, open=false, powered=false]	4	0.00006609
+volume_state	minecraft:glow_lichen[down=false, east=false, north=true, south=false, up=false, waterlogged=true, west=false]	4	0.00006609
+volume_state	minecraft:pink_petals[facing=north, flower_amount=2]	4	0.00006609
+volume_state	minecraft:pink_petals[facing=south, flower_amount=1]	4	0.00006609
+volume_state	minecraft:pink_petals[facing=south, flower_amount=4]	4	0.00006609
+volume_state	minecraft:cobbled_deepslate_wall[east=none, north=none, south=none, up=true, waterlogged=false, west=low]	3	0.00004957
+volume_state	minecraft:dark_oak_fence[east=false, north=true, south=false, waterlogged=false, west=false]	3	0.00004957
+volume_state	minecraft:dark_oak_fence[east=true, north=false, south=false, waterlogged=false, west=false]	3	0.00004957
+volume_state	minecraft:dark_oak_fence_gate[facing=north, in_wall=false, open=true, powered=false]	3	0.00004957
+volume_state	minecraft:glow_lichen[down=false, east=true, north=true, south=false, up=false, waterlogged=false, west=false]	3	0.00004957
+volume_state	minecraft:glow_lichen[down=true, east=false, north=false, south=false, up=false, waterlogged=false, west=false]	3	0.00004957
+volume_state	minecraft:pink_petals[facing=east, flower_amount=2]	3	0.00004957
+volume_state	minecraft:pink_petals[facing=south, flower_amount=2]	3	0.00004957
+volume_state	minecraft:pink_petals[facing=west, flower_amount=4]	3	0.00004957
+volume_state	minecraft:dark_oak_fence[east=false, north=false, south=true, waterlogged=false, west=false]	2	0.00003304
+volume_state	minecraft:dark_oak_fence_gate[facing=south, in_wall=true, open=false, powered=false]	2	0.00003304
+volume_state	minecraft:dark_oak_fence_gate[facing=west, in_wall=false, open=false, powered=false]	2	0.00003304
+volume_state	minecraft:glow_lichen[down=false, east=false, north=false, south=false, up=false, waterlogged=true, west=true]	2	0.00003304
+volume_state	minecraft:glow_lichen[down=false, east=false, north=false, south=false, up=true, waterlogged=false, west=true]	2	0.00003304
+volume_state	minecraft:glow_lichen[down=false, east=false, north=false, south=true, up=false, waterlogged=true, west=false]	2	0.00003304
+volume_state	minecraft:glow_lichen[down=false, east=true, north=false, south=true, up=false, waterlogged=false, west=false]	2	0.00003304
+volume_state	minecraft:lava[level=4]	2	0.00003304
+volume_state	minecraft:pointed_dripstone[thickness=middle, vertical_direction=up, waterlogged=true]	2	0.00003304
+volume_state	minecraft:basalt[axis=z]	1	0.00001652
+volume_state	minecraft:cobbled_deepslate_wall[east=none, north=low, south=none, up=true, waterlogged=false, west=none]	1	0.00001652
+volume_state	minecraft:cobbled_deepslate_wall[east=none, north=none, south=low, up=true, waterlogged=false, west=none]	1	0.00001652
+volume_state	minecraft:cornflower	1	0.00001652
+volume_state	minecraft:dark_oak_fence_gate[facing=east, in_wall=false, open=false, powered=false]	1	0.00001652
+volume_state	minecraft:dark_oak_fence_gate[facing=north, in_wall=false, open=false, powered=false]	1	0.00001652
+volume_state	minecraft:dark_oak_fence_gate[facing=west, in_wall=true, open=false, powered=false]	1	0.00001652
+volume_state	minecraft:glow_lichen[down=false, east=false, north=false, south=true, up=false, waterlogged=false, west=true]	1	0.00001652
+volume_state	minecraft:glow_lichen[down=false, east=false, north=false, south=true, up=false, waterlogged=true, west=true]	1	0.00001652
+volume_state	minecraft:glow_lichen[down=false, east=false, north=false, south=true, up=true, waterlogged=true, west=false]	1	0.00001652
+volume_state	minecraft:glow_lichen[down=false, east=true, north=false, south=false, up=false, waterlogged=true, west=false]	1	0.00001652
+volume_state	minecraft:glow_lichen[down=false, east=true, north=false, south=false, up=true, waterlogged=false, west=false]	1	0.00001652
+volume_state	minecraft:glow_lichen[down=false, east=true, north=true, south=false, up=false, waterlogged=true, west=false]	1	0.00001652
+volume_state	minecraft:glow_lichen[down=true, east=false, north=false, south=false, up=false, waterlogged=false, west=true]	1	0.00001652
+volume_state	minecraft:glow_lichen[down=true, east=false, north=false, south=false, up=false, waterlogged=true, west=true]	1	0.00001652
+volume_state	minecraft:glow_lichen[down=true, east=false, north=false, south=true, up=false, waterlogged=false, west=false]	1	0.00001652
+volume_state	minecraft:glow_lichen[down=true, east=false, north=true, south=false, up=false, waterlogged=false, west=false]	1	0.00001652
+volume_state	minecraft:glow_lichen[down=true, east=false, north=true, south=false, up=false, waterlogged=true, west=false]	1	0.00001652
+volume_state	minecraft:glow_lichen[down=true, east=true, north=false, south=false, up=false, waterlogged=true, west=false]	1	0.00001652
+volume_state	minecraft:lava[level=6]	1	0.00001652
+volume_state	minecraft:mangrove_leaves[distance=7, persistent=true, waterlogged=false]	1	0.00001652
+volume_state	minecraft:oxeye_daisy	1	0.00001652
+volume_state	minecraft:red_banner[rotation=0]	1	0.00001652
+volume_state	minecraft:red_banner[rotation=14]	1	0.00001652
+volume_state	minecraft:stone_bricks	1	0.00001652
+volume_state	minecraft:sweet_berry_bush[age=3]	1	0.00001652
+volume_state	minecraft:white_banner[rotation=0]	1	0.00001652
+volume_state	minecraft:yellow_banner[rotation=1]	1	0.00001652

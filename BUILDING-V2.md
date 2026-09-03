@@ -1,6 +1,6 @@
 # WorldPainter v2 — Windows build
 
-Clean fork of [WorldPainter](https://github.com/Captain-Chaos/WorldPainter) (`upstream/master`, 2.27.x) with **performance / memory optimizations only** (no surface-smoothing or UI feature forks).
+Fork of [WorldPainter](https://github.com/Captain-Chaos/WorldPainter) with performance and memory improvements, surface smoothing, River Designer, and Axiom terrain/smooth-snow tools. See [other-PC update instructions](docs/UPDATE-OTHER-PC-TR.md) and [Axiom texture documentation](docs/AXIOM-TEXTURE.md).
 
 ## What’s included
 

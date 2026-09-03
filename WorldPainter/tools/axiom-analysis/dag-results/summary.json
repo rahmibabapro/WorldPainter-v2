@@ -1,0 +1,9 @@
+{
+  "width": 350, "length": 380, "height": 140,
+  "nonAirBlocks": 6052506, "explicitAir": 0,
+  "topColumns": 129234, "emptyColumns": 3766, "multiRunColumns": 28919,
+  "minSubstrateHeight": 0, "maxSubstrateHeight": 138,
+  "volumeNames": 76, "volumeStates": 190,
+  "visibleTopNames": 62, "substrateTopNames": 38, "substrateTopStates": 43,
+  "boundarySideFacesExcluded": 27848, "elapsedSeconds": 9.281414801
+}

@@ -62,6 +62,7 @@ import org.pepsoft.worldpainter.tools.Eyedropper.PaintType;
 import org.pepsoft.worldpainter.tools.Eyedropper.SelectionListener;
 import org.pepsoft.worldpainter.tools.MapQuickPresetDialog;
 import org.pepsoft.worldpainter.tools.RespawnPlayerDialog;
+import org.pepsoft.worldpainter.tools.RiverToolsDialog;
 import org.pepsoft.worldpainter.tools.RiverTerrainSupport;
 import org.pepsoft.worldpainter.tools.ScriptLibraryActions;
 import org.pepsoft.worldpainter.tools.scripts.BundledScriptCatalog;
@@ -4552,6 +4553,11 @@ public final class App extends JFrame implements BrushControl,
         menuItem.setMnemonic('q');
         menu.add(menuItem);
 
+        menuItem = new JMenuItem("River Designer...");
+        menuItem.addActionListener(e -> showRiverDesigner());
+        menuItem.setMnemonic('r');
+        menu.add(menuItem);
+
         menu.add(createScriptLibraryMenu());
 
         menuItem = new JMenuItem("Run script...");
@@ -5765,10 +5771,21 @@ public final class App extends JFrame implements BrushControl,
         new MapQuickPresetDialog(this, dimension, this).setVisible(true);
     }
 
+    private void showRiverDesigner() {
+        if ((world == null) || (dimension == null)) {
+            DesktopUtils.beep();
+            return;
+        }
+        new RiverToolsDialog(this, this, dimension).setVisible(true);
+    }
+
     private void showQuickSettingsPopup(Component invoker) {
         final JPopupMenu popup = new JPopupMenu("Hızlı Ayarlar");
         JMenuItem item = new JMenuItem("Quick Map Presets...");
         item.addActionListener(e -> showQuickMapPresets());
+        popup.add(item);
+        item = new JMenuItem("River Designer...");
+        item.addActionListener(e -> showRiverDesigner());
         popup.add(item);
         popup.addSeparator();
         popup.add(createScriptLibraryMenu());

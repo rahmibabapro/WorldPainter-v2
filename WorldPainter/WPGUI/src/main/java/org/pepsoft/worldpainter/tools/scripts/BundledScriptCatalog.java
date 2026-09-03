@@ -45,7 +45,13 @@ public final class BundledScriptCatalog {
             new BundledScript(Category.GLOBALS, "dry_to_stone", PREFIX + "globals/global_remove_water_ge0_make_stone.js", "global_remove_water_ge0_make_stone.js", "dry to stone", false),
             new BundledScript(Category.GLOBALS, "realistic_snow", PREFIX + "globals/global_realistic_snow.js", "global_realistic_snow.js", "realistic snow", false),
             // Script Library (flat list)
-            new BundledScript(Category.GLOBALS, "stone_grass_slope", PREFIX + "globals/global_ops_stone_grass_45deg.js", "global_ops_stone_grass_45deg.js", "Taş Çimen", true)
+            new BundledScript(Category.GLOBALS, "stone_grass_slope", PREFIX + "globals/global_ops_stone_grass_45deg.js", "global_ops_stone_grass_45deg.js", "Taş Çimen", true),
+            // Advanced variants stay available through Run script; the library exposes the safe one-click preset.
+            new BundledScript(Category.GLOBALS, "terrain_texture_painter", PREFIX + "globals/terrain_texture_painter.js", "terrain_texture_painter.js", "Terrain Texture Painter", false),
+            new BundledScript(Category.SNOW, "snowify_smooth", PREFIX + "snow/snowify.js", "snowify_smooth.js", "Snowify Smooth", false),
+            new BundledScript(Category.GLOBALS, "axiom_mountain_smooth_snow", PREFIX + "globals/axiom_mountain_smooth_snow.js", "axiom_mountain_smooth_snow.js", "Axiom Mountain Smooth Snow", false),
+            new BundledScript(Category.GLOBALS, "axiom_mountain_style", PREFIX + "globals/axiom_mountain_smooth_snow.js", "axiom_mountain_style.js", "Axiom Dağ Stili (Taş, Çimen, Kar)", false),
+            new BundledScript(Category.GLOBALS, "axiom_blueprint_texture", PREFIX + "globals/axiom_blueprint_texture.js", "axiom_blueprint_texture.js", "Axiom Blueprint Dağ + Düzlük + Kar", true)
     );
 
     private BundledScriptCatalog() {

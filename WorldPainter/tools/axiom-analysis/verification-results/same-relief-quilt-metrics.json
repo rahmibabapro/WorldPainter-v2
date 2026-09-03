@@ -1,0 +1,9 @@
+{
+  "scenario": "same-relief-quilt", "targetSize":384, "identityShortcut":false,
+  "transferSeconds":0.1827446, "patches":953, "ribbonBytes":24576,
+  "painted":127696, "untextured":0, "protectedChanged":0, "heightChanged":0,
+  "expectedMaskCells":16298, "actualMaskCells":16150, "maskIntersectionOverUnion":0.9808314510713632,
+  "expectedSnowCells":4577, "actualSnowCells":4568, "invalidSnowCells":0, "whiteTerrainFillerCells":0, "plantTerrainFillerCells":0, "snowDepthCounts0to8":[0, 232, 442, 474, 299, 3121, 0, 0, 0],
+  "expectedUndercoatAdjacency":0.6922116687143622, "actualUndercoatAdjacency":0.6973624106102133, "randomUndercoatAdjacency":0.12571275556815675,
+  "undercoatProportionTV":0.016578436286179672, "snowSurfaceProportionTV":0.016578436286179672
+}

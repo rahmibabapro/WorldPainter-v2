@@ -303,7 +303,13 @@ public class WorldPainterChunkFactory implements ChunkFactory {
                     material = terrain.getMaterial(platform, seed, worldX, worldY, height + topLayerLayerOffset, intHeight + topLayerLayerOffset);
                 }
                 Material surfaceMaterial = material;
-                if (surfaceSmoothing == Dimension.SurfaceSmoothing.SLABS_AND_STAIRS) {
+                // Explicit layered snow needs a solid supporting face. A bottom slab/stair here
+                // would make the subsequent Frost export reject this otherwise valid snow cell.
+                final int snowDepth = tile.getLayerValue(SnowDepth.INSTANCE, xInTile, yInTile);
+                final boolean preserveSnowSupport = snowDepth >= 1 && snowDepth <= 8
+                        && tile.getBitLayerValue(Frost.INSTANCE, xInTile, yInTile)
+                        && intHeight > waterLevel && intHeight < maxY;
+                if (surfaceSmoothing == Dimension.SurfaceSmoothing.SLABS_AND_STAIRS && ! preserveSnowSupport) {
                     final Material smoothed = SurfaceSmoother.smoothSurfaceMaterial(
                             dimension, heightSnapshot, worldX, worldY, intHeight, material);
                     if (smoothed != null) {
