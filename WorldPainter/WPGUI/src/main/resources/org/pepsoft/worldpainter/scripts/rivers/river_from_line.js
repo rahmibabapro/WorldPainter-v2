@@ -205,6 +205,18 @@ if (riverPoints.length === 0) {
     throw new Error("River Designer stopped because the selected input is invalid");
 }
 
+// Kopuk / seyrek noktaları araziye uygun path ile birleştir (Mod 2).
+var linkSparseWaypoints = params['linkSparseWaypoints'];
+if (linkSparseWaypoints == null) {
+    linkSparseWaypoints = true;
+}
+if (linkSparseWaypoints) {
+    var linked = linkSparseWaypointsToPath(riverPoints, riverMap, riverLayer);
+    riverPoints = linked.points;
+    riverMap = linked.map;
+    print("Path birleştirme: " + linked.waypoints + " waypoint → " + riverPoints.length + " bağlı nokta");
+}
+
 // Resolve the actual painted connections. The old script simply sorted every painted
 // point by screen Y, which broke curved, east-west and branching centre lines.
 var lineSelection = resolveDrawnCentreline(riverPoints, riverMap);
@@ -402,6 +414,205 @@ function graniteHash(x, y, salt) {
 
 function clamp01(value) {
     return Math.max(0, Math.min(1, isNaN(value) ? 0 : value));
+}
+
+/**
+ * Clusters sparse painted dots into waypoints, orders high→low, and paints
+ * terrain-following segments so resolveDrawnCentreline sees one connected path.
+ */
+function linkSparseWaypointsToPath(points, map, layer) {
+    var clusters = clusterWaypoints(points, 3);
+    if (clusters.length === 0) {
+        return {points: points, map: map, waypoints: 0};
+    }
+    if (clusters.length === 1 && points.length >= 2 && isMostlyConnected(points, map)) {
+        return {points: points, map: map, waypoints: clusters.length};
+    }
+
+    clusters.sort(function (a, b) {
+        return b.height - a.height;
+    });
+
+    if (clusters.length < 2) {
+        if (points.length < 2) {
+            print("HATA: En az iki rota noktası boyayın (veya Mod 3 Kaynak kullanın).");
+            throw new Error("River Designer stopped because the selected input is invalid");
+        }
+        return {points: points, map: map, waypoints: clusters.length};
+    }
+
+    var ordered = [clusters[0]];
+    var remaining = clusters.slice(1);
+    while (remaining.length > 0) {
+        var last = ordered[ordered.length - 1];
+        var bestIndex = 0;
+        var bestScore = Number.MAX_VALUE;
+        for (var i = 0; i < remaining.length; i++) {
+            var candidate = remaining[i];
+            var dx = candidate.x - last.x;
+            var dy = candidate.y - last.y;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+            var climb = Math.max(0, candidate.height - last.height);
+            var score = dist + climb * 8;
+            if (score < bestScore) {
+                bestScore = score;
+                bestIndex = i;
+            }
+        }
+        ordered.push(remaining[bestIndex]);
+        remaining.splice(bestIndex, 1);
+    }
+
+    for (var s = 0; s < ordered.length - 1; s++) {
+        paintTerrainPath(ordered[s], ordered[s + 1], map, points, layer);
+    }
+
+    // Deduplicate points list from map keys
+    var rebuilt = [];
+    for (var key in map) {
+        if (map.hasOwnProperty(key) && map[key]) {
+            var parts = key.split(",");
+            rebuilt.push({x: parseInt(parts[0], 10), y: parseInt(parts[1], 10)});
+        }
+    }
+    return {points: rebuilt, map: map, waypoints: ordered.length};
+}
+
+function clusterWaypoints(points, radius) {
+    var used = {};
+    var clusters = [];
+    for (var i = 0; i < points.length; i++) {
+        var p = points[i];
+        var key = lineKey(p.x, p.y);
+        if (used[key]) {
+            continue;
+        }
+        var queue = [p];
+        used[key] = true;
+        var sumX = 0;
+        var sumY = 0;
+        var count = 0;
+        var maxH = -1e9;
+        for (var head = 0; head < queue.length; head++) {
+            var cur = queue[head];
+            sumX += cur.x;
+            sumY += cur.y;
+            count++;
+            var h = dimension.getHeightAt(cur.x, cur.y);
+            if (h > maxH) {
+                maxH = h;
+            }
+            for (var dx = -radius; dx <= radius; dx++) {
+                for (var dy = -radius; dy <= radius; dy++) {
+                    if (dx === 0 && dy === 0) {
+                        continue;
+                    }
+                    var nx = cur.x + dx;
+                    var ny = cur.y + dy;
+                    var nKey = lineKey(nx, ny);
+                    if (!used[nKey] && mapHas(points, nx, ny)) {
+                        used[nKey] = true;
+                        queue.push({x: nx, y: ny});
+                    }
+                }
+            }
+        }
+        clusters.push({
+            x: Math.round(sumX / count),
+            y: Math.round(sumY / count),
+            height: maxH
+        });
+    }
+    return clusters;
+}
+
+function mapHas(points, x, y) {
+    for (var i = 0; i < points.length; i++) {
+        if (points[i].x === x && points[i].y === y) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function isMostlyConnected(points, map) {
+    if (points.length === 0) {
+        return true;
+    }
+    var visited = {};
+    var component = collectLineComponent(points[0], map, visited, indexPoints(points));
+    return component.length >= Math.max(2, Math.floor(points.length * 0.85));
+}
+
+function indexPoints(points) {
+    var byKey = {};
+    for (var i = 0; i < points.length; i++) {
+        byKey[lineKey(points[i].x, points[i].y)] = points[i];
+    }
+    return byKey;
+}
+
+function paintTerrainPath(from, to, map, points, layer) {
+    var x = from.x;
+    var y = from.y;
+    var guard = 0;
+    var maxSteps = Math.max(64, Math.floor(Math.abs(to.x - from.x) + Math.abs(to.y - from.y)) * 8);
+    markPathCell(x, y, map, points, layer);
+    while ((x !== to.x || y !== to.y) && guard < maxSteps) {
+        guard++;
+        var best = null;
+        var bestScore = Number.MAX_VALUE;
+        for (var dx = -1; dx <= 1; dx++) {
+            for (var dy = -1; dy <= 1; dy++) {
+                if (dx === 0 && dy === 0) {
+                    continue;
+                }
+                var nx = x + dx;
+                var ny = y + dy;
+                if (nx < minX || ny < minY || nx > maxX || ny > maxY) {
+                    continue;
+                }
+                var dist = Math.abs(nx - to.x) + Math.abs(ny - to.y);
+                var climb = Math.max(0, dimension.getHeightAt(nx, ny) - dimension.getHeightAt(x, y));
+                var score = dist + climb * 6;
+                // Prefer stepping closer to target
+                if (dist > Math.abs(x - to.x) + Math.abs(y - to.y)) {
+                    score += 2;
+                }
+                if (score < bestScore) {
+                    bestScore = score;
+                    best = {x: nx, y: ny};
+                }
+            }
+        }
+        if (!best) {
+            break;
+        }
+        // Prevent infinite oscillation: force Bresenham-ish progress every few steps
+        if (guard % 12 === 0) {
+            best = {
+                x: x + (to.x === x ? 0 : (to.x > x ? 1 : -1)),
+                y: y + (to.y === y ? 0 : (to.y > y ? 1 : -1))
+            };
+        }
+        x = best.x;
+        y = best.y;
+        markPathCell(x, y, map, points, layer);
+    }
+    markPathCell(to.x, to.y, map, points, layer);
+}
+
+function markPathCell(x, y, map, points, layer) {
+    var key = lineKey(x, y);
+    if (!map[key]) {
+        map[key] = true;
+        points.push({x: x, y: y});
+        try {
+            dimension.setBitLayerValueAt(layer, x, y, true);
+        } catch (ignore) {
+            // Layer paint is best-effort; in-memory map is enough for carving.
+        }
+    }
 }
 
 function getLineTangent(points, index) {

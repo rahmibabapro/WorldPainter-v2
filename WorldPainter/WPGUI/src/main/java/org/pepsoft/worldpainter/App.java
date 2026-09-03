@@ -63,6 +63,7 @@ import org.pepsoft.worldpainter.tools.Eyedropper.SelectionListener;
 import org.pepsoft.worldpainter.tools.MapQuickPresetDialog;
 import org.pepsoft.worldpainter.tools.RespawnPlayerDialog;
 import org.pepsoft.worldpainter.tools.RiverToolsDialog;
+import org.pepsoft.worldpainter.tools.RiverPathSupport;
 import org.pepsoft.worldpainter.tools.RiverTerrainSupport;
 import org.pepsoft.worldpainter.tools.ScriptLibraryActions;
 import org.pepsoft.worldpainter.tools.scripts.BundledScriptCatalog;
@@ -2028,6 +2029,18 @@ public final class App extends JFrame implements BrushControl,
 
     public void selectRiverSourceTerrainForPainting() {
         RiverTerrainSupport.selectRiverSourceTerrainForPainting(this);
+    }
+
+    public void selectRiverPathLayerForPainting() {
+        RiverPathSupport.selectRiverPathLayerForPainting(this);
+    }
+
+    /**
+     * Registers a custom layer on a palette. Used by river tooling to auto-create the River Path layer.
+     */
+    public void registerCustomLayer(CustomLayer layer, boolean activate) {
+        customLayerController.registerCustomLayer(layer, activate);
+        saveCustomLayers();
     }
 
     boolean performUndo() {
@@ -4553,7 +4566,8 @@ public final class App extends JFrame implements BrushControl,
         menuItem.setMnemonic('q');
         menu.add(menuItem);
 
-        menuItem = new JMenuItem("River Designer...");
+        menuItem = new JMenuItem("Nehir...");
+        menuItem.setToolTipText("Otomatik, nokta yolu veya kaynak noktalarıyla nehir üret");
         menuItem.addActionListener(e -> showRiverDesigner());
         menuItem.setMnemonic('r');
         menu.add(menuItem);
@@ -5784,7 +5798,7 @@ public final class App extends JFrame implements BrushControl,
         JMenuItem item = new JMenuItem("Quick Map Presets...");
         item.addActionListener(e -> showQuickMapPresets());
         popup.add(item);
-        item = new JMenuItem("River Designer...");
+        item = new JMenuItem("Nehir...");
         item.addActionListener(e -> showRiverDesigner());
         popup.add(item);
         popup.addSeparator();
