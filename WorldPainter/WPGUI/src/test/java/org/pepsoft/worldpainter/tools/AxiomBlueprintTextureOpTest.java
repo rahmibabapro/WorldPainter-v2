@@ -101,6 +101,21 @@ public class AxiomBlueprintTextureOpTest {
     }
 
     @Test
+    public void profileEntryRejectsWrongWorldAndMissingUndoBeforeAllocatingTerrains() throws Exception {
+        final World2 unrelated = new World2(DefaultPlugin.JAVA_ANVIL_1_18, -64, 320);
+        assertThrows(IllegalArgumentException.class, () -> AxiomBlueprintTextureOp.applyProfile(unrelated,
+                dimension, profile, false, null, System.nanoTime()));
+        dimension.unregisterUndoManager();
+        assertThrows(IllegalStateException.class, () -> AxiomBlueprintTextureOp.applyProfile(world,
+                dimension, profile, false, null, System.nanoTime()));
+        assertOriginalCells();
+        for (int i = 0; i < saved.length; i++) {
+            assertNull(world.getMixedMaterial(i));
+            assertNull(Terrain.getCustomMaterial(i));
+        }
+    }
+
+    @Test
     public void scriptEntryMayRunInsideAnAlreadyInhibitedDimension() throws Exception {
         dimension.setEventsInhibited(true);
         try {

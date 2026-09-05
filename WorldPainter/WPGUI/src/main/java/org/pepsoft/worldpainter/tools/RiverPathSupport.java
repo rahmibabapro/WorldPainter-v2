@@ -10,7 +10,7 @@ import java.awt.Color;
 import static org.pepsoft.worldpainter.painting.PaintFactory.createLayerPaintId;
 
 /**
- * Ensures the fixed "River Path" BIT layer exists for waypoint painting (Mode 2).
+ * Ensures the fixed "River Path" BIT layer exists for drawing a river centreline (Mode 2).
  */
 public final class RiverPathSupport {
     public static final String RIVER_PATH_LAYER_NAME = "River Path";
@@ -41,7 +41,7 @@ public final class RiverPathSupport {
         }
         final CustomAnnotationLayer layer = new CustomAnnotationLayer(
                 RIVER_PATH_LAYER_NAME,
-                "Nehir rota noktaları / River path waypoints",
+                "Nehir çizim fırçasının merkez hattı / River brush centreline",
                 new Color(0x22, 0x88, 0xFF));
         app.registerCustomLayer(layer, false);
         return layer;
@@ -53,6 +53,7 @@ public final class RiverPathSupport {
             return;
         }
         app.selectPaint(createLayerPaintId(layer));
+        app.activateRiverPathDrawingTool();
         app.activateDockPanel("layers");
     }
 }

@@ -6,6 +6,12 @@ package org.pepsoft.worldpainter.exporting;
 import org.pepsoft.minecraft.Direction;
 import org.pepsoft.minecraft.Material;
 import org.pepsoft.worldpainter.Dimension;
+import org.pepsoft.worldpainter.MixedMaterial;
+import org.pepsoft.worldpainter.Terrain;
+import org.pepsoft.worldpainter.layers.FloodWithLava;
+import org.pepsoft.worldpainter.layers.NotPresent;
+import org.pepsoft.worldpainter.layers.NotPresentBlock;
+import org.pepsoft.worldpainter.layers.ReadOnly;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -40,9 +46,23 @@ public final class SurfaceSmoother {
         if (family == null) {
             return null;
         }
-        int bits = (heightSnapshot != null)
-                ? computeVoxel222(heightSnapshot, worldX, worldY, intHeight)
-                : computeVoxel222(dimension, worldX, worldY, intHeight);
+        // An original full dry bank can hold water at its own block Y. Cutting
+        // that block into a slab/stair would open a lateral fluid face even
+        // though the heightmap is unchanged. Preserve only that boundary voxel;
+        // submerged granite still follows the normal smoothing/waterlogging path.
+        if (hasAdjacentFullWater(dimension, heightSnapshot, worldX, worldY, intHeight)) {
+            return null;
+        }
+        // Grass/dirt (and other full, non-smoothable surface materials) cannot
+        // share a half-block top with the adjoining rock. Keep the rock flush at
+        // equal-height dry seams; submerged granite still needs partial blocks.
+        if (hasDryFullBlockSeam(dimension, heightSnapshot, worldX, worldY, intHeight)) {
+            return null;
+        }
+        // Keep the immutable height halo for seam-safe geometry, but retain the
+        // Dimension as fluid context. Snapshot-only dispatch used to lose the
+        // wet/dry distinction needed by underwater contour bridges.
+        int bits = computeVoxel222(dimension, heightSnapshot, worldX, worldY, intHeight);
         if (bits == 0) {
             return null;
         }
@@ -103,26 +123,84 @@ public final class SurfaceSmoother {
         return material;
     }
 
+    /**
+     * Whether this is the wet, terrain-supported side of an actual shoreline.
+     * The generated river may render that one-cell fringe with mud-brick
+     * slab/stair geometry, without cutting the original dry grass bank or
+     * extending the water plane into it.
+     */
+    static boolean isWetShorelineEdge(Dimension dimension, ChunkHeightSnapshot snapshot,
+                                      int worldX, int worldY, int intHeight) {
+        if (dimension == null || dimension.getWaterLevelAt(worldX, worldY) <= intHeight
+                || dimension.getBitLayerValueAt(FloodWithLava.INSTANCE, worldX, worldY)) return false;
+        final int waterLevel = dimension.getWaterLevelAt(worldX, worldY);
+        final float centre = heightAt(dimension, snapshot, worldX, worldY);
+        if (isMissingHeight(centre)) return false;
+        for (int[] offset : CARDINAL_NEIGHBOURS) {
+            final int x = worldX + offset[0], y = worldY + offset[1];
+            final float height = heightAt(dimension, snapshot, x, y);
+            if (isMissingHeight(height) || height - centre > 1.5f || Math.round(height) < waterLevel
+                    || dimension.getWaterLevelAt(x, y) >= waterLevel) continue;
+            if (dimension.getBitLayerValueAt(FloodWithLava.INSTANCE, x, y)
+                    || dimension.getBitLayerValueAt(org.pepsoft.worldpainter.layers.Void.INSTANCE, x, y)
+                    || dimension.getBitLayerValueAt(NotPresent.INSTANCE, x, y)
+                    || dimension.getBitLayerValueAt(NotPresentBlock.INSTANCE, x, y)
+                    || dimension.getBitLayerValueAt(ReadOnly.INSTANCE, x, y)) continue;
+            return true;
+        }
+        return false;
+    }
+
+    /** Whether this wet surface participates in a required one-block rounded-height bridge. */
+    static boolean hasWetRoundedContourNeighbour(Dimension dimension, ChunkHeightSnapshot snapshot,
+                                                 int worldX, int worldY, int intHeight) {
+        if (dimension == null || dimension.getWaterLevelAt(worldX, worldY) <= intHeight) return false;
+        for (int[] offset : CARDINAL_NEIGHBOURS) {
+            final int x = worldX + offset[0], y = worldY + offset[1];
+            final float height = heightAt(dimension, snapshot, x, y);
+            if (isMissingHeight(height)) continue;
+            final int neighbourHeight = Math.round(height);
+            if (Math.abs(neighbourHeight - intHeight) == 1
+                    && dimension.getWaterLevelAt(x, y) > neighbourHeight
+                    && !dimension.getBitLayerValueAt(FloodWithLava.INSTANCE, x, y)) return true;
+        }
+        return false;
+    }
+
     static int computeVoxel222(ChunkHeightSnapshot heightSnapshot, int worldX, int worldY, int intHeight) {
-        final float h00 = heightSnapshot.getHeightAt(worldX, worldY);
-        final float h10 = heightSnapshot.getHeightAt(worldX + 1, worldY);
-        final float h01 = heightSnapshot.getHeightAt(worldX, worldY + 1);
-        final float h11 = heightSnapshot.getHeightAt(worldX + 1, worldY + 1);
-        return computeVoxel222FromHeights(h00, h10, h01, h11, intHeight);
+        return computeVoxel222(null, heightSnapshot, worldX, worldY, intHeight);
     }
 
     static int computeVoxel222(Dimension dimension, int worldX, int worldY, int intHeight) {
-        final float h00 = dimension.getHeightAt(worldX, worldY);
-        final float h10 = dimension.getHeightAt(worldX + 1, worldY);
-        final float h01 = dimension.getHeightAt(worldX, worldY + 1);
-        final float h11 = dimension.getHeightAt(worldX + 1, worldY + 1);
-        return computeVoxel222FromHeights(h00, h10, h01, h11, intHeight);
+        return computeVoxel222(dimension, null, worldX, worldY, intHeight);
     }
 
-    private static int computeVoxel222FromHeights(float h00, float h10, float h01, float h11, int intHeight) {
-        if (isMissingHeight(h00) || isMissingHeight(h10) || isMissingHeight(h01) || isMissingHeight(h11)) {
-            return 255;
+    private static int computeVoxel222(Dimension dimension, ChunkHeightSnapshot snapshot, int worldX, int worldY, int intHeight) {
+        final float[] heights = new float[9];
+        int index = 0;
+        for (int dz = -1; dz <= 1; dz++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                final float height = heightAt(dimension, snapshot, worldX + dx, worldY + dz);
+                if (isMissingHeight(height)) return 255;
+                heights[index++] = height;
+            }
         }
+        final float centre = heights[4];
+        for (float height : heights) {
+            // One surface voxel cannot turn a genuine multi-block cliff into a
+            // ramp. Retaining its full block avoids fragile ledges and holes.
+            if (Math.abs(height - centre) > 1.5f) return 255;
+        }
+
+        // Symmetric uphill stencil: a lower cell turns into a ramp facing its
+        // higher neighbour, in all four directions. The previous +X/+Z-only
+        // quadrant made west/north slopes slabs but east/south slopes stairs.
+        // Opposing equal rises cancel instead of arbitrarily choosing an axis.
+        final float riseX = Math.max(0, heights[5] - centre) - Math.max(0, heights[3] - centre);
+        final float riseZ = Math.max(0, heights[7] - centre) - Math.max(0, heights[1] - centre);
+        if (Math.abs(riseX) < HEIGHT_EPSILON && Math.abs(riseZ) < HEIGHT_EPSILON
+                && Math.abs(centre - intHeight) < HEIGHT_EPSILON) return 255;
+        final float uphillOffset = (Math.abs(riseX) + Math.abs(riseZ)) * 0.5f;
 
         int bits = 0;
         // Bit order: bottom Y half first, then top Y half; within each half dz then dx.
@@ -132,26 +210,136 @@ public final class SurfaceSmoother {
         // WorldPainter places the surface at round(height). Bottom half fills for terrain
         // above intHeight-0.5 (so heights that round up still form a slab, not air).
         // Top half fills only above intHeight+0.5 so gentle slopes still become stairs.
-        final int[] bitValues = {128, 64, 32, 16, 8, 4, 2, 1};
         int bitIndex = 0;
         for (int dy = 0; dy < 2; dy++) {
             for (int dz = 0; dz < 2; dz++) {
                 for (int dx = 0; dx < 2; dx++) {
-                    final float u = dx * 0.5f + 0.25f;
-                    final float v = dz * 0.5f + 0.25f;
-                    final float height = bilinear(h00, h10, h01, h11, u, v);
-                    final boolean exactIntegerHeight = Math.abs(height - intHeight) < (1f / 256f);
+                    final float u = dx * 0.5f - 0.25f;
+                    final float v = dz * 0.5f - 0.25f;
+                    final float height = centre + uphillOffset + riseX * u + riseZ * v;
                     // dy=0 → intHeight-0.5; dy=1 → intHeight+0.5
                     final float threshold = intHeight - 0.5f + dy;
-                    if (exactIntegerHeight || height > threshold) {
-                        bits |= bitValues[bitIndex];
+                    if (height > threshold) {
+                        bits |= VOXEL_BITS[bitIndex];
                     }
                     bitIndex++;
                 }
             }
         }
+        // round(height) chooses the Minecraft block Y. Two almost identical
+        // fractional heights on opposite sides of the .5 boundary would both
+        // otherwise become bottom slabs in consecutive block layers: e.g.
+        // 64.10 -> slab at Y=64 and 64.60 -> slab at Y=65. That creates a full
+        // block ledge in an extremely gentle (and especially visible underwater)
+        // grade. Give the LOWER contour cell elevated corners towards neighbours
+        // which round into the next block layer. It then becomes an upright
+        // straight/inner/outer stair and bridges the contour in half-block steps.
+        // Flat fractional interiors have no higher rounded neighbour and remain
+        // slabs. The 1.5-block cliff guard above still keeps real cliffs whole.
+        if ((bits & 240) == 240 && (bits & 15) != 15) {
+            final int originalTop = bits & 15;
+            final int top = (bits | roundedContourCorners(dimension, worldX, worldY, heights, intHeight)) & 15;
+            // Opposite diagonal elevated corners cannot be represented by one
+            // vanilla stair. The old nearest-pattern tie produced an arbitrary
+            // triangular notch. Keep the pre-contour slab instead of inventing
+            // an asymmetric corner or displacing shallow surface water.
+            bits = (bits & 240) | ((top == 6 || top == 9) ? originalTop : top);
+        }
         return bits;
     }
+
+    private static int roundedContourCorners(Dimension dimension, int worldX, int worldY,
+                                             float[] heights, int intHeight) {
+        int corners = 0;
+        // Row-major stencil: NW,N,NE,W,C,E,SW,S,SE. A cardinal higher
+        // neighbour raises both touching corners; a diagonal raises its one
+        // corner. This also yields the correct inner/outer corner topology.
+        final boolean submerged = dimension != null
+                && fluidOccupiesBlock(intHeight, dimension.getWaterLevelAt(worldX, worldY));
+        if (higherContour(dimension, worldX, worldY, heights[0], -1, -1, intHeight, submerged)
+                || higherContour(dimension, worldX, worldY, heights[1], 0, -1, intHeight, submerged)
+                || higherContour(dimension, worldX, worldY, heights[3], -1, 0, intHeight, submerged)) corners |= 8; // NW
+        if (higherContour(dimension, worldX, worldY, heights[1], 0, -1, intHeight, submerged)
+                || higherContour(dimension, worldX, worldY, heights[2], 1, -1, intHeight, submerged)
+                || higherContour(dimension, worldX, worldY, heights[5], 1, 0, intHeight, submerged)) corners |= 4; // NE
+        if (higherContour(dimension, worldX, worldY, heights[3], -1, 0, intHeight, submerged)
+                || higherContour(dimension, worldX, worldY, heights[6], -1, 1, intHeight, submerged)
+                || higherContour(dimension, worldX, worldY, heights[7], 0, 1, intHeight, submerged)) corners |= 2; // SW
+        if (higherContour(dimension, worldX, worldY, heights[5], 1, 0, intHeight, submerged)
+                || higherContour(dimension, worldX, worldY, heights[7], 0, 1, intHeight, submerged)
+                || higherContour(dimension, worldX, worldY, heights[8], 1, 1, intHeight, submerged)) corners |= 1; // SE
+        return corners;
+    }
+
+    private static boolean higherContour(Dimension dimension, int worldX, int worldY, float height,
+                                         int dx, int dy, int intHeight, boolean submerged) {
+        final int neighbourHeight = Math.round(height);
+        if (neighbourHeight <= intHeight) return false;
+        // An underwater floor must not ramp up into a dry bank merely because
+        // the bank occupies the next rounded Y. Only another fluid-filled
+        // surface cell belongs to the same underwater contour. Dry terrain has
+        // no such restriction; snapshot-only callers retain geometric behaviour.
+        return !submerged || dimension == null
+                || fluidOccupiesBlock(neighbourHeight, dimension.getWaterLevelAt(worldX + dx, worldY + dy));
+    }
+
+    private static boolean hasAdjacentFullWater(Dimension dimension, ChunkHeightSnapshot snapshot,
+                                                int worldX, int worldY, int intHeight) {
+        if (dimension.getWaterLevelAt(worldX, worldY) >= intHeight) return false;
+        for (int[] offset : CARDINAL_NEIGHBOURS) {
+            final int x = worldX + offset[0], y = worldY + offset[1];
+            if (dimension.getWaterLevelAt(x, y) < intHeight) continue;
+            final float height = heightAt(dimension, snapshot, x, y);
+            // A stored water plane buried in terrain is not an adjacent water
+            // voxel. Use the same rounded terrain surface as the chunk factory.
+            if (isMissingHeight(height) || Math.round(height) >= intHeight) continue;
+            if (dimension.getBitLayerValueAt(FloodWithLava.INSTANCE, x, y)
+                    || dimension.getBitLayerValueAt(org.pepsoft.worldpainter.layers.Void.INSTANCE, x, y)
+                    || dimension.getBitLayerValueAt(NotPresent.INSTANCE, x, y)
+                    || dimension.getBitLayerValueAt(NotPresentBlock.INSTANCE, x, y)
+                    || dimension.getBitLayerValueAt(ReadOnly.INSTANCE, x, y)) continue;
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean hasDryFullBlockSeam(Dimension dimension, ChunkHeightSnapshot snapshot,
+                                              int worldX, int worldY, int intHeight) {
+        if (dimension.getWaterLevelAt(worldX, worldY) >= intHeight) return false;
+        final Terrain currentTerrain = dimension.getTerrainAt(worldX, worldY);
+        for (int[] offset : CARDINAL_NEIGHBOURS) {
+            final int x = worldX + offset[0], y = worldY + offset[1];
+            final float height = heightAt(dimension, snapshot, x, y);
+            if (isMissingHeight(height) || Math.round(height) != intHeight
+                    || dimension.getWaterLevelAt(x, y) >= intHeight) continue;
+            final Terrain terrain = dimension.getTerrainAt(x, y);
+            if (terrain == null || (terrain == currentTerrain && !terrain.isCustom())) continue;
+            // Resolve the neighbour's actual terrain surface, including ordinary
+            // mixed custom terrains. Layer exporters are deliberately not run
+            // here; they may independently replace terrain in later passes.
+            int layerOffset = 0;
+            if (terrain.isCustom() && dimension.getTopLayerAnchor() == Dimension.LayerAnchor.TERRAIN) {
+                final MixedMaterial mixed = Terrain.getCustomMaterial(terrain.getCustomTerrainIndex());
+                if (mixed != null && mixed.getMode() == MixedMaterial.Mode.LAYERED) {
+                    layerOffset = -(intHeight - mixed.getPatternHeight() + 1);
+                }
+            }
+            final Material material = layerOffset != 0
+                    ? terrain.getMaterial(dimension.getWorld().getPlatform(), dimension.getSeed(),
+                            x, y, intHeight + layerOffset, intHeight + layerOffset)
+                    : terrain.getMaterial(dimension.getWorld().getPlatform(), dimension.getSeed(), x, y, height, intHeight);
+            if (material.solid && (getFamily(material) == null || isDeepslateTerrain(material))) return true;
+        }
+        return false;
+    }
+
+    private static float heightAt(Dimension dimension, ChunkHeightSnapshot snapshot, int x, int y) {
+        return snapshot != null ? snapshot.getHeightAt(x, y) : dimension.getHeightAt(x, y);
+    }
+
+    private static final float HEIGHT_EPSILON = 1f / 256f;
+    private static final int[] VOXEL_BITS = {128, 64, 32, 16, 8, 4, 2, 1};
+    private static final int[][] CARDINAL_NEIGHBOURS = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} };
 
     /**
      * Snap to a terrain-safe slab/stair pattern. Empty (0) and top-only / upside-down
@@ -241,6 +429,24 @@ public final class SurfaceSmoother {
         return FAMILY_BY_BLOCK_TYPE.get(material.blockType);
     }
 
+    /** Retexture an already validated surface shape without recalculating its geometry. */
+    static Material retextureSurface(Material material, SmoothableBlockFamily target) {
+        if (material == null || target == null) return material;
+        final Material result;
+        if (material.name != null && material.name.endsWith("_slab")) {
+            result = target.slab().withProperty(TYPE, material.getProperty(TYPE));
+        } else if (material.name != null && material.name.endsWith("_stairs")) {
+            result = target.stair()
+                    .withProperty(HALF, material.getProperty(HALF))
+                    .withProperty(SHAPE, material.getProperty(SHAPE))
+                    .withProperty(FACING, material.getProperty(FACING));
+        } else {
+            result = target.full();
+        }
+        return Boolean.TRUE.equals(material.getProperty(WATERLOGGED)) && result.hasProperty(WATERLOGGED)
+                ? result.withProperty(WATERLOGGED, true) : result;
+    }
+
     /**
      * Deepslate and related terrain full blocks (cobbled / polished / bricks / tiles).
      * These must not be converted to stairs or slabs during surface smoothing.
@@ -309,13 +515,6 @@ public final class SurfaceSmoother {
 
     private static boolean isMissingHeight(float height) {
         return height < -1.0e30f || ExportHeightSnapshot.isMissing(height);
-    }
-
-    private static float bilinear(float h00, float h10, float h01, float h11, float u, float v) {
-        return h00 * (1 - u) * (1 - v)
-                + h10 * u * (1 - v)
-                + h01 * (1 - u) * v
-                + h11 * u * v;
     }
 
     private static void registerFamily(String fullName, String stairName, String slabName) {
@@ -408,6 +607,7 @@ public final class SurfaceSmoother {
         registerFamily(MC_GRANITE, "minecraft:granite_stairs", "minecraft:granite_slab");
         registerFamily(MC_POLISHED_GRANITE, "minecraft:polished_granite_stairs", "minecraft:polished_granite_slab");
         registerFamily(MC_TUFF, "minecraft:tuff_stairs", "minecraft:tuff_slab");
+        registerFamily("minecraft:mud_bricks", "minecraft:mud_brick_stairs", "minecraft:mud_brick_slab");
         // Plain end stone has no stair/slab in Minecraft; use brick variants as a safe substitute.
         registerFamily(MC_END_STONE, "minecraft:end_stone_brick_stairs", "minecraft:end_stone_brick_slab", BLK_END_STONE);
         registerFamily(MC_PRISMARINE, "minecraft:prismarine_stairs", "minecraft:prismarine_slab");

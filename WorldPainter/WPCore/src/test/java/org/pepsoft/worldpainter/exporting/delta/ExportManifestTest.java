@@ -1,12 +1,47 @@
 package org.pepsoft.worldpainter.exporting.delta;
 
 import org.junit.Test;
+import org.junit.Rule;
+import org.junit.rules.TemporaryFolder;
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 
 import static org.junit.Assert.*;
 
 public class ExportManifestTest {
+    @Rule
+    public TemporaryFolder temporaryFolder = new TemporaryFolder();
+
+    @Test
+    public void rejectsLegacySampledHashes() throws Exception {
+        assertRejectedVersion("1");
+    }
+
+    @Test
+    public void rejectsFutureManifestVersion() throws Exception {
+        assertRejectedVersion("3");
+    }
+
+    @Test
+    public void rejectsOverflowedManifestVersion() throws Exception {
+        assertRejectedVersion("9999999999999999999999999");
+    }
+
+    @Test
+    public void rejectsUnversionedManifest() throws Exception {
+        File dir = temporaryFolder.newFolder();
+        Files.writeString(new File(dir, ExportManifest.MANIFEST_FILE_NAME).toPath(),
+                "{\n  \"worldName\": \"old world\",\n  \"tiles\": {\n  }\n}\n");
+        assertThrows(IOException.class, () -> ExportManifest.load(dir));
+    }
+
+    private void assertRejectedVersion(String version) throws Exception {
+        File dir = temporaryFolder.newFolder();
+        Files.writeString(new File(dir, ExportManifest.MANIFEST_FILE_NAME).toPath(),
+                "{\n  \"schemaVersion\": " + version + ",\n  \"tiles\": {\n  }\n}\n");
+        assertThrows(IOException.class, () -> ExportManifest.load(dir));
+    }
 
     @Test
     public void testManifestSaveAndLoadRoundtrip() throws Exception {
@@ -21,6 +56,7 @@ public class ExportManifestTest {
 
             ExportManifest loaded = ExportManifest.load(tempDir);
             assertNotNull(loaded);
+            assertEquals(ExportManifest.CURRENT_SCHEMA_VERSION, loaded.getSchemaVersion());
             assertEquals("TestWorld", loaded.getWorldName());
             assertEquals("org.pepsoft.anvil.1.20", loaded.getPlatformId());
             assertEquals(3, loaded.getTileHashes().size());

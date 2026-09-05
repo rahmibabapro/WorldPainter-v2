@@ -11,6 +11,7 @@ import org.pepsoft.worldpainter.layers.FloodWithLava;
 import org.pepsoft.worldpainter.layers.Layer;
 import org.pepsoft.worldpainter.layers.NotPresent;
 import org.pepsoft.worldpainter.layers.NotPresentBlock;
+import org.pepsoft.worldpainter.layers.RiverSurfaceDetail;
 import org.pepsoft.worldpainter.selection.SelectionBlock;
 import org.pepsoft.worldpainter.selection.SelectionChunk;
 import org.pepsoft.worldpainter.vo.AttributeKeyVO;
@@ -127,7 +128,7 @@ public final class Constants {
      * selectable to them.
      */
     public static final Set<Layer> SYSTEM_LAYERS = ImmutableSet.of(SelectionChunk.INSTANCE, SelectionBlock.INSTANCE,
-            FloodWithLava.INSTANCE, NotPresent.INSTANCE, NotPresentBlock.INSTANCE);
+            FloodWithLava.INSTANCE, NotPresent.INSTANCE, NotPresentBlock.INSTANCE, RiverSurfaceDetail.INSTANCE);
 
     public static final String MESSAGE_KEY_MASTER_WARNING = "org.pepsoft.worldpainter.ImportHeightMapDialog.masterDimension";
 }

@@ -4,6 +4,18 @@
 
 // script.name= River Script -- by sijmen_v_b.
 
+// script.param.presetId.type=integer
+// script.param.presetId.displayName=Nehir hazır ayarı
+// script.param.presetId.description=0=eski ayarlar, 1=dere, 2=doğal, 3=geniş, 4=kanyon, 5=dağ. Genişlik tam kanal genişliğidir; iç hesap yarıçap kullanır.
+// script.param.presetId.default=0
+// script.param.presetId.optional=false
+
+// script.param.bankSmoothing.type=boolean
+// script.param.bankSmoothing.displayName=Nehir kıyılarını yumuşat
+// script.param.bankSmoothing.description=Hazır ayarlarda yalnız su altı yatak kesitini yumuşatır; kuru kıyı ve yamaçları değiştirmez.
+// script.param.bankSmoothing.default=true
+// script.param.bankSmoothing.optional=false
+
 // script.param.riverMode.type=integer
 // script.param.riverMode.description=0=Klasik, 1=Delta modu
 // script.param.riverMode.displayName=Nehir modu (0/1)
@@ -197,6 +209,7 @@ var startTime = d.getTime();
 initRandom(this);
 noise.seed(Math.random); // make this noise.seed(0); to make the noise consistent
 var dimension = app.dimension;
+if (dimension == null) throw new Error('Nehir oluşturmak için önce bir dünya açın.');
 var lookingAtTunnelLayer = false;
 var report = ""; //stores all the information to be displayed 
 var tunnelLayer = null
@@ -222,6 +235,7 @@ var runScript = true; //set to false to stop the script from running. used when 
 var startPositionLayer = "";
 var randomStartingPositions = 0;
 var riverMode = params['riverMode'];
+var riverPreset = getRealisticRiverPreset(params['presetId']);
 var riverLayoutPreset = params['riverLayoutPreset'];
 var modeRiverCount = params['modeRiverCount'];
 var manualStartCoords = params['manualStartCoords'];
@@ -263,6 +277,7 @@ var HashMap = Java.type('java.util.HashMap');
 var maskMap = new HashMap(); //stores [x,y,width_of_river]
 var newWaterMap = new HashMap();//stores [x,y,[new_height1,...]]
 var riverWaterCapMap = new HashMap();// pre-carve terrain height per generated river cell
+var riverPlannedWaterMap = new HashMap();// requested water surface before later repair passes
 var randomMap = new HashMap();// used to give the same random values each time.
 var waterfallMap = new HashMap();// stores [x,y,strength]
 var junctionBoostMap = new HashMap();// stores [x,y,strength] for natural confluence widening
@@ -288,6 +303,9 @@ function checkForAbort(forceCheck) {
 	interruptProbeCounter++;
 	if (!forceCheck && (interruptProbeCounter % 2048 != 0)) {
 		return;
+	}
+	if (typeof progress !== "undefined" && progress != null) {
+		progress.checkForCancel();
 	}
 	if (typeof wp !== "undefined") {
 		if (wp.interrupted) {
@@ -378,11 +396,18 @@ if (shallowGraniteClusterSize == null) {
 if (shallowGraniteSeed == null) {
 	shallowGraniteSeed = 1337;
 }
-shallowGraniteMaxDepth = Math.max(0.25, Number(shallowGraniteMaxDepth));
-shallowGraniteFloorCoverage = clampBetweenZeroAndOne(Number(shallowGraniteFloorCoverage));
-shallowGraniteBankCoverage = clampBetweenZeroAndOne(Number(shallowGraniteBankCoverage));
-shallowGraniteClusterSize = Math.max(1, Math.floor(Number(shallowGraniteClusterSize)));
-shallowGraniteSeed = Math.floor(Number(shallowGraniteSeed));
+shallowGraniteMaxDepth = riverNumber(shallowGraniteMaxDepth, 'Granit derinliği', 0.25, 512, false);
+shallowGraniteFloorCoverage = riverNumber(shallowGraniteFloorCoverage, 'Taban granit oranı', 0, 1, false);
+shallowGraniteBankCoverage = riverNumber(shallowGraniteBankCoverage, 'Kıyı granit oranı', 0, 1, false);
+shallowGraniteClusterSize = riverNumber(shallowGraniteClusterSize, 'Granit küme boyutu', 1, 4096, true);
+shallowGraniteSeed = riverNumber(shallowGraniteSeed, 'Granit seed', -2147483648, 2147483647, true);
+// Validate the incoming options before profile helpers normalise them. Otherwise
+// a malformed mode could silently become the legacy (deep carving) profile.
+riverMode = riverNumber(riverMode, 'Nehir modu', 0, 1, true);
+styleProfile = riverNumber(styleProfile, 'Görünüm profili', 0, 3, true);
+riverLayoutPreset = riverNumber(riverLayoutPreset, 'Yerleşim ayarı', 0, 1, true);
+modeRiverCount = riverNumber(modeRiverCount, 'Nehir sayısı', 1, 1000, true);
+deltaSeaLevel = riverNumber(deltaSeaLevel, 'Hedef su seviyesi', -32768, 32767, false);
 
 applyStyleProfile(styleProfile);
 applyRiverModeSettings();
@@ -506,8 +531,17 @@ for (var i = 0; i < arguments.length; i++)//loop trough all arguments
 }
 
 
+applyRealisticRiverPreset();
 if (runScript) {
+	riverMode = riverNumber(riverMode, 'Nehir modu', 0, 1, true);
+	styleProfile = riverNumber(styleProfile, 'Görünüm profili', 0, 3, true);
+	riverLayoutPreset = riverNumber(riverLayoutPreset, 'Yerleşim ayarı', 0, 1, true);
+	modeRiverCount = riverNumber(modeRiverCount, 'Nehir sayısı', 1, 1000, true);
+	deltaSeaLevel = riverNumber(deltaSeaLevel, 'Hedef su seviyesi', -32768, 32767, false);
+	MaxOrigins = riverNumber(MaxOrigins, 'Kaynak sınırı', 1, 10000, true);
+	dykeSize = riverNumber(dykeSize, 'Set boyutu', 0, 100, false);
 	var foundPaths = [];
+	var shallowSourcePositions = [];
 	var pathWidthScales = [];
 	var pathProfiles = [];
 	foundPathMaskData = [];
@@ -515,7 +549,8 @@ if (runScript) {
 	if (riverMode == 1) {
 		print("Delta modu aktif: Buyuk ana nehirler uretiliyor" + (disableBranching ? " (dallanma kapali)." : " ve ince kollar uretiliyor..."));
 		report += "Delta modu aktif.\n";
-		var network = generateDeltaNetwork(modeRiverCount, deltaSeaLevel);
+		var network = riverPreset != null ? { paths: [], widthScales: [], pathProfiles: [] }
+			: generateDeltaNetwork(modeRiverCount, deltaSeaLevel);
 		foundPaths = network.paths;
 		pathWidthScales = network.widthScales;
 		pathProfiles = network.pathProfiles == null ? [] : network.pathProfiles;
@@ -540,22 +575,24 @@ if (runScript) {
 
 			var minTileX = dimension.getLowestX()
 			var minTileY = dimension.getLowestY()
-			for (var tileX = 0; tileX < extent.getWidth(); tileX++) {
+			for (var tileX = 0; tileX < extent.getWidth() && (riverPreset == null || startPositions.length < 64); tileX++) {
 				checkForAbort(false);
-				for (var tileY = 0; tileY < extent.getHeight(); tileY++) {
+				for (var tileY = 0; tileY < extent.getHeight() && (riverPreset == null || startPositions.length < 64); tileY++) {
 					//print("haslayer:", dimension.getTile(tileX + minTileX, tileY + minTileY).containsOneOf(originLayer))
 					if (dimension.getTile(tileX + minTileX, tileY + minTileY) == null || !dimension.getTile(tileX + minTileX, tileY + minTileY).containsOneOf(originLayer)) {
 						continue;
 					}
-					for (var x = tileX * 128; x < (tileX + 1) * 128; x++) {
-						for (var y = tileY * 128; y < (tileY + 1) * 128; y++) {
-							if (originLayer.getDataSize().toString() == "BIT") {
+					for (var x = tileX * 128; x < (tileX + 1) * 128 && (riverPreset == null || startPositions.length < 64); x++) {
+						for (var y = tileY * 128; y < (tileY + 1) * 128 && (riverPreset == null || startPositions.length < 64); y++) {
+							if (originLayer.getDataSize().toString() == "BIT" || originLayer.getDataSize().toString() == "BIT_PER_CHUNK") {
 								if (dimension.getBitLayerValueAt(originLayer, x + minX, y + minY) && !avoidCondition(x + minX, y + minY)) {//add the start positions
-									startPositions.push([x + minX, y + minY]);
+									if (riverPreset != null) addNamedSource(startPositions, x + minX, y + minY);
+									else startPositions.push([x + minX, y + minY]);
 								}
 							} else {
 								if (dimension.getLayerValueAt(originLayer, x + minX, y + minY) > 0 && !avoidCondition(x + minX, y + minY)) {//add the start positions
-									startPositions.push([x + minX, y + minY]);
+										if (riverPreset != null) addNamedSource(startPositions, x + minX, y + minY);
+										else startPositions.push([x + minX, y + minY]);
 								}
 							}
 						}
@@ -583,7 +620,7 @@ if (runScript) {
 
 
 	var maxTries = 50;//how often to retry when starting position is not on land.
-	for (var i = 0; i < randomStartingPositions; i++) {
+	for (var i = 0; i < (riverPreset != null ? 0 : randomStartingPositions); i++) {
 		checkForAbort(false);
 		var tries = 0;
 		var randomX, randomY;
@@ -614,7 +651,9 @@ if (runScript) {
 	var startSeparationRadius = Math.max(32, Math.min(180, parseInt(Math.min(worldWidth, worldHeight) / Math.max(10, parseInt(Math.sqrt(Math.max(1, Math.min(startPositions.length, MaxOrigins)))) * 1.8))));
 	var riverNoMergeRadius = Math.max(5, Math.min(14, parseInt(endWidth * 0.7 + 2)));
 
-	if (manualStartsProvided) {
+	if (riverPreset != null) {
+		shallowSourcePositions = startPositions;
+	} else if (manualStartsProvided) {
 		var manualNetwork = generateManualDrainageNetwork(startPositions, deltaSeaLevel);
 		foundPaths = manualNetwork.paths;
 		pathWidthScales = manualNetwork.widthScales;
@@ -664,7 +703,7 @@ if (runScript) {
 
 	numberOfRivers = foundPaths.length
 
-	if (foundPaths.length > 0 && classicHydroModel == null) {
+	if (riverPreset == null && foundPaths.length > 0 && classicHydroModel == null) {
 		print("Building hydrology model for discharge-based river widths...");
 		classicHydroModel = buildHydrologyModel(deltaSeaLevel);
 	}
@@ -676,6 +715,11 @@ if (runScript) {
 	}
 
 
+	if (riverPreset != null) {
+		// Named presets plan from untouched terrain. The legacy gravity/slope,
+		// carving and fixup passes below must NEVER pre-dig their reference surface.
+		carveShallowNamedPaths(foundPaths, shallowSourcePositions, riverMode == 1, modeRiverCount);
+	} else {
 	//make sure the terrain only flows down.
 	if (onlyFlowDown) {
 		print("making sure rivers only flow down")
@@ -693,7 +737,7 @@ if (runScript) {
 				for (var i = path.length - 1; i >= 0; i--) {
 					var x = path[i][0];
 					var y = path[i][1];
-					if (x == null || y == null) {
+					if (x == null || y == null || !canEditLegacyRiverCell(dimension, x, y)) {
 						continue;
 					}
 
@@ -740,6 +784,8 @@ if (runScript) {
 		if (enableWaterfalls) {
 			blendWaterfallDepthOnPathData(path, pathProfile, pathMaskData);
 		}
+		// Apply limits after hydrology, junctions, rapids, pools and waterfalls.
+		boundRealisticPathWidths(pathMaskData, pathProfile);
 		buildPathWaterSurfaceProfile(path, pathMaskData, minWaterDepth);
 
 		for (var i = path.length - 1; i >= 1; i--) {
@@ -821,6 +867,7 @@ if (runScript) {
 		var arr = newWaterMap.get(key);
 		var x = arr[0];
 		var y = arr[1];
+		if (!canEditLegacyRiverCell(dimension, x, y)) continue;
 		var heightsArr = arr[2];
 		var dist = arr[3];// between 0 and 1 where 0 is the center and 1 is the edge of the river.
 		var widthArr = arr[4];
@@ -874,8 +921,14 @@ if (runScript) {
 				var groundCap = localGround - bankFreeboard;
 				newWaterLevel = Math.min(newWaterLevel, groundCap);
 				newWaterLevel = Math.max(newWaterLevel, minWaterDepth);
+				if (riverPreset != null) {
+					newWaterLevel = Math.floor(newWaterLevel);
+				}
 
 				dimension.setWaterLevelAt(x, y, newWaterLevel);
+				if (riverPreset != null) {
+					riverPlannedWaterMap.put(toCoordinate(x, y), newWaterLevel);
+				}
 			}
 			//set the terrain.
 			var factor = 0.0;
@@ -910,11 +963,14 @@ if (runScript) {
 				depth *= 1.0 + 0.05 * Math.max(0, overlapCount - 1) + confluence * 0.06;
 				bankAdjust.heightOffset = Math.min(0, bankAdjust.heightOffset);
 			}
+			depth = boundRealisticDepth(depth);
 			var guardRailScale = width > 12 ? 1.6 : 2.4;
 			var riverGuardRailsScale = guardRailScale * guardRailRelax * Math.max(0.18 + dykeSize //the minimum dyke size.
 				, Math.min(1.2, slope)); //the steepness of the terrain.
 
-			var bedHeight = referenceHeight - depth;
+			var presetSurface = riverPreset == null ? null : riverPlannedWaterMap.get(toCoordinate(x, y));
+			var carveReference = getRiverCarveReference(referenceHeight, presetSurface);
+			var bedHeight = carveReference - depth;
 			var newHeight;
 			if (dist <= innerLimit) {
 				newHeight = bedHeight;
@@ -938,6 +994,9 @@ if (runScript) {
 			}
 			newHeight = Math.max(newHeight, bedHeight - 0.25);
 			newHeight = Math.min(newHeight, localGround + (dist > 0.72 && overlapCount <= 1 && confluence <= 0 ? depth * 0.15 : 0));
+			if (riverPreset != null) {
+				newHeight = Math.max(newHeight, carveReference - riverPreset.maxDepth);
+			}
 			dimension.setHeightAt(x, y, newHeight);
 
 
@@ -1028,6 +1087,7 @@ if (runScript) {
 		var arr = newWaterMap.get(key);
 		var x = arr[0];
 		var y = arr[1];
+		if (!canEditLegacyRiverCell(dimension, x, y)) continue;
 		var dist = arr[3];// between 0 and 1 where 0 is the center and 1 is the edge of the river.
 		var minWaterDepth = arr[5];
 		var slope = arr[6];
@@ -1142,6 +1202,8 @@ if (runScript) {
 		for (var i = 0; i < path.length; i++) {
 			var x = path[i][0];
 			var y = path[i][1];
+			checkForAbort(false);
+			if (!canEditLegacyRiverCell(dimension, x, y)) continue;
 			if (parseInt(dimension.getHeightAt(x, y) - 0.5) >= (dimension.getWaterLevelAt(x, y) - 1)) {
 				//dimension.setBitLayerValueAt(maskLayer, x, y, true);
 				dimension.setHeightAt(x, y, dimension.getWaterLevelAt(x, y) - 1);
@@ -1152,11 +1214,12 @@ if (runScript) {
 	// The legacy generator may calculate a water surface far above a later valley.
 	// Re-anchor every generated water cell to its final carved bed before exporting.
 	stabiliseGeneratedRiverWater(dimension);
+	} // legacy carving only
 
 
 
 	print("\n\n=============  Report:  =============\n" + report);
-	if (shallowGraniteDetail) {
+	if (shallowGraniteDetail && riverPreset == null) {
 		print("Sığ yatak granite hücreleri: " + shallowGraniteCells
 			+ " (taban=" + shallowGraniteFloorCells + ", kıyı=" + shallowGraniteBankCells + ")");
 	}
@@ -1286,8 +1349,9 @@ function loadTerrainData(dimension, x, y, distance, minWaterDepth, slope, depthM
 	var useEllipse = tangentAngle != null && !isNaN(tangentAngle);
 	var cosA = useEllipse ? Math.cos(tangentAngle) : 1;
 	var sinA = useEllipse ? Math.sin(tangentAngle) : 0;
-	for (var i = -1 * distance; i < distance + 1; i++) {
-		for (var j = -1 * distance; j < distance + 1; j++)//loop trough all coordinates(blocks) of the map.
+	var sampleRadius = Math.ceil(distance);
+	for (var i = -sampleRadius; i <= sampleRadius; i++) {
+		for (var j = -sampleRadius; j <= sampleRadius; j++)// Integer world coordinates, including half-block radius presets.
 		{
 			if (x + i > minX && x + i < worldWidth + minX && y + j > minY && y + j < worldHeight + minY) {
 				var distNorm;
@@ -1314,6 +1378,10 @@ function loadTerrainData(dimension, x, y, distance, minWaterDepth, slope, depthM
 
 // updates maskMap to include a [x,y,size] array where if the coordinate is already exists it makes size the maximum of the two.
 function setMaskMaxSize(x, y, size, minWaterDepth, slope, depthMultiplier, waterfallStrength, tangentAngle, pathIndex, pointIndex) {
+	// Final guard also covers connectors, outlet extensions and sealing passes.
+	if (riverPreset != null) {
+		size = Math.max(1, Math.min(size, (riverPreset.endWidth - 1) / 2));
+	}
 	key = toCoordinate(x, y);
 	current = maskMap.get(key);
 	if (waterfallStrength == null) {
@@ -1477,8 +1545,21 @@ function getIntermediatePositions(x, y) {
 }
 
 //function that returns true if the river may not cross this point.
+function canEditLegacyRiverCell(dim, x, y) {
+	if (x == null || y == null || !isFinite(x) || !isFinite(y)
+			|| x < -2147483584 || x > 2147483583 || y < -2147483584 || y > 2147483583) return false;
+	if (!dim.isTilePresent(x >> 7, y >> 7) || !isFinite(dim.getHeightAt(x, y))) return false;
+	var layers = org.pepsoft.worldpainter.layers;
+	var guards = [layers.ReadOnly.INSTANCE, layers.NotPresent.INSTANCE, layers.NotPresentBlock.INSTANCE,
+		layers.Void.INSTANCE, layers.FloodWithLava.INSTANCE, layers.River.INSTANCE];
+	for (var i = 0; i < guards.length; i++) if (dim.getBitLayerValueAt(guards[i], x, y)) return false;
+	return true;
+}
+
 function avoidCondition(x, y) {
-	if (isNearWorldBoundary(x, y, riverBoundaryMargin)) {
+	if (riverPreset == null && !canEditLegacyRiverCell(dimension, x, y)) return true;
+	var margin = riverPreset != null ? Math.ceil(riverPreset.endWidth / 2) + 2 : riverBoundaryMargin;
+	if (isNearWorldBoundary(x, y, margin)) {
 		return true;
 	}
 	return avoidLayerCondition(x, y);
@@ -1488,7 +1569,7 @@ function avoidLayerCondition(x, y) {
 	if (avoidLayer == null) {
 		return false;
 	}
-	if (avoidLayer.getDataSize().toString() == "BIT") {
+	if (avoidLayer.getDataSize().toString() == "BIT" || avoidLayer.getDataSize().toString() == "BIT_PER_CHUNK") {
 		if (dimension.getBitLayerValueAt(avoidLayer, x, y)) {//add the start positions
 			return true;
 		}
@@ -1746,6 +1827,7 @@ function stabiliseGeneratedRiverWater(dimension) {
 		var arr = newWaterMap.get(key);
 		var x = arr[0];
 		var y = arr[1];
+		if (!canEditLegacyRiverCell(dimension, x, y)) continue;
 		var widthArr = arr[4];
 		var width = 1;
 		if (widthArr != null && widthArr.length > 0) {
@@ -1762,6 +1844,10 @@ function stabiliseGeneratedRiverWater(dimension) {
 			var originalSurfaceCap = riverWaterCapMap.get(toCoordinate(x, y));
 			var waterSurface = Math.max(Math.floor(bedHeight) + 1,
 				originalSurfaceCap != null ? originalSurfaceCap : Math.floor(bedHeight));
+			if (riverPreset != null) {
+				var plannedWater = riverPlannedWaterMap.get(toCoordinate(x, y));
+				waterSurface = boundedRiverWaterLevel(bedHeight, plannedWater == null ? bedHeight : plannedWater, originalSurfaceCap, riverPreset.maxDepth);
+			}
 			dimension.setWaterLevelAt(x, y, waterSurface);
 			groundedWaterCells++;
 		} else if (dimension.getWaterLevelAt(x, y) > bedHeight) {
@@ -1783,6 +1869,7 @@ function smoothRiverBedCenter(dimension) {
 	];
 	var updates = new HashMap();
 	for (key in newWaterMap) {
+		checkForAbort(false);
 		var arr = newWaterMap.get(key);
 		var x = arr[0];
 		var y = arr[1];
@@ -1800,6 +1887,7 @@ function smoothRiverBedCenter(dimension) {
 			if (nx - minX < 0 || nx - minX >= worldWidth || ny - minY < 0 || ny - minY >= worldHeight) {
 				continue;
 			}
+			if (!canEditLegacyRiverCell(dimension, nx, ny)) continue;
 			sum += dimension.getHeightAt(nx, ny);
 			countLocal++;
 		}
@@ -1814,6 +1902,8 @@ function smoothRiverBedCenter(dimension) {
 	var changed = 0;
 	for (updateKey in updates) {
 		var update = updates.get(updateKey);
+		checkForAbort(false);
+		if (!canEditLegacyRiverCell(dimension, update[0], update[1])) continue;
 		dimension.setHeightAt(update[0], update[1], update[2]);
 		changed++;
 	}
@@ -1838,6 +1928,7 @@ function smoothRiverBanks(maxWallHeight, iterations) {
 	for (var pass = 0; pass < iterations; pass++) {
 		var updates = new HashMap();
 		for (key in newWaterMap) {
+			checkForAbort(false);
 			var arr = newWaterMap.get(key);
 			var x = arr[0];
 			var y = arr[1];
@@ -1863,6 +1954,7 @@ function smoothRiverBanks(maxWallHeight, iterations) {
 				if (nx - minX < 0 || nx - minX >= worldWidth || ny - minY < 0 || ny - minY >= worldHeight) {
 					continue;
 				}
+				if (!canEditLegacyRiverCell(dimension, nx, ny)) continue;
 				sum += dimension.getHeightAt(nx, ny);
 				countLocal++;
 			}
@@ -1885,6 +1977,8 @@ function smoothRiverBanks(maxWallHeight, iterations) {
 		var changed = 0;
 		for (updateKey in updates) {
 			var update = updates.get(updateKey);
+			checkForAbort(false);
+			if (!canEditLegacyRiverCell(dimension, update[0], update[1])) continue;
 			dimension.setHeightAt(update[0], update[1], update[2]);
 			changed++;
 		}
@@ -1953,6 +2047,258 @@ function applyStyleProfile(profile) {
 	}
 }
 
+// Shared semantic contract with RiverPreset: FULL corridor widths, not radii.
+// Legacy direct-script users retain their settings when presetId is zero.
+function riverNumber(value, label, minimum, maximum, integer) {
+    var number = Number(value);
+    if (value == null || !isFinite(number) || number < minimum || number > maximum
+            || (integer && Math.floor(number) !== number)) {
+        throw new Error(label + ': geçerli ' + (integer ? 'tam ' : '') + 'sayı ' + minimum + ' ile ' + maximum + ' arasında olmalı.');
+    }
+    return number;
+}
+
+function getRealisticRiverPreset(id) {
+	var definitions = [null,
+		{ startWidth: 3, endWidth: 6, maxDepth: 0.85 },
+		{ startWidth: 5, endWidth: 12, maxDepth: 1.10 },
+		{ startWidth: 8, endWidth: 20, maxDepth: 1.40 },
+		{ startWidth: 4, endWidth: 10, maxDepth: 2.0 },
+		{ startWidth: 3, endWidth: 8, maxDepth: 1.0 }];
+    var value = id == null || id === '' ? 0 : Number(id);
+    if (!isFinite(value) || Math.floor(value) !== value || value < 0 || value >= definitions.length) {
+        throw new Error('Geçersiz nehir hazır ayarı; 0 ile 5 arasında bir değer seçin.');
+    }
+    return definitions[value];
+}
+
+function carveShallowNamedPaths(paths, sourcePositions, automatic, requestedCount) {
+	function coordinate(value) {
+		var number = Number(value);
+        if (value == null || (typeof value === 'string' && value.replace(/\s/g, '') === '')
+                || !isFinite(number) || number < -2147483584 || number > 2147483583) {
+			throw new Error('Geçersiz nehir koordinatı: ' + value);
+		}
+		return Math.round(number);
+	}
+	if (!isFinite(Number(shallowGraniteSeed))) throw new Error('Nehir seed değeri sonlu bir sayı olmalı.');
+	paths = paths || [];
+	sourcePositions = sourcePositions || [];
+	if (paths.length > 64 || sourcePositions.length > 1024) throw new Error('Çok fazla nehir kaynağı veya rota seçildi.');
+	var Carver = Java.type('org.pepsoft.worldpainter.tools.scripts.ShallowRiverCarver');
+	var effectiveEndWidth = riverPreset.endWidth;
+	var plan = new Carver(dimension, riverPreset.startWidth, riverPreset.endWidth, riverPreset.maxDepth,
+		bankSmoothing, shallowGraniteDetail, shallowGraniteSeed, typeof progress === 'undefined' ? null : progress);
+	// Named presets fit a shallow wet channel into the terrain. Never grade or
+	// fill a broad shoulder to force an unsuitable route through a hillside.
+	plan.enableTerrainPreservation();
+	var Router = Java.type('org.pepsoft.worldpainter.tools.scripts.ShallowRiverRouter');
+	var namedAvoid = createNamedAvoidPredicate();
+	var router = new Router(dimension, plan, riverPreset.startWidth, riverPreset.endWidth, riverPreset.maxDepth,
+		bankSmoothing, shallowGraniteSeed, typeof progress === 'undefined' ? null : progress, namedAvoid);
+	if (automatic) router.enableMountainCourseSelection();
+	var failedSources = [];
+	var requestedPaths = 0, sourceLimitReached = false;
+	paths = paths || [];
+	sourcePositions = sourcePositions || [];
+	for (var p = 0; p < paths.length; p++) {
+		checkForAbort(false);
+		if (paths[p] == null) continue;
+		if (paths[p].length > 65536) throw new Error('Nehir yolu 65536 nokta sınırını aşıyor.');
+		var xs = [], ys = [];
+		// Named route producers normalise to outlet first (including hydro traces);
+		// the shared planner takes source first. No height heuristic on flat paths.
+		for (var i = paths[p].length - 1; i >= 0; i--) {
+			checkForAbort(false);
+			if (paths[p][i] != null && paths[p][i][0] != null) {
+				xs.push(coordinate(paths[p][i][0])); ys.push(coordinate(paths[p][i][1]));
+			}
+		}
+		if (xs.length < 2) continue;
+		if (!plan.addPath(Java.to(xs, 'int[]'), Java.to(ys, 'int[]'))) {
+			print('Araziyi bozmayan alternatif rota aranıyor: ' + plan.getLastRejection());
+			failedSources.push([xs[0], ys[0]]);
+		}
+	}
+	if (automatic) {
+		var count = requestedCount == null ? 1 : Number(requestedCount);
+		if (!isFinite(count) || Math.floor(count) !== count || count < 1) throw new Error('Nehir sayısı pozitif tam sayı olmalı.');
+		var wanted = Math.min(12, count);
+		requestedPaths = wanted;
+		function runAutomaticRounds() {
+			print('Havza tabanlı nehir araması: akış yönleri ve uzun vadi hatları karşılaştırılıyor...');
+			for (var searchRound = 1; searchRound <= 6 && plan.getAcceptedPaths() < wanted; searchRound++) {
+				if (searchRound > 1) {
+					if (!router.canContinueAutomaticSearch()) break;
+					print('Kapsamlı nehir araması: ' + searchRound + '/6. tur; yeni kaynak ve çıkış adayları deneniyor...');
+				}
+				router.findAutomatic(wanted - plan.getAcceptedPaths());
+			}
+		}
+		runAutomaticRounds();
+		// Some rugged worlds contain a safe shallow corridor, but not enough
+		// untouched cross-section for the preset's widest mouth. Keep every
+		// cut/fill/protection check and retry with a still multi-block, narrower
+		// full width. This changes only the proposed wet bed, never the terrain
+		// around it, and is attempted only when the first plan found nothing.
+		if (plan.getAcceptedPaths() == 0 && paths.length == 0 && riverPreset.endWidth > riverPreset.startWidth) {
+			var fallbackWidths = [Math.max(riverPreset.startWidth, Math.round(riverPreset.endWidth * 2 / 3)), riverPreset.startWidth];
+			var previousWidth = riverPreset.endWidth;
+			for (var fw = 0; fw < fallbackWidths.length && plan.getAcceptedPaths() == 0; fw++) {
+				var fallbackWidth = fallbackWidths[fw];
+				if (fallbackWidth >= previousWidth) continue;
+				previousWidth = fallbackWidth;
+				effectiveEndWidth = fallbackWidth;
+				print('Araziyi bozmayan uyarlamalı arama: tam bitiş genişliği ' + fallbackWidth
+					+ ' blok; kazı, dolgu ve koruma sınırları aynen korunuyor...');
+				plan = new Carver(dimension, riverPreset.startWidth, fallbackWidth, riverPreset.maxDepth,
+					bankSmoothing, shallowGraniteDetail, shallowGraniteSeed, typeof progress === 'undefined' ? null : progress);
+				plan.enableTerrainPreservation();
+				router = new Router(dimension, plan, riverPreset.startWidth, fallbackWidth, riverPreset.maxDepth,
+					bankSmoothing, shallowGraniteSeed, typeof progress === 'undefined' ? null : progress, namedAvoid);
+				router.enableMountainCourseSelection();
+				runAutomaticRounds();
+			}
+		}
+	} else {
+		var seen = {};
+		var seeds = sourcePositions.concat(failedSources);
+		var uniqueSeeds = [];
+		for (var s = 0; s < seeds.length; s++) {
+			checkForAbort(false);
+			if (!seeds[s] || seeds[s][0] == null || seeds[s][1] == null) continue;
+			var sx = coordinate(seeds[s][0]), sy = coordinate(seeds[s][1]);
+			var key = sx + ',' + sy;
+			if (seen[key]) continue;
+			seen[key] = true;
+			uniqueSeeds.push([sx, sy]);
+		}
+		requestedPaths = plan.getAcceptedPaths() + uniqueSeeds.length;
+		sourceLimitReached = uniqueSeeds.length > 64;
+		for (var s = 0; s < Math.min(uniqueSeeds.length, 64); s++) {
+			checkForAbort(true);
+			var sx = uniqueSeeds[s][0], sy = uniqueSeeds[s][1], key = sx + ',' + sy;
+			print('Kaynak için alternatif vadi/çıkış aranıyor: ' + key);
+			router.findFromSource(sx, sy);
+		}
+	}
+	var routeSummary = router.getSummary();
+	var searchLimited = router.isSearchLimited() || sourceLimitReached;
+	var failureReason = router.getFailureReason();
+	print(routeSummary);
+	if (sourceLimitReached) print('Kaynak sınırı: ' + requestedPaths + ' farklı kaynaktan en fazla 64 tanesi denendi; diğerleri değiştirilmedi.');
+	if (plan.getAcceptedPaths() == 0) {
+		numberOfRivers = 0;
+		var explanation = !automatic && sourcePositions.length == 0 && failedSources.length == 0
+			? 'Geçerli boyanmış kaynak bulunamadı. Cyan kaynak noktası koyun veya Otomatik modunu seçin.'
+			: searchLimited
+				? 'Arama sınırına ulaşıldı. Henüz uygun rota bulunamadı; bu, dünyada nehir yapılamayacağı anlamına gelmez.'
+				: 'Taranan adaylarda bu hazır ayarla araziyi koruyan uygun sığ kanal bulunamadı.';
+		// A zero-result run is not success. Throw so the normal script window
+		// displays the actionable diagnosis instead of "Done! generated 0".
+		throw new Error(explanation + '\nDünya değiştirilmedi. İstenen: ' + requestedPaths + ', oluşturulan: 0.'
+			+ (failureReason ? '\nNeden: ' + failureReason : '')
+			+ '\n' + routeSummary);
+	}
+	// Joining paths may widen the final mouth beyond an individual route's
+	// probe. Validate that actual shared footprint using the very same mask.
+	if (!plan.isFootprintAllowed(namedAvoid)) {
+		throw new Error('Son nehir yatağı korunan veya kaçınılacak bir alana taşıyor. Dünya değiştirilmedi.');
+	}
+	var result = plan.apply();
+	numberOfRivers = result.paths();
+	shallowGraniteCells = result.graniteCells();
+	print('Sığ nehir: ' + result.paths() + ' rota, ' + result.changedCells() + ' hücre; azami toplam kazı '
+		+ result.maximumCut().toFixed(2) + ' blok; azami dolgu ' + result.maximumFill().toFixed(2)
+		+ ' blok (' + result.raisedCells() + ' hücre); granit ' + result.graniteCells() + ' hücre.');
+	print('Nehir exportu — mod: ' + (automatic ? 'Otomatik' : 'Kaynak')
+		+ '; uygulanan tam genişlik: ' + riverPreset.startWidth + '–' + effectiveEndWidth + ' blok'
+		+ '; yerel 2×2×2 seçeneği: ' + (shallowGraniteDetail ? 'açık' : 'kapalı')
+		+ '; granit hücresi: ' + result.graniteCells()
+		+ '; dünya geneli: ' + dimension.getSurfaceSmoothing() + ' (değiştirilmedi).');
+	if (shallowGraniteDetail) print('Yerel slab/merdiven yalnız yeni işaretli, ıslak granitte uygun geometride uygulanır; düz yüzey, dik uçurum ve gerekli taşıyıcı bloklar tam kalır.');
+	if (result.paths() < requestedPaths) {
+		print('KISMİ SONUÇ — İstenen: ' + requestedPaths + ', oluşturulan: ' + result.paths()
+			+ ', oluşturulamayan: ' + (requestedPaths - result.paths()) + '. Yalnız kabul edilen rotalar uygulandı.');
+		print(searchLimited
+			? 'Arama sınırı nedeniyle tüm seçenekler denenmedi; kalan nehirlerin imkânsız olduğu sonucu çıkarılamaz.'
+			: 'Kalan adaylar seçilen sığ yatak ve arazi koruma koşullarını karşılamadı.');
+		if (failureReason) print('Neden: ' + failureReason);
+	} else {
+		print('Nehir sonucu — İstenen: ' + requestedPaths + ', oluşturulan: ' + result.paths() + '.');
+	}
+	return result;
+}
+
+function createNamedAvoidPredicate() {
+	var layer = typeof avoidLayer === 'undefined' ? null : avoidLayer;
+	if (layer == null) return null;
+	var size = String(layer.getDataSize());
+	var bit = size === 'BIT' || size === 'BIT_PER_CHUNK';
+	if (!bit && size !== 'NIBBLE' && size !== 'BYTE') throw new Error('Seçilen kaçınma katmanı boyanabilir bir maske değil.');
+	var BiPredicate = Java.type('java.util.function.BiPredicate');
+	return new BiPredicate({test: function(x, y) {
+		return bit ? !!dimension.getBitLayerValueAt(layer, Number(x), Number(y))
+			: dimension.getLayerValueAt(layer, Number(x), Number(y)) > 0;
+	}});
+}
+
+function applyRealisticRiverPreset() {
+	// This newly exposed control also works for direct-script legacy profiles.
+	bankSmoothing = params['bankSmoothing'] == null ? true : params['bankSmoothing'];
+	if (riverPreset == null) {
+		return;
+	}
+	startWidth = (riverPreset.startWidth - 1) / 2;
+	endWidth = (riverPreset.endWidth - 1) / 2;
+	riverDepth = Math.max(0.05, (riverPreset.maxDepth - 1.2) / Math.max(1, endWidth));
+	enableFloodplain = false; // The legacy shelf adds new water masks, not a dry floodplain.
+	riverBraiding = false;
+	maxBankWallHeight = 1.5;
+	bankSmoothingIterations = 2;
+	dykeSize = 0;
+	print("Nehir hazır ayarı: tam genişlik " + riverPreset.startWidth + "–" + riverPreset.endWidth
+		+ " blok, azami su derinliği " + riverPreset.maxDepth + " blok.");
+}
+
+function realisticProfileWidths(profile) {
+	var type = profile != null && typeof profile == "object" ? profile.type : profile;
+	var scale = type == "feeder" ? 0.30 : (type == "small" ? 0.5 : (type == "medium" ? 0.75 : 1));
+	return { start: Math.max(1, (riverPreset.startWidth * scale - 1) / 2),
+		end: Math.max(1, (riverPreset.endWidth * scale - 1) / 2) };
+}
+
+function boundRealisticPathWidths(data, profile) {
+	if (riverPreset == null || data == null) {
+		return;
+	}
+	var range = realisticProfileWidths(profile);
+	for (var i = 0; i < data.length; i++) {
+		if (data[i] != null) {
+			data[i].width = Math.max(1, Math.min(data[i].width, range.end));
+		}
+	}
+}
+
+function boundRealisticDepth(depth) {
+	return riverPreset == null ? depth : Math.min(depth, riverPreset.maxDepth);
+}
+
+function getRiverCarveReference(referenceHeight, plannedWater) {
+	// Presets specify WATER depth. Subtracting from higher original ground can
+	// round a shallow bed up to water level, leaving a dry channel on export.
+	return riverPreset == null || plannedWater == null ? referenceHeight
+		: Math.min(referenceHeight, Math.floor(plannedWater));
+}
+
+function boundedRiverWaterLevel(bed, plannedWater, originalCap, maximumDepth) {
+	// Do not refill to a high bank's original ground: preserve the planned surface.
+	var cap = originalCap == null ? plannedWater : originalCap;
+	// If the planned surface cannot cover the bed, leave it dry, never lift water.
+	return Math.max(Math.floor(bed),
+		Math.floor(Math.min(plannedWater, cap, bed + maximumDepth)));
+}
+
 function getBankFreeboard(width, slope) {
 	var freeboard = width > 14 ? 1.5 : 1.0;
 	if (slope > 0.35) {
@@ -2005,6 +2351,10 @@ function getPathWidthAt(profile, pathScale, length, i, pathLength, slope, juncti
 	var t = (length - (i - (pathLength - length))) / length;
 	t = clampBetweenZeroAndOne(t);
 	var width = widths.start + t * (widths.end - widths.start);
+	if (riverPreset != null) {
+		// Steep reaches contract; the former +2*slope^2 made mountains swell into lakes.
+		return Math.max(1, width * (1 - 0.20 * clampBetweenZeroAndOne(slope)));
+	}
 	if (profile != null && profile.type == "main") {
 		width += 2 * (slope * slope);
 		width *= (1 + 0.22 * junctionBoost);
@@ -2055,6 +2405,9 @@ function getManualLocalFlowAt(profile, index, pathLength) {
 }
 
 function getManualFlowWidthRange(flowCount) {
+	if (riverPreset != null) {
+		return realisticProfileWidths("main");
+	}
 	flowCount = Math.max(1, flowCount);
 	var end = 4 + Math.min(34, Math.pow(flowCount, 0.78) * 5.2);
 	var start = flowCount < 1.5 ? 1 : Math.min(8, 1 + Math.pow(flowCount - 1, 0.65) * 3.2);
@@ -2062,6 +2415,11 @@ function getManualFlowWidthRange(flowCount) {
 }
 
 function getManualFlowWidthFloor(flowCount) {
+	if (riverPreset != null) {
+		var range = realisticProfileWidths("main");
+		return range.start + (range.end - range.start) * 0.5
+			* clampBetweenZeroAndOne(Math.log(Math.max(1, flowCount)) / Math.log(8));
+	}
 	if (flowCount < 1.5) {
 		return 1;
 	}
@@ -2069,6 +2427,9 @@ function getManualFlowWidthFloor(flowCount) {
 }
 
 function getProfileWidthRange(type) {
+	if (riverPreset != null) {
+		return realisticProfileWidths(type);
+	}
 	if (type != null && typeof type == "object") {
 		if (type.customStartWidth != null && type.customEndWidth != null) {
 			return { start: type.customStartWidth, end: type.customEndWidth };
@@ -2143,15 +2504,16 @@ function limitAllRiverPathSlopes(paths) {
 }
 
 function limitRiverPathSlopeChange(path) {
-	if (path == null || path[0][0] == null || path[0][1] == null) {
+	if (path == null || path.length < 2 || path[0] == null || path[0][0] == null || path[0][1] == null) {
 		return;
 	}
 	var previousHeight2 = dimension.getHeightAt(path[0][0], path[0][1]);
 	var previousHeight1 = dimension.getHeightAt(path[1][0], path[1][1]);
 	for (var i = 2; i < path.length; i++) {
+		checkForAbort(false);
 		var x = path[i][0];
 		var y = path[i][1];
-		if (x == null || y == null) {
+		if (x == null || y == null || !canEditLegacyRiverCell(dimension, x, y)) {
 			continue;
 		}
 
@@ -2424,7 +2786,7 @@ function buildPathMaskData(path, pathProfile, pathScale, length, hydro) {
 	var manualWidthFloor = 1;
 	var blend = riverMode == 1 ? dischargeWidthBlendDelta : dischargeWidthBlendClassic;
 	var downstreamFloor = getProfileWidthRange(pathProfile).start;
-	if (pathProfile != null && pathProfile.type == "main") {
+	if (riverPreset == null && pathProfile != null && pathProfile.type == "main") {
 		downstreamFloor = Math.max(downstreamFloor, Math.max(6, parseInt(endWidth * 0.35)));
 	}
 	for (var i = path.length - 1; i >= 0; i--) {
@@ -2506,7 +2868,7 @@ function enforceClassicDownstreamWidthFloor(pathMaskData, pathProfile) {
 		return;
 	}
 	var floor = getProfileWidthRange(pathProfile).start;
-	if (pathProfile.type == "main") {
+	if (riverPreset == null && pathProfile.type == "main") {
 		floor = Math.max(floor, Math.max(6, parseInt(endWidth * 0.35)));
 	}
 	for (var i = pathMaskData.length - 1; i >= 0; i--) {
@@ -2590,6 +2952,9 @@ function blendWaterfallDepthOnPathData(path, pathProfile, pathMaskData) {
 }
 
 function getMinimumSealWidth(type, width) {
+	if (riverPreset != null) {
+		return Math.max(1, Math.min(width, realisticProfileWidths(type).end));
+	}
 	width = Math.max(1, parseInt(width));
 	if (type == "feeder" || type == "small") {
 		return Math.max(2, width);
@@ -2943,6 +3308,9 @@ function expandWaterAlongPathWidth(paths, pathMaskDataList) {
 			var profileWater = pathWaterSurfaceMap.get(toCoordinate(x, y));
 			var centerWater = profileWater != null ? Math.max(minWaterDepth, profileWater) : Math.max(minWaterDepth, dimension.getWaterLevelAt(x, y));
 			var radius = Math.max(2, parseInt(width * 0.58));
+			if (riverPreset != null) {
+				radius = Math.max(1, Math.floor(Math.min(radius, maskData[i].width)));
+			}
 			for (var dx = -radius; dx <= radius; dx++) {
 				for (var dy = -radius; dy <= radius; dy++) {
 					if (dx * dx + dy * dy > radius * radius) {
@@ -2954,6 +3322,9 @@ function expandWaterAlongPathWidth(paths, pathMaskDataList) {
 						continue;
 					}
 					var blockGround = dimension.getHeightAt(wx, wy);
+					if (riverPreset != null && newWaterMap.get(toCoordinate(wx, wy)) == null) {
+						continue; // A narrow preset may not flood an uncarved neighbouring bank.
+					}
 					if (blockGround <= centerWater) {
 						var current = dimension.getWaterLevelAt(wx, wy);
 						if (centerWater > current) {
@@ -3109,6 +3480,9 @@ function detectClassicConfluences(paths, pathProfiles) {
 }
 
 function stitchNearbyRiverChannels(paths, pathProfiles) {
+	if (riverPreset != null && disableBranching) {
+		return;
+	}
 	if (paths == null || paths.length < 2) {
 		return;
 	}
@@ -3216,7 +3590,7 @@ function applyRiverModeSettings() {
 		modeRiverCount = 6;
 	}
 	startPositionLayer = "";
-	randomStartingPositions = Math.max(5, modeRiverCount);
+	randomStartingPositions = riverPreset == null ? Math.max(5, modeRiverCount) : Math.min(12, modeRiverCount);
 	if (hasManualDrainageInput()) {
 		riverMode = 0;
 		startPositionLayer = "";
@@ -3228,11 +3602,17 @@ function applyRiverModeSettings() {
 		if (styleProfile == 0) {
 			applyStyleProfile(3);
 		}
-		modeRiverCount = Math.min(Math.max(modeRiverCount, 4), 7);
-		startWidth = Math.max(startWidth, 8);
-		endWidth = Math.max(endWidth, 30);
-		enableWaterfalls = true;
-		maxWaterfallsPerRiver = Math.max(maxWaterfallsPerRiver, 3);
+		if (riverPreset == null) {
+			modeRiverCount = Math.min(Math.max(modeRiverCount, 4), 7);
+			startWidth = Math.max(startWidth, 8);
+			endWidth = Math.max(endWidth, 30);
+			enableWaterfalls = true;
+			maxWaterfallsPerRiver = Math.max(maxWaterfallsPerRiver, 3);
+		} else {
+			modeRiverCount = Math.max(1, Math.min(12, modeRiverCount));
+			// Named presets use terrain hydrology, never a fixed fantasy map layout.
+			riverLayoutPreset = 0;
+		}
 	}
 }
 
@@ -3270,19 +3650,22 @@ function parseManualStartCoords(text) {
 	if (text == null) {
 		return result;
 	}
+	if (String(text).length > 131072) throw new Error('Elle koordinat listesi çok uzun; daha az kaynak seçin.');
 	var parts = ("" + text).replace(/\r/g, "\n").split(/[;\n]+/);
 	for (var i = 0; i < parts.length; i++) {
 		var part = parts[i];
 		if (part == null || part.replace(/\s/g, "").length == 0) {
 			continue;
 		}
-		var match = part.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+		var match = part.match(/^\s*([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)\s*$/);
 		if (match == null) {
-			print("Elle koordinat okunamadi: " + part);
-			continue;
+			throw new Error('Elle koordinat okunamadı: ' + part + '. x,y biçimini kullanın.');
 		}
 		var x = Math.round(parseFloat(match[1]));
 		var y = Math.round(parseFloat(match[2]));
+		if (!isFinite(x) || !isFinite(y) || x < -2147483584 || x > 2147483583 || y < -2147483584 || y > 2147483583) {
+			throw new Error('Elle koordinat güvenli dünya sınırını aşıyor.');
+		}
 		if (x - minX < 0 || x - minX >= worldWidth || y - minY < 0 || y - minY >= worldHeight) {
 			print("Elle koordinat harita disinda: " + x + "," + y);
 			continue;
@@ -3291,6 +3674,7 @@ function parseManualStartCoords(text) {
 			print("Elle koordinat avoid/sinir alaninda: " + x + "," + y);
 			continue;
 		}
+		if (result.length >= 1024) throw new Error('Elle kaynak sayısı 1024 sınırını aşıyor.');
 		result.push([x, y]);
 	}
 	return result;
@@ -3299,6 +3683,23 @@ function parseManualStartCoords(text) {
 function findManualSourceTerrainPositions(sourceTerrain) {
 	var result = [];
 	if (sourceTerrain == null) {
+		return result;
+	}
+	if (riverPreset != null) {
+		var tiles = Java.from(dimension.getTiles().toArray());
+		tiles.sort(function(a,b) { return a.getX() - b.getX() || a.getY() - b.getY(); });
+		for (var ti = 0; ti < tiles.length && result.length < 64; ti++) {
+			checkForAbort(true);
+			var tile = tiles[ti];
+			if (!tile.getAllTerrains().contains(sourceTerrain)) continue;
+			for (var tx = 0; tx < 128 && result.length < 64; tx++) {
+				checkForAbort(false);
+				for (var ty = 0; ty < 128 && result.length < 64; ty++) {
+					var wx = tile.getX() * 128 + tx, wy = tile.getY() * 128 + ty;
+					if (tile.getTerrain(tx,ty).equals(sourceTerrain) && !avoidCondition(wx,wy)) addNamedSource(result,wx,wy);
+				}
+			}
+		}
 		return result;
 	}
 	var lastProgress = -1;
@@ -3317,6 +3718,16 @@ function findManualSourceTerrainPositions(sourceTerrain) {
 		}
 	}
 	return result;
+}
+
+function addNamedSource(result, x, y) {
+	if (result.length >= 64) return;
+	// One painted patch represents a source, not one river per painted pixel.
+	for (var i = 0; i < result.length; i++) {
+		var dx = x - result[i][0], dy = y - result[i][1];
+		if (dx*dx + dy*dy < 24*24) return;
+	}
+	result.push([x,y]);
 }
 
 function generateManualDrainageNetwork(startPositions, targetSeaLevel) {
@@ -5139,6 +5550,12 @@ function traceHydroPathToOutlet(hydro, startIdx, targetSeaLevel, blockedMap, max
 	if (path.length < 2 || !reachedOutlet) {
 		return [];
 	}
+	if (riverPreset != null) {
+		// Hydrology walks SOURCE -> OUTLET, unlike getTrail's predecessor walk.
+		// Normalise at the producer boundary so densify/stylize and the named
+		// carver all use the same outlet-first contract. Legacy remains unchanged.
+		path.reverse();
+	}
 	return densifyPath(path, Math.max(6, parseInt(hydro.cellSize / 2)));
 }
 
@@ -5171,6 +5588,10 @@ function traceHydroPathToJoinPoint(hydro, startIdx, targetX, targetY, maxSteps) 
 
 	if (path.length < 2 || !reachedJoin) {
 		return [];
+	}
+	if (riverPreset != null) {
+		// Same explicit producer contract as traceHydroPathToOutlet above.
+		path.reverse();
 	}
 	return densifyPath(path, Math.max(6, parseInt(hydro.cellSize / 2)));
 }
@@ -5623,6 +6044,10 @@ function clampBetweenZeroAndOne(x) {
 }
 
 function fixupCenterSpike(dimension, x, y) {
+	checkForAbort(false);
+	if (!canEditLegacyRiverCell(dimension, x, y)
+			|| !canEditLegacyRiverCell(dimension, x - 1, y) || !canEditLegacyRiverCell(dimension, x + 1, y)
+			|| !canEditLegacyRiverCell(dimension, x, y - 1) || !canEditLegacyRiverCell(dimension, x, y + 1)) return;
 	var height = parseInt(dimension.getHeightAt(x, y) - 0.5);
 	var left = parseInt(dimension.getHeightAt(x - 1, y) - 0.5);
 	var right = parseInt(dimension.getHeightAt(x + 1, y) - 0.5);
@@ -5669,6 +6094,10 @@ function smoothConfluenceHeights(dimension) {
 
 // this was taken from fixify
 function fixupRelaxed(dimension, x, y) {
+	checkForAbort(false);
+	if (!canEditLegacyRiverCell(dimension, x, y)
+			|| !canEditLegacyRiverCell(dimension, x - 1, y) || !canEditLegacyRiverCell(dimension, x + 1, y)
+			|| !canEditLegacyRiverCell(dimension, x, y - 1) || !canEditLegacyRiverCell(dimension, x, y + 1)) return;
 	height = parseInt(dimension.getHeightAt(x, y) - 0.5)
 	left = parseInt(dimension.getHeightAt(x - 1, y) - 0.5)
 	right = parseInt(dimension.getHeightAt(x + 1, y) - 0.5)

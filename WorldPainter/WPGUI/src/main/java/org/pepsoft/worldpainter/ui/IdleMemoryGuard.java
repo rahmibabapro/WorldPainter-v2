@@ -11,8 +11,8 @@ import java.awt.event.AWTEventListener;
 import java.awt.event.MouseEvent;
 
 /**
- * After a period of inactivity, drops redo stacks and rendered tile caches to reduce idle RSS.
- * Tile/undo snapshot data for the loaded world remains in memory until the world is closed.
+ * After a period of inactivity, drops reproducible rendered tile caches.
+ * Both undo and redo history are preserved regardless of inactivity.
  */
 public final class IdleMemoryGuard implements AWTEventListener {
     private static final long IDLE_MS = 10L * 60L * 1000L;
@@ -70,7 +70,7 @@ public final class IdleMemoryGuard implements AWTEventListener {
             return;
         }
         sleepActive = true;
-        logger.info("Idle memory guard: releasing redo history and tile render caches after {} minutes idle", IDLE_MS / 60_000L);
+        logger.info("Idle memory guard: releasing tile render caches (editing history preserved) after {} minutes idle", IDLE_MS / 60_000L);
         SwingUtilities.invokeLater(this::releaseIdleMemory);
     }
 

@@ -6,7 +6,6 @@ import org.pepsoft.minecraft.Material;
 import org.pepsoft.worldpainter.Dimension;
 import org.pepsoft.worldpainter.Terrain;
 import org.pepsoft.worldpainter.TestData;
-import org.pepsoft.worldpainter.Tile;
 import org.pepsoft.worldpainter.TileFactory;
 
 import static org.junit.Assert.*;
@@ -33,6 +32,57 @@ public class SurfaceSmootherTest {
         // round(63.75)=64; must fill bottom half instead of empty/air
         final Dimension dimension = createDimensionWithHeights(63.75f, 63.75f, 63.75f, 63.75f);
         assertEquals(240, SurfaceSmoother.computeVoxel222(dimension, 0, 0, 64));
+    }
+
+    @Test
+    public void fractionalRoundingContourBecomesUprightStairInAllFourDirections() {
+        final int[][] directions = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+        final int[] topCorners = { 4 | 1, 8 | 2, 2 | 1, 8 | 4 };
+        final Direction[] facings = { Direction.EAST, Direction.WEST, Direction.SOUTH, Direction.NORTH };
+        for (int i = 0; i < directions.length; i++) {
+            final Dimension dimension = createDimensionWithHeights(64.10f, 64.10f, 64.10f, 64.10f);
+            final int dx = directions[i][0], dz = directions[i][1];
+            // A half-block grade crosses round(height), but is far below the
+            // 1.5-block cliff guard. This used to make two slabs one Y apart.
+            dimension.setHeightAt(dx, dz, 64.60f);
+            dimension.setHeightAt(dx + dz, dz + dx, 64.60f);
+            dimension.setHeightAt(dx - dz, dz - dx, 64.60f);
+            final int voxel = SurfaceSmoother.computeVoxel222(dimension, 0, 0, 64);
+            assertEquals(240 | topCorners[i], voxel);
+            final Material material = SurfaceSmoother.smoothSurfaceMaterial(dimension, 0, 0, 64, GRANITE);
+            assertEquals("minecraft:granite_stairs", material.name);
+            assertEquals(facings[i], material.getProperty(FACING));
+            assertEquals("bottom", material.getProperty(HALF));
+            assertEquals("straight", material.getProperty(SHAPE));
+        }
+    }
+
+    @Test
+    public void diagonalRoundingContourUsesOuterCornerWithoutChangingFlatSlabs() {
+        final Dimension dimension = createDimensionWithHeights(64.10f, 64.10f, 64.10f, 64.10f);
+        assertEquals(240, SurfaceSmoother.computeVoxel222(dimension, 0, 0, 64));
+        dimension.setHeightAt(1, -1, 64.60f);
+        final Material corner = SurfaceSmoother.smoothSurfaceMaterial(dimension, 0, 0, 64, GRANITE);
+        assertEquals("minecraft:granite_stairs", corner.name);
+        assertEquals("outer_left", corner.getProperty(SHAPE));
+        assertEquals(Direction.EAST, corner.getProperty(FACING));
+        assertEquals("bottom", corner.getProperty(HALF));
+    }
+
+    @Test
+    public void oppositeDiagonalContourDoesNotInventTriangularCorner() {
+        for (int[][] diagonals : new int[][][] {
+                { { 1, -1 }, { -1, 1 } },
+                { { -1, -1 }, { 1, 1 } }
+        }) {
+            final Dimension dimension = createDimensionWithHeights(64.10f, 64.10f, 64.10f, 64.10f);
+            for (int[] diagonal : diagonals) dimension.setHeightAt(diagonal[0], diagonal[1], 64.60f);
+            assertEquals("A diagonal saddle must not snap to one arbitrary triangular corner",
+                    240, SurfaceSmoother.computeVoxel222(dimension, 0, 0, 64));
+            final Material material = SurfaceSmoother.smoothSurfaceMaterial(dimension, 0, 0, 64, GRANITE);
+            assertEquals("minecraft:granite_slab", material.name);
+            assertEquals("bottom", material.getProperty(TYPE));
+        }
     }
 
     @Test
@@ -136,6 +186,35 @@ public class SurfaceSmootherTest {
     }
 
     @Test
+    public void mudBricksUseTheirOwnWaterloggableSlabFamily() {
+        final Material mudBricks = Material.get("minecraft:mud_bricks");
+        final SurfaceSmoother.SmoothableBlockFamily family = SurfaceSmoother.getFamily(mudBricks);
+        assertNotNull(family);
+        assertEquals("minecraft:mud_brick_stairs", family.stair().name);
+        assertEquals("minecraft:mud_brick_slab", family.slab().name);
+        final Dimension dimension = createDimensionWithHeights(64.25f, 64.25f, 64.25f, 64.25f);
+        dimension.setWaterLevelAt(0, 0, 65);
+        final Material slab = SurfaceSmoother.smoothSurfaceMaterial(dimension, 0, 0, 64, mudBricks);
+        assertEquals("minecraft:mud_brick_slab", slab.name);
+        assertEquals("bottom", slab.getProperty(TYPE));
+        assertTrue(SurfaceSmoother.waterlogIfFluidOccupies(slab, 64, 65).getProperty(WATERLOGGED));
+    }
+
+    @Test
+    public void mudBrickRetexturePreservesValidatedStairGeometryAndWaterlogging() {
+        final Material granite = SurfaceSmoother.createFromVoxel222(
+                240 | 4 | 1, GRANITE, Material.get("minecraft:granite_stairs"),
+                Material.get("minecraft:granite_slab")).withProperty(WATERLOGGED, true);
+        final Material mud = SurfaceSmoother.retextureSurface(granite,
+                SurfaceSmoother.getFamily(Material.get("minecraft:mud_bricks")));
+        assertEquals("minecraft:mud_brick_stairs", mud.name);
+        assertEquals(Direction.EAST, mud.getProperty(FACING));
+        assertEquals("straight", mud.getProperty(SHAPE));
+        assertEquals("bottom", mud.getProperty(HALF));
+        assertTrue(mud.getProperty(WATERLOGGED));
+    }
+
+    @Test
     public void stoneMixSlopeCanSmoothWhenEnabled() {
         final Dimension dimension = createDimensionWithHeights(64f, 65f, 64f, 65f);
         dimension.setSurfaceSmoothing(Dimension.SurfaceSmoothing.SLABS_AND_STAIRS);
@@ -235,15 +314,87 @@ public class SurfaceSmootherTest {
         assertFalse(Boolean.TRUE.equals(dry.getProperty(WATERLOGGED)));
     }
 
+    @Test
+    public void actualHeightStencilProducesBalancedStairsInAllFourDirections() {
+        final int[][] directions = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+        final Direction[] facings = { Direction.EAST, Direction.WEST, Direction.SOUTH, Direction.NORTH };
+        for (int i = 0; i < directions.length; i++) {
+            final Dimension dimension = createDimensionWithHeights(64, 64, 64, 64);
+            for (int z = -1; z <= 1; z++) {
+                for (int x = -1; x <= 1; x++) {
+                    dimension.setHeightAt(x, z, 64 + x * directions[i][0] + z * directions[i][1]);
+                }
+            }
+            final Material material = SurfaceSmoother.smoothSurfaceMaterial(dimension, 0, 0, 64, STONE);
+            assertEquals("minecraft:stone_stairs", material.name);
+            assertEquals(facings[i], material.getProperty(FACING));
+            assertEquals("bottom", material.getProperty(HALF));
+            assertEquals("straight", material.getProperty(SHAPE));
+            final ChunkHeightSnapshot snapshot = ChunkHeightSnapshot.create(dimension, 0, 0);
+            assertEquals(SurfaceSmoother.computeVoxel222(dimension, 0, 0, 64),
+                    SurfaceSmoother.computeVoxel222(snapshot, 0, 0, 64));
+        }
+    }
+
+    @Test
+    public void equalHeightDryGrassAndDirtSeamsKeepFullRockInAllDirections() {
+        for (Terrain terrain : new Terrain[] { Terrain.GRASS, Terrain.DIRT }) {
+            for (int[] offset : new int[][] { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } }) {
+                final Dimension dimension = createDimensionWithHeights(64.25f, 64.25f, 64.25f, 64.25f);
+                dimension.setTerrainAt(offset[0], offset[1], terrain);
+                assertNull("A dry slab must not leave a half-block gap next to " + terrain,
+                        SurfaceSmoother.smoothSurfaceMaterial(dimension, 0, 0, 64, STONE));
+            }
+        }
+    }
+
+    @Test
+    public void wetGraniteRetainsPartialSurfaceAlongGrassSeam() {
+        final Dimension dimension = createDimensionWithHeights(64.25f, 64.25f, 64.25f, 64.25f);
+        dimension.setTerrainAt(1, 0, Terrain.GRASS);
+        dimension.setWaterLevelAt(0, 0, 65);
+        final Material material = SurfaceSmoother.smoothSurfaceMaterial(dimension, 0, 0, 64, GRANITE);
+        assertEquals("minecraft:granite_slab", material.name);
+        assertTrue(SurfaceSmoother.waterlogIfFluidOccupies(material, 64, 65).getProperty(WATERLOGGED));
+    }
+
+    @Test
+    public void intentionalCliffRetainsFullBlockAndMissingHaloIsSafe() {
+        final Dimension dimension = createDimensionWithHeights(64, 67, 64, 67);
+        assertEquals(255, SurfaceSmoother.computeVoxel222(dimension, 0, 0, 64));
+        assertEquals(STONE, SurfaceSmoother.smoothSurfaceMaterial(dimension, 0, 0, 64, STONE));
+        assertEquals(255, SurfaceSmoother.computeVoxel222(dimension, 127, 127, 64));
+    }
+
+    @Test
+    public void everyNonemptyOccupancyPatternSnapsToSupportedBottomSurface() {
+        for (int bits = 1; bits < 256; bits++) {
+            final int snapped = SurfaceSmoother.snapToNearestValidVoxel222(bits);
+            final Material material = SurfaceSmoother.createFromVoxel222(snapped, STONE,
+                    Material.get("minecraft:stone_stairs"), Material.get("minecraft:stone_slab"));
+            assertNotNull(material);
+            assertFalse(material.empty);
+            assertFalse("No floating upper slab or upside-down stair", "top".equals(material.getProperty(TYPE))
+                    || "top".equals(material.getProperty(HALF)));
+        }
+    }
+
     private static Dimension createDimensionWithHeights(float h00, float h10, float h01, float h11) {
         final TileFactory tileFactory = TestData.createTileFactory(64);
         final Dimension dimension = new Dimension(TestData.WORLD, "Surface", TestData.SEED, tileFactory, NORMAL_DETAIL);
-        final Tile tile = tileFactory.createTile(0, 0);
-        tile.setHeight(0, 0, h00);
-        tile.setHeight(1, 0, h10);
-        tile.setHeight(0, 1, h01);
-        tile.setHeight(1, 1, h11);
-        dimension.addTile(tile);
+        // The rotationally symmetric stencil needs the negative-side halo too.
+        for (int tileZ = -1; tileZ <= 0; tileZ++) {
+            for (int tileX = -1; tileX <= 0; tileX++) {
+                dimension.addTile(tileFactory.createTile(tileX, tileZ));
+            }
+        }
+        for (int z = -1; z <= 1; z++) {
+            for (int x = -1; x <= 1; x++) {
+                dimension.setHeightAt(x, z, z > 0 ? (x > 0 ? h11 : h01) : (x > 0 ? h10 : h00));
+                dimension.setTerrainAt(x, z, Terrain.STONE);
+                dimension.setWaterLevelAt(x, z, 62);
+            }
+        }
         return dimension;
     }
 }

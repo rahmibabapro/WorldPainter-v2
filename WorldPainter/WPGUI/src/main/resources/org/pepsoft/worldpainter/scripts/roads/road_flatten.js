@@ -39,438 +39,219 @@
 
 // script.hideCmdLineParams=true
 
-
-
-//################ CHANGE THESE VARIABLES ################### 
-//################ CHANGE THESE VARIABLES ###################
-//################ CHANGE THESE VARIABLES ###################
-//################ CHANGE THESE VARIABLES ###################
-//################ CHANGE THESE VARIABLES ###################
-
-useThickSlabs = false // change this to true to get thick edge selection for slabify by default (is a bit slower.)
-
-
-//################ CHANGE THESE VARIABLES ###################
-//################ CHANGE THESE VARIABLES ###################
-//################ CHANGE THESE VARIABLES ###################
-//################ CHANGE THESE VARIABLES ###################
-//################ CHANGE THESE VARIABLES ###################
-
-
-
-
-
-
-
-
-
-
-if (world == null) {
-	print("Running from terminal!");
-	print("I can make this work from the terminal, just haven't bothered. contact me on discord: @sijmen_v_b");
-}
-var app = org.pepsoft.worldpainter.App.getInstance();
-
-// ############# \/ save last entered value \/ ###############
-var fs = Java.type('java.nio.file.Files');
-var Paths = Java.type('java.nio.file.Paths');
-var StandardOpenOption = Java.type('java.nio.file.StandardOpenOption');
-var StandardCharsets = Java.type('java.nio.charset.StandardCharsets');
-var System = Java.type('java.lang.System');
-var scriptFilePath = Paths.get(scriptDir, __FILE__).toString()
-// ############# /\ save last entered value /\ ###############
-
-var dimension = world.getDimension(0);
-var scale = 100;
-extent = dimension.getExtent();
-worldWidth = extent.getWidth() * 128;
-worldHeight = extent.getHeight() * 128;
-var minX = dimension.getLowestX() * 128;
-var minY = dimension.getLowestY() * 128;
-var thick = false;
-var maskOn = 0;
-
-var d = new Date();
-var startTime = d.getTime();
-
+var useThickSlabs = false; // Retain the original thin-edge Slabify default.
+var dim = (typeof dimension !== 'undefined' && dimension != null)
+        ? dimension : org.pepsoft.worldpainter.App.getInstance().getDimension();
+if (dim == null) { throw "Open a dimension before flattening roads."; }
+var ReadOnly = Java.type('org.pepsoft.worldpainter.layers.ReadOnly').INSTANCE;
+var VoidLayer = Java.type('org.pepsoft.worldpainter.layers.Void').INSTANCE;
+var NotPresent = Java.type('org.pepsoft.worldpainter.layers.NotPresent').INSTANCE;
+var NotPresentBlock = Java.type('org.pepsoft.worldpainter.layers.NotPresentBlock').INSTANCE;
+var FloodWithLava = Java.type('org.pepsoft.worldpainter.layers.FloodWithLava').INSTANCE;
 var HashMap = Java.type('java.util.HashMap');
-
-var distance = params['distance'];
-var layerMask = params['layerMask'];
-var terrainMask = params['terrainMask'];
-var fileMask = params['fileMask'];
-var roadLayerName = params['roadLayer'];
-var roadSlabName = params['roadSlab'];
-
-
-
-// ############# \/ save last entered value \/ ###############
-var paramDefaults = [
-    ["// script.param.distance.default=",distance],
-    ["// script.param.layerMask.default=",layerMask],
-    ["// script.param.terrainMask.default=",terrainMask],
-    ["// script.param.fileMask.default=",fileMask],
-    ["// script.param.roadLayer.default=",roadLayerName],
-    ["// script.param.roadSlab.default=",roadSlabName]
-]
-
-var str = readFile(scriptFilePath);
-newStr = replaceParamValue(str,paramDefaults)
-createAndWriteFile(scriptFilePath, newStr);
-// ############# /\ save last entered value /\ ###############
-
-
-
-var pointsToBeFlattened = new HashMap();
-
-//create map with all the terrain types. where the keys are the names lowercase without spaces. (use .replaceAll(" ","").toLocaleLowerCase())
-var terrainMap = new HashMap();
-var terrainEnum = org.pepsoft.worldpainter.Terrain.VALUES
-
+var terrainMap = new HashMap(), layerMap = new HashMap();
+var terrainEnum = org.pepsoft.worldpainter.Terrain.VALUES;
 for (var i = 0; i < terrainEnum.length; i++) {
-	terrainMap.put(terrainEnum[i].toString().replaceAll(" ", "").toLocaleLowerCase(), terrainEnum[i]) // add the name to the and the terrain to the enum 
-	terrainMap.put(terrainEnum[i].getName().replaceAll(" ", "").toLocaleLowerCase(), terrainEnum[i]) // also add the custom name so instead of custom4 you can also use the name of the custom layer.
+    terrainMap.put(normalize(terrainEnum[i]), terrainEnum[i]);
+    terrainMap.put(normalize(terrainEnum[i].getName()), terrainEnum[i]);
+}
+var app = org.pepsoft.worldpainter.App.getInstanceIfExists();
+var layers = app == null ? dim.getAllLayers(false) : app.getAllLayers();
+var layerIterator = layers.iterator();
+while (layerIterator.hasNext()) {
+    var layer = layerIterator.next();
+    layerMap.put(normalize(layer.getName()), layer);
 }
 
-// load the layer from the GUI! (no longer require the layer to be on the map.) where the keys are the names lowercase without spaces. (use .replaceAll(" ","").toLocaleLowerCase())
-var layers = app.getAllLayers();
-var layerMap = new HashMap();
-
-for (var i = 0; i < layers.length; i++) {
-	layerMap.put(layers[i].getName().replaceAll(" ", "").toLocaleLowerCase(), layers[i])
+// The host saves parameter values; never rewrite a bundled script on disk.
+var distanceValue = params['distance'];
+var distance = distanceValue == null ? 4 : Number(distanceValue);
+if (!isFinite(distance) || distance < 0 || Math.floor(distance) !== distance || distance > 2147483647
+        || (distanceValue != null && String(distanceValue).trim() === '')) {
+    throw "Distance must be a non-negative whole number no larger than 2147483647.";
 }
-
-function Point(x, y) {
-	this.x = x;
-	this.y = y;
-	this.heights = [];
-}
-
-Point.prototype.getHeights = function () {
-	return this.heights;
-}
-
-Point.prototype.setHeights = function (heights) {
-	this.heights = heights;
-}
-
-
-var applyRoadLayer = roadLayerName != null
-var roadLayerIsBit = false
-if (applyRoadLayer) {
-	var roadLayer = layerMap.get(roadLayerName.replaceAll(" ", "").toLocaleLowerCase());
-	s = ""
-	s = s + roadLayer.getDataSize()
-	if (s == "BIT")//bit layer
-	{
-		roadLayerIsBit = true
-	}
-}
-
-var applyRoadSlab = roadSlabName != null
-var roadSlabIsBit = false
-if (applyRoadSlab) {
-	var roadSlab = layerMap.get(roadSlabName.replaceAll(" ", "").toLocaleLowerCase());
-	s = ""
-	s = s + roadSlab.getDataSize()
-	if (s == "BIT")//bit layer
-	{
-		roadSlabIsBit = true
-	}
-}
-
-
-
+var layerMask = optionalText(params['layerMask']);
+var terrainMask = optionalText(params['terrainMask']);
+var fileMask = optionalText(params['fileMask']);
+var roadLayer = resolveLayer(optionalText(params['roadLayer']), "Road layer", true);
+var roadSlab = resolveLayer(optionalText(params['roadSlab']), "Road slab layer", true);
+var maskLayer = null, maskTerrain = null, heightMap = null, halfway = 0;
 if (layerMask != null) {
-	var maskLayer = layerMap.get(layerMask.replaceAll(" ", "").toLocaleLowerCase());//load the layer as mask-layer.
-	print("layer: ", maskLayer, "selected as mask");
-
-	var bitLayer = maskLayer.getDataSize() == "BIT";
-	maskOn = 1;
-}
-else if (terrainMask != null) {
-	var terrain = terrainMap.get(terrainMask.replaceAll(" ", "").toLocaleLowerCase())//load the terrain.
-	print("terrain: ", terrain, "selected as mask");
-	maskOn = 2;
-}
-else if (fileMask != null) {
-	if (fileMask[0] == "\"") {
-		//print("removing \" from file path")
-		fileMask = fileMask.slice(1, -1);
-	}
-
-	var heightMap = wp.getHeightMap().fromFile(fileMask).go();//load image as heightmap
-	if (heightMap.getRange()[1] > 256)//get the maximum value of the heightmap and if the maximum value is under 255 assume a 8 bit heightmap.
-	{
-		var halfway = 32767;//set the halfway value to the half height of the image.
-		print("16 bit mask detected.")
-	}
-	else {
-		var halfway = 127;//set the halfway value to the half height of the image.
-		print("8 bit mask detected.")
-	}
-
-
-	maskOn = 3;
-}
-
-
-
-
-if (maskOn == 0) {
-	print("NO mask was selected. (accidentally running without a mask is super slow so a mask is mandatory.)")
+    maskLayer = resolveLayer(layerMask, "Layer mask", false);
+} else if (terrainMask != null) {
+    maskTerrain = terrainMap.get(normalize(terrainMask));
+    if (maskTerrain == null || (maskTerrain.isCustom() && !org.pepsoft.worldpainter.Terrain.isCustomMaterialConfigured(maskTerrain.getCustomTerrainIndex()))) {
+        throw "Unknown or unconfigured terrain mask: " + terrainMask;
+    }
+} else if (fileMask != null) {
+    if (fileMask.charAt(0) === '"' && fileMask.charAt(fileMask.length - 1) === '"') {
+        fileMask = fileMask.slice(1, -1);
+    }
+    heightMap = wp.getHeightMap().fromFile(fileMask).go();
+    var range = heightMap.getRange();
+    if (range == null || !isFinite(range[1])) { throw "The file mask has an invalid value range."; }
+    halfway = range[1] > 256 ? 32767 : 127;
 } else {
-	for (var x = minX + 1; x < worldWidth + minX - 1; x++) {
-		for (var y = minY + 1; y < worldHeight + minY - 1; y++)//loop trough all coordinates(blocks) of the map.
-		{
-			if (maskOn == 1)//if the mask is a layer
-			{
-				if (bitLayer) {
-					if (dimension.getBitLayerValueAt(maskLayer, x, y) == 1)//if the layer value is not 0 on a block (so the layer is there) continue in applying the edge detection.
-					{
-						fixup(dimension, x, y);
-					}
-				}
-				else {
-					if (dimension.getLayerValueAt(maskLayer, x, y) > 0)//if the layer value is not 0 on a block (so the layer is there) continue in applying the edge detection.
-					{
-						fixup(dimension, x, y);
-					}
-				}
-			}
-			else if (maskOn == 2) { //if the mask is a terrain
-				if (dimension.getTerrainAt(x, y) == terrain)//compare the terrain at the block to the terrain of the mask. id they are the same continue in applying the edge detection.
-				{
-					fixup(dimension, x, y);
-				}
-			}
-			else if (maskOn == 3) { //if the mask is a file
-				if (heightMap.getHeight(x, y) > halfway)//if the value of the mask is bigger than 50% of the maximum height (gray) continue in applying the edge detection.  
-				{
-					fixup(dimension, x, y);
-				}
-			}
-
-		}
-		if (x % 10 == 0 || x == worldWidth + minX - 1) {
-			print("gathering height information status: " + parseInt((x - minX) / (worldWidth) * 100 + 0.2) + "%");
-		}
-	}
+    throw "Choose a layer, terrain or file mask before flattening roads.";
 }
 
-var pointsToBeFlattenedLength = pointsToBeFlattened.length;
-var counter = 0;
-for (key in pointsToBeFlattened) {
-	point = pointsToBeFlattened.get(key);
-	var x = point.x;
-	var y = point.y;
-	var heights = point.getHeights();
-	if (heights == null) {
-		print("skipping", x, y);
-		continue;
-	}
-
-	var length = heights.length
-
-	var sum = 0;
-	for (var i = 0; i < length; i++) {
-		sum += heights[i];
-	}
-	dimension.setHeightAt(x, y, (sum / length));
-
-	if (counter % 1000 == 0) {
-		print("flattening roads: " + parseInt((counter) / (pointsToBeFlattenedLength) * 100 + 0.2) + "%");
-	}
-
-	if (applyRoadLayer) {
-		if (roadLayerIsBit) {
-			dimension.setBitLayerValueAt(roadLayer, x, y, true)
-		} else {
-			dimension.setLayerValueAt(roadLayer, x, y, 8)
-		}
-	}
-
-
-
-	counter++
-}
-
-for (key in pointsToBeFlattened) {
-	point = pointsToBeFlattened.get(key);
-	var x = point.x;
-	var y = point.y;
-	if (applyRoadSlab && (thinLower(dimension, x, y) || useThickSlabs && thickLower(dimension, x, y) )) {
-		if (roadSlabIsBit) {
-			dimension.setBitLayerValueAt(roadSlab, x, y, true)
-		} else {
-			dimension.setLayerValueAt(roadSlab, x, y, 8)
-		}
-	}
-}
-
-
-d = new Date();
-var endTime = d.getTime();
-var elapsedMs = endTime - startTime;
-
-// Convert elapsed time from milliseconds to seconds
-var elapsedSec = Math.floor(elapsedMs / 1000);
-
-// Calculate hours, minutes, and seconds
-var hours = Math.floor(elapsedSec / 3600);
-var minutes = Math.floor((elapsedSec - (hours * 3600)) / 60);
-var seconds = elapsedSec - (hours * 3600) - (minutes * 60);
-var milliseconds = elapsedMs - (elapsedSec * 1000);
-
-// Format the time string
-var timeStr = '';
-if (hours > 0) {
-	timeStr += hours + ' hour';
-	if (hours > 1) {
-		timeStr += 's';
-	}
-	timeStr += ' ';
-}
-if (minutes > 0 || hours > 0) {
-	timeStr += minutes + ' minute';
-	if (minutes > 1) {
-		timeStr += 's';
-	}
-	timeStr += ' ';
-}
-if (seconds > 0 || minutes > 0 || hours > 0) {
-	timeStr += seconds + ' second';
-	if (seconds > 1) {
-		timeStr += 's';
-	}
-	timeStr += ' ';
-}
-timeStr += milliseconds + ' millisecond';
-if (milliseconds != 1) {
-	timeStr += 's';
-}
-print("\ntook:\t" + timeStr);
-
-
-print("\nDone! -- script provided by sijmen_v_b");
-
-function fixup(dimension, x, y) {
-	//print("x " + (x - minX) + " y " + (y - minY));
-	var height = dimension.getHeightAt(x, y);
-	for (var i = -1 * distance; i < distance + 1; i++) {
-		for (var j = -1 * distance; j < distance + 1; j++)//loop trough all coordinates(blocks) of the map.
-		{
-			if (x + i > minX && x + i < worldWidth + minX && y + j > minY && y + j < worldHeight + minY) {
-				var dist = getSquaredDistance(x + i, y + j, x, y);
-				if (dist <= distance * distance) {
-					addHeight(x + i, y + j, height);
-				}
-			}
-
-		}
-	}
-}
-
-function addHeight(x, y, height) {
-	var index = CoordinateToIndex(x, y);
-	var point = pointsToBeFlattened.get(index);
-
-	if (point == null) {
-		point = new Point(x, y);
-	}
-	point.getHeights().push(height);
-	pointsToBeFlattened.put(index, point);
-}
-
-function getSquaredDistance(x1, y1, x2, y2) {
-	var x = x1 - x2;
-	var y = y1 - y2;
-	return x * x + y * y;
-}
-
-
-//used for the hashmap
-function CoordinateToIndex(x, y) {
-	return x + y * worldWidth
-}
-
-function thinLower(dimension, x, y) {
-	return parseInt(dimension.getHeightAt(x + 1, y) - 0.5) == parseInt(dimension.getHeightAt(x, y) - 0.5) - 1 ||
-		parseInt(dimension.getHeightAt(x - 1, y) - 0.5) == parseInt(dimension.getHeightAt(x, y) - 0.5) - 1 ||
-		parseInt(dimension.getHeightAt(x, y + 1) - 0.5) == parseInt(dimension.getHeightAt(x, y) - 0.5) - 1 ||
-		parseInt(dimension.getHeightAt(x, y - 1) - 0.5) == parseInt(dimension.getHeightAt(x, y) - 0.5) - 1
-}
-
-function thickLower(dimension, x, y) {
-	return  parseInt(dimension.getHeightAt(x + 1, y - 1) - 0.5) == parseInt(dimension.getHeightAt(x, y) - 0.5) - 1 ||
-		parseInt(dimension.getHeightAt(x - 1, y + 1) - 0.5) == parseInt(dimension.getHeightAt(x, y) - 0.5) - 1 ||
-		parseInt(dimension.getHeightAt(x + 1, y + 1) - 0.5) == parseInt(dimension.getHeightAt(x, y) - 0.5) - 1 ||
-		parseInt(dimension.getHeightAt(x - 1, y - 1) - 0.5) == parseInt(dimension.getHeightAt(x, y) - 0.5) - 1
-
-}
-
-//###################### \/ functions for saving the last entered values \/ ########################################
-function createAndWriteFile(filePath, content) {
-    var path = Paths.get(filePath);
-    
-    try {
-        // Create the file if it doesn't exist, truncate it if it does
-        var writer = fs.newBufferedWriter(path, [StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING]);
-        
-        // Write the content to the file
-        writer.write(content);
-        writer.newLine();
-        
-        // Close the writer
-        writer.close();
-        
-        print("File updated successfully:", filePath);
-    } catch (e) {
-        print("Error updating file:", e);
-    }
-}
-
-
-
-function readFile(filePath) {
-    var path = Paths.get(filePath);
-    if (!fs.exists(path)) {
-        print("ERROR:", filePath, "does not exist.")
-        return null;
-    }
-    var content = new java.lang.String(fs.readAllBytes(path), StandardCharsets.UTF_8).toString();
-    return content;
-}
-
-function replaceParamValue(inputString, patternsAndValues) {
-    var lines = inputString.split('\n'); // Split inputString into lines
-    var updatedLines = [];
-
-    lines.forEach(function(line) {
-        var lineUpdated = false;
-        patternsAndValues.forEach(function(tuple) {
-            var pattern = tuple[0];
-            var newValue = tuple[1];
-            if (newValue == undefined){
-                newValue = "";
-            }
-
-            if (line.startsWith(pattern)) {
-                var newLine = pattern + newValue;
-                updatedLines.push(newLine);
-                lineUpdated = true;
-            }
-        });
-
-        if (!lineUpdated) {
-            updatedLines.push(line); // Push lines that don't match any pattern unchanged
+var totalCells = dim.getTiles().size() * 16384;
+var scanned = 0, candidateChecks = 0, counter = 0, fraction = 0;
+var pointsToBeFlattened = new HashMap();
+var runtime = Java.type('java.lang.Runtime').getRuntime();
+var availableHeap = Math.max(0, runtime.maxMemory() - (runtime.totalMemory() - runtime.freeMemory()));
+// Planning completes before any writes. Reserve most heap for the world/undo;
+// sum/count avoids retaining every overlapping source height for each target.
+var maxPlannedPoints = Math.max(1, Math.min(1000000, Math.floor(availableHeap * 0.15 / 512)));
+var maxCandidateChecks = 100000000;
+var minX = dim.getLowestX() * 128, minY = dim.getLowestY() * 128;
+var maxX = (dim.getHighestX() + 1) * 128 - 1, maxY = (dim.getHighestY() + 1) * 128 - 1;
+checkProgress(0);
+print("Gathering road heights from present, editable terrain...");
+var tileIterator = dim.getTiles().iterator();
+while (tileIterator.hasNext()) {
+    var tile = tileIterator.next();
+    for (var lx = 0; lx < 128; lx++) {
+        if ((lx & 7) === 0) { checkProgress(0.55 * scanned / Math.max(1, totalCells)); }
+        for (var ly = 0; ly < 128; ly++) {
+            scanned++;
+            if (!editable(tile, lx, ly)) { continue; }
+            var x = tile.getX() * 128 + lx, y = tile.getY() * 128 + ly;
+            if (selected(tile, lx, ly, x, y)) { gather(x, y, tile.getHeight(lx, ly)); }
         }
-    });
-
-    // Join the updated lines back into a single string
-    var updatedString = updatedLines.join('\n');
-    return updatedString;
+    }
 }
-//###################### /\ functions for saving the last entered values /\ ########################################
+checkProgress(0.55);
+var pointsToBeFlattenedLength = pointsToBeFlattened.size();
+print("Flattening " + pointsToBeFlattenedLength + " road cells...");
+var points = pointsToBeFlattened.values().iterator();
+while (points.hasNext()) {
+    if ((counter & 255) === 0) { checkProgress(0.55 + 0.35 * counter / Math.max(1, pointsToBeFlattenedLength)); }
+    var point = points.next();
+    var target = editableAt(point.x, point.y);
+    if (target != null) {
+        // Same arithmetic mean as the original per-point list of source heights.
+        dim.setHeightAt(point.x, point.y, point.sum / point.count);
+        applyLayer(roadLayer, point.x, point.y);
+    }
+    counter++;
+}
+checkProgress(0.90);
+if (roadSlab != null) {
+    counter = 0;
+    points = pointsToBeFlattened.values().iterator();
+    while (points.hasNext()) {
+        if ((counter & 255) === 0) { checkProgress(0.90 + 0.10 * counter / Math.max(1, pointsToBeFlattenedLength)); }
+        var point = points.next();
+        if (editableAt(point.x, point.y) != null && (thinLower(point.x, point.y)
+                || (useThickSlabs && thickLower(point.x, point.y)))) {
+            applyLayer(roadSlab, point.x, point.y);
+        }
+        counter++;
+    }
+}
+checkProgress(1);
+print("Done. Flattened " + pointsToBeFlattenedLength + " cells. Original script by sijmen_v_b.");
+
+function optionalText(value) {
+    if (value == null) { return null; }
+    var text = String(value).trim();
+    return text.length === 0 ? null : text;
+}
+function normalize(value) { return String(value).replace(/\s+/g, "").toLowerCase(); }
+function resolveLayer(name, description, output) {
+    if (name == null) { return null; }
+    var layer = layerMap.get(normalize(name));
+    if (layer == null) { throw description + " was not found: " + name; }
+    var size = String(layer.getDataSize());
+    if (size !== 'BIT' && size !== 'BIT_PER_CHUNK' && size !== 'NIBBLE' && size !== 'BYTE') {
+        throw description + " is not a paintable layer: " + name;
+    }
+    if (output && (size === 'BIT_PER_CHUNK' || layer === ReadOnly || layer === VoidLayer
+            || layer === NotPresent || layer === NotPresentBlock || layer === FloodWithLava)) {
+        throw description + " must be a per-block road layer, not a protected/no-data layer: " + name;
+    }
+    return layer;
+}
+function hasSurface(tile, x, y) {
+    return tile != null && isFinite(tile.getHeight(x, y))
+            && !tile.getBitLayerValue(VoidLayer, x, y)
+            && !tile.getBitLayerValue(NotPresent, x, y)
+            && !tile.getBitLayerValue(NotPresentBlock, x, y);
+}
+function editable(tile, x, y) {
+    return hasSurface(tile, x, y) && !tile.getBitLayerValue(ReadOnly, x, y)
+            && !tile.getBitLayerValue(FloodWithLava, x, y);
+}
+function editableAt(x, y) {
+    var tile = dim.getTile(Math.floor(x / 128), Math.floor(y / 128));
+    return editable(tile, ((x % 128) + 128) % 128, ((y % 128) + 128) % 128) ? tile : null;
+}
+function selected(tile, lx, ly, x, y) {
+    if (maskLayer != null) {
+        var size = String(maskLayer.getDataSize());
+        return (size === 'BIT' || size === 'BIT_PER_CHUNK')
+                ? tile.getBitLayerValue(maskLayer, lx, ly) : tile.getLayerValue(maskLayer, lx, ly) > 0;
+    }
+    if (maskTerrain != null) { return tile.getTerrain(lx, ly) === maskTerrain; }
+    var value = heightMap.getHeight(x, y);
+    return isFinite(value) && value > halfway;
+}
+function checkProgress(value) {
+    fraction = value;
+    if (typeof progress !== 'undefined' && progress != null) {
+        progress.checkForCancel();
+        progress.setProgress(value);
+    }
+}
+function gather(x, y, height) {
+    var lowX = Math.max(minX, x - distance), highX = Math.min(maxX, x + distance);
+    var lowY = Math.max(minY, y - distance), highY = Math.min(maxY, y + distance);
+    for (var dx = lowX; dx <= highX; dx++) {
+        for (var dy = lowY; dy <= highY; dy++) {
+            if ((++candidateChecks & 1023) === 0) { checkProgress(fraction); }
+            if (candidateChecks > maxCandidateChecks) {
+                throw "Road mask/radius exceeds the safe planning work budget. Use a thinner centerline mask or smaller distance; no road changes were applied.";
+            }
+            var offsetX = dx - x, offsetY = dy - y;
+            if (offsetX * offsetX + offsetY * offsetY > distance * distance || editableAt(dx, dy) == null) { continue; }
+            var key = dx + "," + dy;
+            var point = pointsToBeFlattened.get(key);
+            if (point == null) {
+                if (pointsToBeFlattened.size() >= maxPlannedPoints) {
+                    throw "Road mask exceeds the available-memory planning budget (" + maxPlannedPoints
+                            + " cells). Use a smaller mask; no road changes were applied.";
+                }
+                point = {x: dx, y: dy, sum: 0, count: 0};
+                pointsToBeFlattened.put(key, point);
+            }
+            point.sum += height;
+            point.count++;
+        }
+    }
+}
+function applyLayer(layer, x, y) {
+    if (layer == null) { return; }
+    if (String(layer.getDataSize()) === 'BIT') { dim.setBitLayerValueAt(layer, x, y, true); }
+    else { dim.setLayerValueAt(layer, x, y, 8); }
+}
+function heightOrCenter(x, y, center) {
+    var tile = dim.getTile(Math.floor(x / 128), Math.floor(y / 128));
+    var lx = ((x % 128) + 128) % 128, ly = ((y % 128) + 128) % 128;
+    return hasSurface(tile, lx, ly) ? tile.getHeight(lx, ly) : center;
+}
+function lowerNeighbour(x, y, dx, dy) {
+    var height = dim.getHeightAt(x, y);
+    // Keep the legacy Slabify rounding, including negative heights.
+    return parseInt(heightOrCenter(x + dx, y + dy, height) - 0.5) === parseInt(height - 0.5) - 1;
+}
+function thinLower(x, y) {
+    return lowerNeighbour(x, y, 1, 0) || lowerNeighbour(x, y, -1, 0)
+            || lowerNeighbour(x, y, 0, 1) || lowerNeighbour(x, y, 0, -1);
+}
+function thickLower(x, y) {
+    return lowerNeighbour(x, y, 1, -1) || lowerNeighbour(x, y, -1, 1)
+            || lowerNeighbour(x, y, 1, 1) || lowerNeighbour(x, y, -1, -1);
+}
 
 

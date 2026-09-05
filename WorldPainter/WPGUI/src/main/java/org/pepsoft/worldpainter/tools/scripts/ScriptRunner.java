@@ -5,7 +5,6 @@
  */
 package org.pepsoft.worldpainter.tools.scripts;
 
-import org.jetbrains.annotations.NotNull;
 import org.pepsoft.util.undo.UndoManager;
 import org.pepsoft.worldpainter.Configuration;
 import org.pepsoft.worldpainter.Dimension;
@@ -134,14 +133,14 @@ public class ScriptRunner extends WorldPainterDialog {
     }
 
     private void setControlStates() {
-        buttonRun.setEnabled((comboBoxScript.getSelectedItem() != null)
+        buttonRun.setEnabled((context == null) && (comboBoxScript.getSelectedItem() != null)
                 && ((File) comboBoxScript.getSelectedItem()).isFile()
                 && ((scriptDescriptor == null) || scriptDescriptor.isValid()));
     }
     
     private void selectFile() {
         Set<String> extensions = new HashSet<>();
-        SCRIPT_ENGINE_MANAGER.getEngineFactories().forEach(factory -> extensions.addAll(factory.getExtensions()));
+        new ScriptEngineManager().getEngineFactories().forEach(factory -> extensions.addAll(factory.getExtensions()));
         File script = FileUtils.selectFileForOpen(this, "Select Script", (File) comboBoxScript.getSelectedItem(), new FileFilter() {
             @Override
             public boolean accept(File f) {
@@ -359,6 +358,7 @@ public class ScriptRunner extends WorldPainterDialog {
     }
 
     private void run() {
+        if (context != null) return;
         comboBoxScript.setEnabled(false);
         buttonSelectScript.setEnabled(false);
         textAreaParameters.setEnabled(false);
@@ -381,7 +381,12 @@ public class ScriptRunner extends WorldPainterDialog {
             scriptName = scriptFileName;
         }
         // GUI ScriptRunner uses ScriptingContext(false) and must never call System.exit (#462).
-        context = new ScriptingContext(false);
+        final ScriptingContext runContext = new ScriptingContext(false);
+        context = runContext;
+        // Snapshot Swing inputs on the EDT, not from the script worker.
+        final String parameterText = textAreaParameters.getText();
+        final String[] parameters = parameterText.isEmpty() ? new String[0] : parameterText.split("\\R");
+        final List<File> recentFiles = new ArrayList<>(recentScriptFiles);
         new Thread(scriptFileName) {
             @Override
             public void run() {
@@ -389,29 +394,19 @@ public class ScriptRunner extends WorldPainterDialog {
                     final Configuration config = Configuration.getInstance();
                     final int p = scriptFileName.lastIndexOf('.');
                     final String extension = scriptFileName.substring(p + 1);
-                    ScriptEngine scriptEngine;
-                    synchronized (SCRIPT_ENGINES) {
-                        if (SCRIPT_ENGINES.containsKey(extension)) {
-                            scriptEngine = SCRIPT_ENGINES.get(extension);
-                        } else {
-                            scriptEngine = SCRIPT_ENGINE_MANAGER.getEngineByExtension(extension);
-                            if (scriptEngine == null) {
-                                logger.error("No script engine found for extension \"" + extension + "\"");
-                                doLaterOnEventThread(() -> beepAndShowError(ScriptRunner.this, "No script engine installed for extension \"" + extension + "\"", "Error"));
-                                return;
-                            }
-                            SCRIPT_ENGINES.put(extension, scriptEngine);
-                            logger.info("Using script engine {} version {} for scripts of type {}", scriptEngine.getFactory().getEngineName(), scriptEngine.getFactory().getEngineVersion(), extension);
-                        }
+                    final ScriptEngine scriptEngine = ScriptExecution.createEngine(extension);
+                    if (scriptEngine == null) {
+                        logger.error("No script engine found for extension \"" + extension + "\"");
+                        doLaterOnEventThread(() -> beepAndShowError(ScriptRunner.this, "No script engine installed for extension \"" + extension + "\"", "Error"));
+                        return;
                     }
 
                     scriptEngine.put(ScriptEngine.FILENAME, scriptFileName);
-                    config.setRecentScriptFiles(new ArrayList<>(recentScriptFiles));
+                    config.setRecentScriptFiles(recentFiles);
 
                     // Initialise script context
                     final Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
-                    bindings.put("wp", context);
-                    final String[] parameters = textAreaParameters.getText().isEmpty() ? new String[0] : textAreaParameters.getText().split("\\R");
+                    bindings.put("wp", runContext);
                     bindings.put("argc", parameters.length + 1);
                     final String[] argv = new String[parameters.length + 1];
                     argv[0] = scriptFileName;
@@ -434,38 +429,13 @@ public class ScriptRunner extends WorldPainterDialog {
                     bindings.put("DataSize", dataSizes);
                     bindings.put("scriptDir", scriptFilePath);
                     bindings.put("__FILE__", scriptFileName);
-                    bindings.put("progress", new ScriptProgress(context, null));
+                    bindings.put("progress", new ScriptProgress(runContext, null));
                     if (dimension != null) {
-                        bindings.put("scriptDimension", new ScriptDimensionBridge(dimension, context, scriptEngine, null));
+                        bindings.put("scriptDimension", new ScriptDimensionBridge(dimension, runContext, scriptEngine, null));
                     }
 
                     // Capture output
-                    final List<String> textQueue = new LinkedList<>();
-                    final boolean[] textUpdateScheduled = new boolean[] {false};
-                    Writer writer = new Writer() {
-                        @Override
-                        public void write(char @NotNull [] cbuf, int off, int len) {
-                            synchronized (textQueue) {
-                                textQueue.add(new String(cbuf, off, len));
-                                if (! textUpdateScheduled[0]) {
-                                    doLaterOnEventThread(() -> {
-                                        synchronized (textQueue) {
-                                            // Join the fragments first so that
-                                            // only one string need be appended
-                                            // to the text area's document
-                                            textAreaOutput.append(String.join("", textQueue));
-                                            textQueue.clear();
-                                            textUpdateScheduled[0] = false;
-                                        }
-                                    });
-                                    textUpdateScheduled[0] = true;
-                                }
-                            }
-                        }
-
-                        @Override public void flush() {}
-                        @Override public void close() {}
-                    };
+                    Writer writer = new BoundedScriptWriter(textAreaOutput);
                     scriptEngine.getContext().setWriter(writer);
                     scriptEngine.getContext().setErrorWriter(writer);
 
@@ -477,42 +447,36 @@ public class ScriptRunner extends WorldPainterDialog {
                     // TODO add an event to the world history (after it has succeeded, and first make that history
                     //  undoable)
 
-                    // Execute script — nested inhibit via Dimension ref-count
-                    if (dimension != null) {
-                        dimension.setEventsInhibited(true);
-                    }
                     try {
-                        // Load the script
                         final String script = org.pepsoft.util.FileUtils.load(scriptFile, Charset.defaultCharset());
-
-                        // Compile the script, if the engine supports it, and run it
-                        final long start;
-                        if (scriptEngine instanceof Compilable) {
-                            final CompiledScript compiledScript;
-                            if (COMPILED_SCRIPTS.containsKey(script)) {
-                                compiledScript = COMPILED_SCRIPTS.get(script);
-                            } else {
-                                logger.info("Compiling script {}", scriptName);
-                                compiledScript = ((Compilable) scriptEngine).compile(new FileReader(scriptFile));
-                                COMPILED_SCRIPTS.put(script, compiledScript);
-                            }
-                            start = System.currentTimeMillis();
-                            compiledScript.eval();
-                        } else {
-                            start = System.currentTimeMillis();
+                        final boolean automaticRollback = BundledScriptCatalog.usesHostUndoTransaction(script);
+                        try (ScriptEditTransaction transaction = new ScriptEditTransaction(dimension, automaticRollback)) {
+                            runContext.checkForInterrupt();
+                            final long start = System.currentTimeMillis();
+                            // A fresh engine also prevents retained compiled scripts from pinning worlds.
                             scriptEngine.eval(script);
+                            logger.debug("Running script {} took {} ms", scriptName, System.currentTimeMillis() - start);
+                            runContext.checkGoCalled(null);
+                            // Close the last-check/commit cancellation window for host-owned edits.
+                            // Native transactions have already made their own commit decision.
+                            if (automaticRollback) runContext.checkForInterrupt();
+                            transaction.commit();
                         }
-                        logger.debug("Running script {} took {} ms", scriptName, System.currentTimeMillis() - start);
-
-                        // Check that go() was invoked on the last operation:
-                        context.checkGoCalled(null);
                     } catch (ScriptingContext.InterruptedException e) {
                         logger.info("Script {} execution interrupted by user", scriptName);
                         doLaterOnEventThread(() -> beepAndShowWarning(ScriptRunner.this, "Script execution interrupted by user", "Script Aborted"));
                     } catch (RuntimeException e) {
-                        logger.error(e.getClass().getSimpleName() + " occurred while executing " + scriptFileName, e);
-                        doLaterOnEventThread(() -> beepAndShowError(ScriptRunner.this, e.getClass().getSimpleName() + " occurred (message: " + e.getMessage() + ")", "Error"));
+                        if (ScriptExecution.isCancellation(e)) {
+                            doLaterOnEventThread(() -> beepAndShowWarning(ScriptRunner.this, "Script execution interrupted by user", "Script Aborted"));
+                        } else {
+                            logger.error(e.getClass().getSimpleName() + " occurred while executing " + scriptFileName, e);
+                            doLaterOnEventThread(() -> beepAndShowError(ScriptRunner.this, e.getClass().getSimpleName() + " occurred (message: " + e.getMessage() + ")", "Error"));
+                        }
                     } catch (javax.script.ScriptException e) {
+                        if (ScriptExecution.isCancellation(e)) {
+                            doLaterOnEventThread(() -> beepAndShowWarning(ScriptRunner.this, "Script execution interrupted by user", "Script Aborted"));
+                            return;
+                        }
                         logger.error("ScriptException occurred while executing " + scriptFileName, e);
                         final StringBuilder sb = new StringBuilder();
                         sb.append(e.getMessage());
@@ -530,9 +494,6 @@ public class ScriptRunner extends WorldPainterDialog {
                         logger.error("I/O error occurred while executing " + scriptFileName, e);
                         doLaterOnEventThread(() -> beepAndShowError(ScriptRunner.this, "I/O error while executing " + scriptFileName, "Error"));
                     } finally {
-                        if (dimension != null) {
-                            dimension.setEventsInhibited(false);
-                        }
                         if (undoManagers != null) {
                             undoManagers.forEach(UndoManager::armSavePoint);
                         }
@@ -547,7 +508,7 @@ public class ScriptRunner extends WorldPainterDialog {
                         comboBoxScript.setEnabled(true);
                         buttonSelectScript.setEnabled(true);
                         textAreaParameters.setEnabled(true);
-                        buttonRun.setEnabled(true);
+                        setControlStates();
                         buttonCancel.setText("Close");
                         buttonCancel.setEnabled(true);
                     });
@@ -558,10 +519,11 @@ public class ScriptRunner extends WorldPainterDialog {
 
     @Override
     protected void cancel() {
-        if (context != null) {
+        final ScriptingContext running = context;
+        if (running != null) {
             buttonCancel.setText("...");
             buttonCancel.setEnabled(false);
-            context.interrupt();
+            running.interrupt();
             nonResponsiveScriptWarningTimer = new Timer(10000,
                     evt -> showWarning(this, "Script not responding to interrupt request.\n" +
                     "Ask the author to add interrupt checking to the script.\n" +
@@ -766,13 +728,10 @@ public class ScriptRunner extends WorldPainterDialog {
     private final ArrayList<File> recentScriptFiles;
     private final Collection<UndoManager> undoManagers;
     private ScriptDescriptor scriptDescriptor;
-    private ScriptingContext context;
+    private volatile ScriptingContext context;
     private Timer nonResponsiveScriptWarningTimer;
 
-    private static final ScriptEngineManager SCRIPT_ENGINE_MANAGER = new ScriptEngineManager();
     private static final Pattern DESCRIPTOR_PATTERN = Pattern.compile("script\\.([.a-zA-Z_0-9]+)=(.+)$");
-    private static final Map<String, ScriptEngine> SCRIPT_ENGINES = new HashMap<>();
-    private static final Map<String, CompiledScript> COMPILED_SCRIPTS = new HashMap<>();
     private static final Logger logger = LoggerFactory.getLogger(ScriptRunner.class);
 
     @SuppressWarnings("Convert2MethodRef") // This is shorter
@@ -801,9 +760,9 @@ public class ScriptRunner extends WorldPainterDialog {
         E getEditor() {
             if (editor == null) {
                 editor = createEditor();
-            }
-            if (defaultValue != null) {
-                setValue(defaultValue);
+                if (defaultValue != null) {
+                    setValue(defaultValue);
+                }
             }
             return editor;
         }
@@ -967,21 +926,25 @@ public class ScriptRunner extends WorldPainterDialog {
 
         @Override
         Float toObject(String str) {
-            return Float.valueOf(str);
+            final float value = Float.parseFloat(str);
+            if (!Float.isFinite(value)) throw new IllegalArgumentException("Parameter must be finite: " + name);
+            return value;
         }
 
         @Override
         boolean isEditorValid() {
+            if (editor.getText().trim().isEmpty()) return optional;
             try {
                 editor.commitEdit();
-                return optional || (editor.getValue() != null);
+                return editor.getValue() instanceof Number value && Float.isFinite(value.floatValue());
             } catch (ParseException e) {
-                return optional;
+                return false;
             }
         }
 
         @Override
         Float getValue() {
+            if (editor.getText().trim().isEmpty()) return null;
             Number nr = (Number) editor.getValue();
             return (nr != null) ? nr.floatValue() : null;
         }

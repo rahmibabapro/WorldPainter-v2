@@ -11,7 +11,8 @@ import java.util.*;
  */
 public class ExportManifest implements Serializable {
     public static final String MANIFEST_FILE_NAME = ".wpexport-manifest.json";
-    private int schemaVersion = 1;
+    public static final int CURRENT_SCHEMA_VERSION = 2;
+    private int schemaVersion = CURRENT_SCHEMA_VERSION;
     private String worldName;
     private long timestamp;
     private String platformId;
@@ -108,10 +109,18 @@ public class ExportManifest implements Serializable {
         }
         String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
         ExportManifest manifest = new ExportManifest();
+        // Never interpret an unversioned or sampled-hash manifest as current.
+        manifest.schemaVersion = 0;
 
         for (String line : content.split("\n")) {
             line = line.trim();
-            if (line.startsWith("\"worldName\":")) {
+            if (line.startsWith("\"schemaVersion\":")) {
+                try {
+                    manifest.schemaVersion = Math.toIntExact(extractLongValue(line));
+                } catch (ArithmeticException | NumberFormatException e) {
+                    throw new IOException("Invalid delta export manifest version", e);
+                }
+            } else if (line.startsWith("\"worldName\":")) {
                 manifest.worldName = extractStringValue(line);
             } else if (line.startsWith("\"platformId\":")) {
                 manifest.platformId = extractStringValue(line);
@@ -128,6 +137,10 @@ public class ExportManifest implements Serializable {
                     } catch (NumberFormatException ignored) {}
                 }
             }
+        }
+        if (manifest.schemaVersion != CURRENT_SCHEMA_VERSION) {
+            throw new IOException("Delta manifest version " + manifest.schemaVersion
+                    + " is not compatible with complete-cell fingerprints; run a full export.");
         }
         return manifest;
     }

@@ -5,16 +5,25 @@ import org.pepsoft.worldpainter.Configuration;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.JarURLConnection;
-import java.net.URISyntaxException;
-import java.net.URL;
+import java.io.UncheckedIOException;
+import java.nio.charset.Charset;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.List;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
+import java.util.Locale;
+import java.util.Set;
+
+import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
+import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
+import static java.nio.file.StandardCopyOption.COPY_ATTRIBUTES;
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 /**
  * Catalog of scripts bundled in {@code org/pepsoft/worldpainter/scripts/}.
@@ -76,21 +85,70 @@ public final class BundledScriptCatalog {
 
     public static File materialise(BundledScript script) throws IOException {
         final File cacheDir = new File(new File(Configuration.getConfigDir(), "scripts"), "bundled-cache");
-        if (! cacheDir.exists() && ! cacheDir.mkdirs()) {
-            throw new IOException("Could not create script cache directory " + cacheDir);
+        return materialise(script, cacheDir.toPath());
+    }
+
+    /** Separate cache root keeps tests and other isolated callers out of the user's profile. */
+    static synchronized File materialise(BundledScript script, Path cacheDir) throws IOException {
+        cacheDir = cacheDir.toAbsolutePath().normalize();
+        final Path target = cacheDir.resolve(script.category().name().toLowerCase(Locale.ROOT) + "_" + script.fileName()).normalize();
+        if (! cacheDir.equals(target.getParent())) {
+            throw new IOException("Bundled script file name escapes the cache directory: " + script.fileName());
         }
-        final File target = new File(cacheDir, script.category().name().toLowerCase() + "_" + script.fileName());
         final ClassLoader cl = BundledScriptCatalog.class.getClassLoader();
+        final byte[] bytes;
         try (InputStream in = cl.getResourceAsStream(script.resourcePath())) {
             if (in == null) {
                 throw new IOException("Bundled script not found: " + script.resourcePath());
             }
-            final byte[] bytes = in.readAllBytes();
-            if ((! target.exists()) || target.lastModified() < getResourceTimestamp(cl, script.resourcePath())) {
-                Files.write(target.toPath(), bytes);
-            }
+            bytes = in.readAllBytes();
         }
-        return target;
+        Files.createDirectories(cacheDir);
+        final boolean exists = Files.exists(target, NOFOLLOW_LINKS);
+        if (exists && ! Files.isRegularFile(target, NOFOLLOW_LINKS)) {
+            throw new IOException("Script cache target is not a regular file: " + target);
+        }
+        // Timestamps are not content versions: a copied/edited cache may be newer
+        // than every future JAR. Identical content needs neither a backup nor a write.
+        if (exists && Files.size(target) == bytes.length && Arrays.equals(Files.readAllBytes(target), bytes)) {
+            return target.toFile();
+        }
+        final Path staged = Files.createTempFile(cacheDir, ".bundled-script-", ".tmp");
+        try {
+            Files.write(staged, bytes);
+            if (Files.exists(target, NOFOLLOW_LINKS)) {
+                if (! Files.isRegularFile(target, NOFOLLOW_LINKS)) {
+                    throw new IOException("Script cache target changed to a non-regular file: " + target);
+                }
+                final Path backupRoot = cacheDir.resolve("backups");
+                Files.createDirectories(backupRoot);
+                final String prefix = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").format(LocalDateTime.now()) + "-";
+                final Path backup = Files.createTempDirectory(backupRoot, prefix).resolve(target.getFileName());
+                // Never overwrite a customised file unless its complete predecessor
+                // was successfully preserved. A failed backup leaves the live file alone.
+                Files.copy(target, backup, COPY_ATTRIBUTES);
+                if (Files.mismatch(target, backup) != -1) {
+                    throw new IOException("Script cache changed while it was being backed up: " + target);
+                }
+            }
+            try {
+                Files.move(staged, target, ATOMIC_MOVE, REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                throw new IOException("Script cache does not support safe atomic replacement: " + cacheDir, e);
+            }
+        } finally {
+            Files.deleteIfExists(staged);
+        }
+        return target.toFile();
+    }
+
+    /**
+     * Only an exact shipped script may opt into the host-managed edit transaction.
+     * A filename, copied header or edited script is not evidence of that contract.
+     * The native blueprint script owns its own transaction and is always excluded.
+     */
+    public static boolean usesHostUndoTransaction(String source) {
+        return source != null && HostUndoSources.SOURCES.contains(source);
     }
 
     public static List<File> materialiseAll() throws IOException {
@@ -101,29 +159,27 @@ public final class BundledScriptCatalog {
         return Collections.unmodifiableList(files);
     }
 
-    private static long getResourceTimestamp(ClassLoader cl, String resourcePath) throws IOException {
-        final URL url = cl.getResource(resourcePath);
-        if (url == null) {
-            return 0L;
-        }
-        if ("jar".equals(url.getProtocol())) {
-            final JarURLConnection connection = (JarURLConnection) url.openConnection();
-            try (JarFile jar = connection.getJarFile()) {
-                final Enumeration<JarEntry> entries = jar.entries();
-                while (entries.hasMoreElements()) {
-                    final JarEntry entry = entries.nextElement();
-                    if (resourcePath.equals(entry.getName())) {
-                        return entry.getTime();
-                    }
+    private static final class HostUndoSources {
+        private static Set<String> load() {
+            final Set<String> result = new HashSet<>(), visited = new HashSet<>();
+            String nativeSource = null;
+            for (BundledScript script : SCRIPTS) {
+                if (! visited.add(script.resourcePath())) continue;
+                try (InputStream in = BundledScriptCatalog.class.getClassLoader().getResourceAsStream(script.resourcePath())) {
+                    if (in == null) continue;
+                    final String source = new String(in.readAllBytes(), Charset.defaultCharset());
+                    if (script.resourcePath().equals(PREFIX + "globals/axiom_blueprint_texture.js")) nativeSource = source;
+                    else result.add(source);
+                } catch (IOException e) {
+                    // Failure to verify provenance must not silently run a known
+                    // editing script without its undo/rollback protection.
+                    throw new UncheckedIOException("Could not verify bundled script " + script.resourcePath(), e);
                 }
             }
-        } else {
-            try {
-                return Files.getLastModifiedTime(java.nio.file.Path.of(url.toURI())).toMillis();
-            } catch (URISyntaxException e) {
-                throw new IOException(e);
-            }
+            result.remove(nativeSource);
+            return Set.copyOf(result);
         }
-        return System.currentTimeMillis();
+
+        private static final Set<String> SOURCES = load();
     }
 }

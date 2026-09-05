@@ -96,6 +96,11 @@ var ImageIO = Java.type('javax.imageio.ImageIO');
 var File = Java.type('java.io.File');
 var HashMap = Java.type('java.util.HashMap');
 var Terrain = Java.type('org.pepsoft.worldpainter.Terrain');
+var ReadOnly = Java.type('org.pepsoft.worldpainter.layers.ReadOnly').INSTANCE;
+var VoidLayer = Java.type('org.pepsoft.worldpainter.layers.Void').INSTANCE;
+var NotPresent = Java.type('org.pepsoft.worldpainter.layers.NotPresent').INSTANCE;
+var NotPresentBlock = Java.type('org.pepsoft.worldpainter.layers.NotPresentBlock').INSTANCE;
+var FloodWithLava = Java.type('org.pepsoft.worldpainter.layers.FloodWithLava').INSTANCE;
 
 if (world == null || dimension == null) {
     throw 'Terrain Texture Painter must be run from an open WorldPainter world.';
@@ -109,20 +114,20 @@ var westTexture = readImageParam('westTexture', false);
 var maskTexture = readImageParam('mask', false);
 
 var palette = parsePalette(String(params['palette']));
-var sourceTerrain = resolveTerrain(optionalText('terrainFilter'));
-var layerFilter = resolveLayer(optionalText('layerFilter'));
-var minHeight = Number(params['minHeight']);
-var maxHeight = Number(params['maxHeight']);
-var minSlope = Number(params['minSlope']);
-var maxSlope = Number(params['maxSlope']);
-var sideSlope = Number(params['sideSlope']);
-var textureScale = Number(params['textureScale']);
-var offsetX = Number(params['offsetX']);
-var offsetY = Number(params['offsetY']);
-var repeatTexture = String(params['repeatTexture']).toLowerCase() === 'true';
-var dither = String(params['dither']).toLowerCase() === 'true';
-var seed = Number(params['seed']);
-var dryRun = String(params['dryRun']).toLowerCase() === 'true';
+var sourceTerrain = resolveTerrain(optionalText(params['terrainFilter']));
+var layerFilter = resolveLayer(optionalText(params['layerFilter']));
+var minHeight = finiteNumberParam('minHeight');
+var maxHeight = finiteNumberParam('maxHeight');
+var minSlope = finiteNumberParam('minSlope');
+var maxSlope = finiteNumberParam('maxSlope');
+var sideSlope = finiteNumberParam('sideSlope');
+var textureScale = finiteNumberParam('textureScale');
+var offsetX = finiteNumberParam('offsetX');
+var offsetY = finiteNumberParam('offsetY');
+var repeatTexture = booleanParam('repeatTexture', true);
+var dither = booleanParam('dither', true);
+var seed = finiteNumberParam('seed');
+var dryRun = booleanParam('dryRun', true);
 
 if (!(textureScale > 0)) {
     throw 'Blocks per texture pixel must be greater than zero.';
@@ -133,12 +138,18 @@ if (minHeight > maxHeight) {
 if (minSlope < 0 || maxSlope > 90 || minSlope > maxSlope) {
     throw 'Slope limits must be between 0 and 90 degrees.';
 }
+if (sideSlope < 0 || sideSlope > 90) {
+    throw 'Directional texture slope must be between 0 and 90 degrees.';
+}
 
 var minX = dimension.getLowestX() * 128;
 var minY = dimension.getLowestY() * 128;
 var maxX = minX + dimension.getWidth() * 128;
 var maxY = minY + dimension.getHeight() * 128;
-var total = Math.max(1, (maxX - minX - 2) * (maxY - minY - 2));
+// Visit present tiles only, including their outer rows/columns. A sparse world
+// must not allocate or scan the potentially enormous empty bounding rectangle.
+var tiles = dimension.getTiles();
+var total = Math.max(1, tiles.size() * 128 * 128);
 var checked = 0;
 var eligible = 0;
 var painted = 0;
@@ -150,11 +161,19 @@ print('Texture: ' + baseTexture.getWidth() + 'x' + baseTexture.getHeight() + ', 
 print('Region: X ' + minX + '..' + (maxX - 1) + ', Y ' + minY + '..' + (maxY - 1));
 print(dryRun ? 'Dry run enabled; the world will not be changed.' : 'Applying terrain texture...');
 
-for (var x = minX + 1; x < maxX - 1; x++) {
-    for (var y = minY + 1; y < maxY - 1; y++) {
+var tileIterator = tiles.iterator();
+while (tileIterator.hasNext()) {
+    var tile = tileIterator.next();
+    for (var localX = 0; localX < 128; localX++) {
+    for (var localY = 0; localY < 128; localY++) {
+        var x = tile.getX() * 128 + localX;
+        var y = tile.getY() * 128 + localY;
         checked++;
-        var height = dimension.getHeightAt(x, y);
-        if (height < minHeight || height > maxHeight) {
+        var height = tile.getHeight(localX, localY);
+        if (!isFinite(height) || isNoData(tile, localX, localY)
+                || tile.getBitLayerValue(ReadOnly, localX, localY)
+                || tile.getBitLayerValue(FloodWithLava, localX, localY)
+                || height < minHeight || height > maxHeight) {
             progressTick();
             continue;
         }
@@ -191,6 +210,7 @@ for (var x = minX + 1; x < maxX - 1; x++) {
             }
         }
         progressTick();
+    }
     }
 }
 
@@ -240,6 +260,23 @@ function optionalText(value) {
     return text.length === 0 ? null : text;
 }
 
+function finiteNumberParam(name) {
+    var text = optionalText(params[name]);
+    var number = text == null ? NaN : Number(text);
+    if (!isFinite(number)) {
+        throw 'A finite numeric value is required for ' + name + '.';
+    }
+    return number;
+}
+
+function booleanParam(name, fallback) {
+    var value = params[name];
+    if (value == null) return fallback;
+    var text = String(value).toLowerCase();
+    if (text !== 'true' && text !== 'false') throw 'A true/false value is required for ' + name + '.';
+    return text === 'true';
+}
+
 function normalise(value) {
     return String(value).toLowerCase().replace(/[ _-]/g, '');
 }
@@ -252,6 +289,9 @@ function resolveTerrain(name) {
     for (var i = 0; i < Terrain.VALUES.length; i++) {
         var terrain = Terrain.VALUES[i];
         if (normalise(terrain.getName()) === wanted || normalise(terrain.toString()) === wanted) {
+            if (terrain.isCustom() && !Terrain.isCustomMaterialConfigured(terrain.getCustomTerrainIndex())) {
+                throw 'Custom terrain is not configured: ' + name;
+            }
             return terrain;
         }
     }
@@ -266,12 +306,18 @@ function resolveLayer(name) {
     if (name == null) {
         return null;
     }
-    var app = Java.type('org.pepsoft.worldpainter.App').getInstance();
-    var layers = app.getAllLayers();
+    var app = Java.type('org.pepsoft.worldpainter.App').getInstanceIfExists();
+    var layers = app == null ? dimension.getAllLayers(false) : app.getAllLayers();
     var wanted = normalise(name);
-    for (var i = 0; i < layers.length; i++) {
-        if (normalise(layers[i].getName()) === wanted) {
-            return layers[i];
+    var iterator = layers.iterator();
+    while (iterator.hasNext()) {
+        var layer = iterator.next();
+        if (normalise(layer.getName()) === wanted) {
+            var size = String(layer.getDataSize());
+            if (size !== 'BIT' && size !== 'BIT_PER_CHUNK' && size !== 'NIBBLE' && size !== 'BYTE') {
+                throw 'Layer filter must be a paintable mask: ' + name;
+            }
+            return layer;
         }
     }
     throw 'Unknown layer: ' + name;
@@ -314,8 +360,9 @@ function parsePalette(value) {
 }
 
 function getSurface(x, y) {
-    var dx = (dimension.getHeightAt(x + 1, y) - dimension.getHeightAt(x - 1, y)) / 2.0;
-    var dy = (dimension.getHeightAt(x, y + 1) - dimension.getHeightAt(x, y - 1)) / 2.0;
+    var center = dimension.getHeightAt(x, y);
+    var dx = (heightOrCenter(x + 1, y, center) - heightOrCenter(x - 1, y, center)) / 2.0;
+    var dy = (heightOrCenter(x, y + 1, center) - heightOrCenter(x, y - 1, center)) / 2.0;
     var slope = Math.atan(Math.sqrt(dx * dx + dy * dy)) * 180.0 / Math.PI;
     var direction;
     if (Math.abs(dx) >= Math.abs(dy)) {
@@ -324,6 +371,22 @@ function getSurface(x, y) {
         direction = dy >= 0 ? 'south' : 'north';
     }
     return { slope: slope, direction: direction };
+}
+
+function isNoData(tile, x, y) {
+    return tile.getBitLayerValue(VoidLayer, x, y)
+        || tile.getBitLayerValue(NotPresent, x, y)
+        || tile.getBitLayerValue(NotPresentBlock, x, y);
+}
+
+function heightOrCenter(x, y, center) {
+    var tile = dimension.getTile(Math.floor(x / 128), Math.floor(y / 128));
+    if (tile == null) return center;
+    var localX = ((x % 128) + 128) % 128;
+    var localY = ((y % 128) + 128) % 128;
+    if (isNoData(tile, localX, localY)) return center;
+    var height = tile.getHeight(localX, localY);
+    return isFinite(height) ? height : center;
 }
 
 function selectTexture(surface) {

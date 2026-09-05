@@ -14,6 +14,10 @@ public class ScriptProgress {
     }
 
     public void setProgress(double progress) {
+        context.checkForInterrupt();
+        if (!Double.isFinite(progress)) {
+            throw new IllegalArgumentException("Progress must be finite");
+        }
         if (progressReceiver != null) {
             try {
                 progressReceiver.setProgress((float) Math.max(0.0, Math.min(1.0, progress)));

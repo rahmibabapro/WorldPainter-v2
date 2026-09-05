@@ -310,9 +310,8 @@ public final class App extends JFrame implements BrushControl,
         setEnabled(true);
     }
 
-    /** Drops redo stacks and rendered 3D tile caches; safe to call while a world is open but idle. */
+    /** Releases only reproducible render data; inactivity must not discard editing history. */
     public void releaseIdleMemory() {
-        undoManagers.values().forEach(UndoManager::clearRedo);
         if (threeDeeFrame != null) {
             threeDeeFrame.clearRenderCache();
         }
@@ -2036,6 +2035,18 @@ public final class App extends JFrame implements BrushControl,
     }
 
     /**
+     * Activates the line-oriented paint tool used for drawing a river centreline.
+     * A radius of zero is intentional: it produces a one-block input path while
+     * the river carver remains responsible for the final variable channel width.
+     */
+    public void activateRiverPathDrawingTool() {
+        if ((pencilToggleButton != null) && (! pencilToggleButton.isSelected())) {
+            pencilToggleButton.setSelected(true);
+        }
+        setRadius(0);
+    }
+
+    /**
      * Registers a custom layer on a palette. Used by river tooling to auto-create the River Path layer.
      */
     public void registerCustomLayer(CustomLayer layer, boolean activate) {
@@ -3244,7 +3255,8 @@ public final class App extends JFrame implements BrushControl,
         toolPanel.setLayout(new GridLayout(0, 4));
         // TODO: use function keys as accelerators?
         toolPanel.add(createButtonForOperation(new SprayPaint(view), 'r'));
-        toolPanel.add(createButtonForOperation(new Pencil(view), 'p'));
+        pencilToggleButton = (JToggleButton) createButtonForOperation(new Pencil(view), 'p');
+        toolPanel.add(pencilToggleButton);
         toolPanel.add(createButtonForOperation(new Fill(view), 'l'));
         toolPanel.add(createButtonForOperation(new Text(view), 'x'));
 
@@ -7035,7 +7047,7 @@ public final class App extends JFrame implements BrushControl,
     private int maxRadius = DEFAULT_MAX_RADIUS, brushRotation = 0, toolBrushRotation = 0, previousBrushRotation = 0;
     private JComboBox<TerrainMode> terrainModeComboBox;
     private JCheckBox terrainSoloCheckBox;
-    private JToggleButton setSpawnPointToggleButton, eyedropperToggleButton;
+    private JToggleButton setSpawnPointToggleButton, eyedropperToggleButton, pencilToggleButton;
     private JMenuItem addNetherMenuItem, removeNetherMenuItem, addEndMenuItem, removeEndMenuItem, addCeilingMenuItem, removeCeilingMenuItem, addMasterMenuItem, removeMasterMenuItem;
     private JCheckBoxMenuItem viewSurfaceMenuItem, viewNetherMenuItem, viewEndMenuItem, extendedBlockIdsMenuItem;
     private ColourScheme selectedColourScheme;

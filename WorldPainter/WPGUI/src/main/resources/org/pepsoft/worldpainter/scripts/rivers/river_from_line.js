@@ -17,6 +17,17 @@
 // script.param.riverWidth.default=8
 // script.param.riverWidth.optional=false
 
+// script.param.presetId.type=integer
+// script.param.presetId.displayName=Nehir hazır ayarı
+// script.param.presetId.description=0=eski ayarlar, 1=dere, 2=doğal, 3=geniş, 4=kanyon, 5=dağ. Genişlik kaynaktan aşağıya kademeli artar.
+// script.param.presetId.default=0
+// script.param.presetId.optional=false
+
+// script.param.linkSparseWaypoints.type=boolean
+// script.param.linkSparseWaypoints.displayName=Ayrık noktaları bir yola bağla
+// script.param.linkSparseWaypoints.default=true
+// script.param.linkSparseWaypoints.optional=false
+
 // script.param.riverDepth.type=float
 // script.param.riverDepth.displayName=Nehir derinliği
 // script.param.riverDepth.description=Nehrin kazılacağı derinlik
@@ -37,19 +48,19 @@
 
 // script.param.waterLevel.type=integer
 // script.param.waterLevel.displayName=Su seviyesi
-// script.param.waterLevel.description=Su bloklarının konacağı yükseklik
+// script.param.waterLevel.description=Eski ayarlarda hedef seviye. Yeni hazır nokta-yolu ayarlarında su mevcut araziyi izler; sabit hedef Y uygulanmaz.
 // script.param.waterLevel.default=62
 // script.param.waterLevel.optional=false
 
 // script.param.bankSmoothing.type=boolean
 // script.param.bankSmoothing.displayName=Nehir kıyılarını yumuşat
-// script.param.bankSmoothing.description=Dik nehir kıyılarını doğal görünümlü hale getir
+// script.param.bankSmoothing.description=Hazır ayarlarda yalnız su altı yatak kesitini yumuşatır; kuru kıyı ve yamaçları değiştirmez.
 // script.param.bankSmoothing.default=true
 // script.param.bankSmoothing.optional=false
 
 // script.param.enableWaterfalls.type=boolean
 // script.param.enableWaterfalls.displayName=Selaleleri etkinleştir
-// script.param.enableWaterfalls.description=Dik yerlerinde selaleler oluştur
+// script.param.enableWaterfalls.description=Eski arayüz uyumluluğu için saklanır. Nokta-yolu motoru ek şelale havuzu üretmez; doğal arazi düşüşlerini izler.
 // script.param.enableWaterfalls.default=true
 // script.param.enableWaterfalls.optional=false
 
@@ -93,6 +104,11 @@
 var riverLayerName = params['riverLayer'];
 var riverWidth = params['riverWidth'];
 var riverDepth = params['riverDepth'];
+var riverPreset = getRealisticRiverPreset(params['presetId']);
+if (riverPreset != null) {
+    riverWidth = riverPreset.endWidth;
+    riverDepth = riverPreset.maxDepth;
+}
 var tributaryCount = params['tributaryCount'];
 var tributaryRandomness = params['tributaryRandomness'];
 var waterLevel = params['waterLevel'];
@@ -108,6 +124,7 @@ var shallowGraniteSeed = params['shallowGraniteSeed'];
 // Initialize
 var app = org.pepsoft.worldpainter.App.getInstance();
 var dimension = app.dimension;
+if (dimension == null) throw new Error('Nehir oluşturmak için önce bir dünya açın.');
 var extent = dimension.getExtent();
 var worldWidth = extent.getWidth() * 128;
 var worldHeight = extent.getHeight() * 128;
@@ -151,11 +168,16 @@ if (shallowGraniteClusterSize == null) {
 if (shallowGraniteSeed == null) {
     shallowGraniteSeed = 1337;
 }
-shallowGraniteMaxDepth = Math.max(0.25, Number(shallowGraniteMaxDepth));
-shallowGraniteFloorCoverage = clamp01(Number(shallowGraniteFloorCoverage));
-shallowGraniteBankCoverage = clamp01(Number(shallowGraniteBankCoverage));
-shallowGraniteClusterSize = Math.max(1, Math.floor(Number(shallowGraniteClusterSize)));
-shallowGraniteSeed = Math.floor(Number(shallowGraniteSeed));
+shallowGraniteMaxDepth = riverNumber(shallowGraniteMaxDepth, 'Granit derinliği', 0.25, 512, false);
+shallowGraniteFloorCoverage = riverNumber(shallowGraniteFloorCoverage, 'Taban granit oranı', 0, 1, false);
+shallowGraniteBankCoverage = riverNumber(shallowGraniteBankCoverage, 'Kıyı granit oranı', 0, 1, false);
+shallowGraniteClusterSize = riverNumber(shallowGraniteClusterSize, 'Granit küme boyutu', 1, 4096, true);
+shallowGraniteSeed = riverNumber(shallowGraniteSeed, 'Granit seed', -2147483648, 2147483647, true);
+riverWidth = riverNumber(riverWidth, 'Nehir genişliği', 2, 128, false);
+riverDepth = riverNumber(riverDepth, 'Nehir derinliği', 0.25, 64, false);
+tributaryCount = riverNumber(tributaryCount, 'Yan kol sayısı', 0, 128, true);
+tributaryRandomness = riverNumber(tributaryRandomness, 'Yan kol rastgeleliği', 0, 1, false);
+waterLevel = riverNumber(waterLevel, 'Su seviyesi', dimension.getMinHeight(), dimension.getMaxHeight() - 1, true);
 
 print("===========================================");
 print("River From Line Script başlıyor...");
@@ -184,19 +206,9 @@ if (!riverLayer) {
 print("Layer bulundu: " + riverLayerName);
 
 // Find all points where the river layer is set
-var riverPoints = [];
-var riverMap = {};
-
-for (var x = 0; x < worldWidth; x++) {
-    for (var y = 0; y < worldHeight; y++) {
-        var ax = minX + x;
-        var ay = minY + y;
-        if (dimension.getBitLayerValueAt(riverLayer, ax, ay)) {
-            riverPoints.push({x: ax, y: ay});
-            riverMap[ax + "," + ay] = true;
-        }
-    }
-}
+var lineInput = collectRiverLine(dimension, riverLayer, 65536);
+var riverPoints = lineInput.points;
+var riverMap = lineInput.map;
 
 print("Bulunan nehir çizgisi noktaları: " + riverPoints.length);
 
@@ -237,6 +249,9 @@ print("Çıkış: (" + lineSelection.outlet.x + ", " + lineSelection.outlet.y + 
 print("Takip edilen merkez hattı: " + orderedRiverPoints.length + " nokta");
 
 // Process main river
+if (riverPreset != null) {
+    carveShallowNamedLine(orderedRiverPoints);
+} else {
 processRiver(orderedRiverPoints, true);
 
 // Create tributaries
@@ -249,6 +264,7 @@ stabiliseRiverWater();
 // Tributaries can overlap and deepen a cell after the main channel touched it.
 // Apply material only after every carve, using the final water and bed levels.
 applyShallowGraniteDetail();
+} // Named presets must not run the old recarve/smoothing passes afterwards.
 
 print("===========================================");
 print("İşlem tamamlandı");
@@ -263,18 +279,79 @@ print("Süre: " + elapsed + " ms");
 print("===========================================");
 
 // Main river processing function
+function checkRiverLineCancel() {
+    if (typeof progress !== 'undefined' && progress != null) progress.checkForCancel();
+    if (typeof wp !== 'undefined' && typeof wp.checkForInterrupt === 'function') wp.checkForInterrupt();
+}
+
+function collectRiverLine(dim, layer, limit) {
+    var size = String(layer.getDataSize());
+    if (size !== 'BIT' && size !== 'BIT_PER_CHUNK') throw new Error('Nehir çizgisi için bit türünde bir layer seçin.');
+    var tiles = Java.from(dim.getTiles().toArray());
+    tiles.sort(function(a, b) { return a.getX() - b.getX() || a.getY() - b.getY(); });
+    var points = [], map = {};
+    for (var t = 0; t < tiles.length; t++) {
+        checkRiverLineCancel();
+        var tile = tiles[t];
+        if (!tile.hasLayer(layer)) continue;
+        for (var x = 0; x < 128; x++) {
+            checkRiverLineCancel();
+            for (var y = 0; y < 128; y++) {
+                if (!tile.getBitLayerValue(layer, x, y)) continue;
+                if (points.length >= limit) throw new Error('Nehir çizgisi ' + limit + ' nokta sınırını aşıyor; daha ince veya kısa bir çizgi kullanın.');
+                var ax = tile.getX() * 128 + x, ay = tile.getY() * 128 + y;
+                points.push({x: ax, y: ay});
+                map[ax + ',' + ay] = true;
+            }
+        }
+    }
+    return {points: points, map: map};
+}
+
+function canEditRiverCell(x, y) {
+    if (!isFinite(x) || !isFinite(y) || x < -2147483584 || x > 2147483583
+            || y < -2147483584 || y > 2147483583) return false;
+    if (!dimension.isTilePresent(x >> 7, y >> 7) || !isFinite(dimension.getHeightAt(x, y))) return false;
+    var layers = org.pepsoft.worldpainter.layers;
+    var guards = [layers.ReadOnly.INSTANCE, layers.NotPresent.INSTANCE, layers.NotPresentBlock.INSTANCE,
+        layers.Void.INSTANCE, layers.FloodWithLava.INSTANCE, layers.River.INSTANCE];
+    for (var i = 0; i < guards.length; i++) if (dimension.getBitLayerValueAt(guards[i], x, y)) return false;
+    return true;
+}
+
 function processRiver(orderedPoints, isMainRiver) {
-    var waterH = Math.max(waterLevel, dimension.getHeightAt(orderedPoints[0].x, orderedPoints[0].y) - 0.25);
+    for (var pi = 0; pi < orderedPoints.length; pi++) {
+        checkRiverLineCancel();
+        if (!canEditRiverCell(orderedPoints[pi].x, orderedPoints[pi].y)) {
+            throw new Error('Nehir çizgisi korunan veya eksik arazi ile çakışıyor; kaynak çizgisini düzeltin.');
+        }
+    }
+    // Snapshot centre heights before a diagonal cross-section touches the next
+    // centre; otherwise reading already-carved heights deepens the path again.
+    var originalHeights = [];
+    if (riverPreset != null) {
+        for (var oi = 0; oi < orderedPoints.length; oi++) {
+            originalHeights.push(dimension.getHeightAt(orderedPoints[oi].x, orderedPoints[oi].y));
+        }
+    }
+    var waterH = riverPreset == null ? Math.max(waterLevel, dimension.getHeightAt(orderedPoints[0].x, orderedPoints[0].y) - 0.25)
+            : originalHeights[0] - 0.25;
     for (var idx = 0; idx < orderedPoints.length; idx++) {
+        checkRiverLineCancel();
         var point = orderedPoints[idx];
-        var groundHeight = dimension.getHeightAt(point.x, point.y);
+        var groundHeight = riverPreset == null ? dimension.getHeightAt(point.x, point.y) : originalHeights[idx];
         if (idx > 0) {
             // Water never climbs upstream. Small steps are intentional and become
             // natural rapids; steep steps remain suitable waterfall candidates.
-            waterH = Math.max(waterLevel, Math.min(waterH - 0.05, groundHeight - 0.2));
+            waterH = riverPreset == null ? Math.max(waterLevel, Math.min(waterH - 0.05, groundHeight - 0.2))
+                    : Math.min(waterH, groundHeight - 0.2);
+        }
+        if (riverPreset != null) {
+            waterH = Math.min(waterH, groundHeight - 0.2);
         }
         var tangent = getLineTangent(orderedPoints, idx);
-        carveCrossSection(point.x, point.y, tangent, riverWidth, riverDepth, waterH);
+        var width = getRealisticLineWidth(idx, orderedPoints.length);
+        carveCrossSection(point.x, point.y, tangent, width, riverDepth, waterH);
     }
     
     riversCreated++;
@@ -286,6 +363,10 @@ function processRiver(orderedPoints, isMainRiver) {
 }
 
 function carveCrossSection(cx, cy, tangent, width, depth, waterSurface) {
+    if (riverPreset != null) {
+        width = Math.min(width, riverPreset.endWidth);
+        depth = Math.min(depth, riverPreset.maxDepth);
+    }
     var tangentLength = Math.sqrt(tangent.x * tangent.x + tangent.y * tangent.y);
     if (tangentLength === 0) {
         tangent = {x: 1, y: 0};
@@ -293,7 +374,7 @@ function carveCrossSection(cx, cy, tangent, width, depth, waterSurface) {
     }
     var normalX = -tangent.y / tangentLength;
     var normalY = tangent.x / tangentLength;
-    var halfWidth = Math.max(0.5, width / 2.0);
+    var halfWidth = Math.max(0.5, (width - (riverPreset == null ? 0 : 1)) / 2.0);
     var sampled = {};
     for (var offset = -Math.ceil(halfWidth); offset <= Math.ceil(halfWidth); offset++) {
         var lateral = Math.abs(offset) / halfWidth;
@@ -303,32 +384,35 @@ function carveCrossSection(cx, cy, tangent, width, depth, waterSurface) {
         var x = Math.round(cx + normalX * offset);
         var y = Math.round(cy + normalY * offset);
         var key = x + "," + y;
-        if (sampled[key] || x < minX || x > maxX || y < minY || y > maxY) {
+        if (sampled[key] || x < minX || x > maxX || y < minY || y > maxY || !canEditRiverCell(x, y)) {
             continue;
         }
         sampled[key] = true;
-        var originalHeight = dimension.getHeightAt(x, y);
+        var previousCell = shallowGraniteCandidates[key];
+        var originalHeight = riverPreset != null && previousCell != null
+                ? previousCell.originalHeight : dimension.getHeightAt(x, y);
         var bankFactor = 1.0 - lateral;
         var localDepth = Math.max(0.5, depth * (0.55 + 0.45 * bankFactor));
         var targetHeight = Math.max(dimension.getMinHeight(), waterSurface - localDepth);
-        if (originalHeight > targetHeight) {
+        if (dimension.getHeightAt(x, y) > targetHeight) {
             dimension.setHeightAt(x, y, targetHeight);
         }
         if (dimension.getHeightAt(x, y) <= waterSurface) {
             dimension.setWaterLevelAt(x, y, Math.max(Math.round(waterSurface), Math.ceil(targetHeight) + 1));
         }
-        rememberShallowGraniteCandidate(x, y, lateral, originalHeight);
+        rememberShallowGraniteCandidate(x, y, lateral, originalHeight, waterSurface);
         processedBlocks++;
     }
 }
 
-function rememberShallowGraniteCandidate(x, y, lateral, originalHeight) {
+function rememberShallowGraniteCandidate(x, y, lateral, originalHeight, plannedWater) {
     var key = x + "," + y;
     var previous = shallowGraniteCandidates[key];
     if (previous == null) {
         shallowGraniteCandidates[key] = {
             x: x, y: y, minLateral: lateral, maxLateral: lateral,
-            surfaceCap: Math.floor(originalHeight)
+            surfaceCap: Math.floor(originalHeight), originalHeight: originalHeight,
+            plannedWater: plannedWater
         };
     } else {
         // Intersections can be in the middle of one river and at the edge of
@@ -337,12 +421,15 @@ function rememberShallowGraniteCandidate(x, y, lateral, originalHeight) {
         previous.minLateral = Math.min(previous.minLateral, lateral);
         previous.maxLateral = Math.max(previous.maxLateral, lateral);
         previous.surfaceCap = Math.min(previous.surfaceCap, Math.floor(originalHeight));
+        previous.plannedWater = Math.min(previous.plannedWater, plannedWater);
     }
 }
 
 function stabiliseRiverWater() {
     for (var key in shallowGraniteCandidates) {
+        checkRiverLineCancel();
         var candidate = shallowGraniteCandidates[key];
+        if (!canEditRiverCell(candidate.x, candidate.y)) continue;
         var bedHeight = dimension.getHeightAt(candidate.x, candidate.y);
         if (candidate.minLateral > 0.85) {
             // The carved lip is dry; clearing its artificial water keeps the bank
@@ -352,8 +439,9 @@ function stabiliseRiverWater() {
             // Keep the requested depth where the original terrain can contain it,
             // while never filling higher than this cell's pre-carve ground level.
             // Sharp descents now become grounded falls, not free-standing walls.
-            dimension.setWaterLevelAt(candidate.x, candidate.y,
-                    Math.max(Math.floor(bedHeight) + 1, candidate.surfaceCap));
+            var level = riverPreset == null ? Math.max(Math.floor(bedHeight) + 1, candidate.surfaceCap)
+                    : boundedRiverWaterLevel(bedHeight, candidate.plannedWater, candidate.surfaceCap, riverPreset.maxDepth);
+            dimension.setWaterLevelAt(candidate.x, candidate.y, level);
         }
     }
 }
@@ -363,7 +451,9 @@ function applyShallowGraniteDetail() {
         return;
     }
     for (var key in shallowGraniteCandidates) {
+        checkRiverLineCancel();
         var candidate = shallowGraniteCandidates[key];
+        if (!canEditRiverCell(candidate.x, candidate.y)) continue;
         var actualWaterDepth = Math.max(0, dimension.getWaterLevelAt(candidate.x, candidate.y)
                 - dimension.getHeightAt(candidate.x, candidate.y));
         if (shouldPlaceShallowGranite(candidate.x, candidate.y, candidate.maxLateral, actualWaterDepth)) {
@@ -414,6 +504,84 @@ function graniteHash(x, y, salt) {
 
 function clamp01(value) {
     return Math.max(0, Math.min(1, isNaN(value) ? 0 : value));
+}
+
+// Keep these values aligned with RiverPreset and the source/automatic script.
+function riverNumber(value, label, minimum, maximum, integer) {
+    var number = Number(value);
+    if (value == null || !isFinite(number) || number < minimum || number > maximum
+            || (integer && Math.floor(number) !== number)) {
+        throw new Error(label + ': geçerli ' + (integer ? 'tam ' : '') + 'sayı ' + minimum + ' ile ' + maximum + ' arasında olmalı.');
+    }
+    return number;
+}
+
+function getRealisticRiverPreset(id) {
+    var definitions = [null,
+        { startWidth: 3, endWidth: 6, maxDepth: 0.85 },
+        { startWidth: 5, endWidth: 12, maxDepth: 1.10 },
+        { startWidth: 8, endWidth: 20, maxDepth: 1.40 },
+        { startWidth: 4, endWidth: 10, maxDepth: 2.0 },
+        { startWidth: 3, endWidth: 8, maxDepth: 1.0 }];
+    var value = id == null || id === '' ? 0 : Number(id);
+    if (!isFinite(value) || Math.floor(value) !== value || value < 0 || value >= definitions.length) {
+        throw new Error('Geçersiz nehir hazır ayarı; 0 ile 5 arasında bir değer seçin.');
+    }
+    return definitions[value];
+}
+
+function carveShallowNamedLine(points) {
+    function coordinate(value) {
+        var number = Number(value);
+        if (value == null || (typeof value === 'string' && value.replace(/\s/g, '') === '')
+                || !isFinite(number) || number < -2147483584 || number > 2147483583) {
+            throw new Error('Geçersiz nehir koordinatı: ' + value);
+        }
+        return Math.round(number);
+    }
+    if (!points || points.length < 2 || points.length > 65536) throw new Error('Nehir yolu 2 ile 65536 nokta içermeli.');
+    if (!isFinite(Number(shallowGraniteSeed))) throw new Error('Nehir seed değeri sonlu bir sayı olmalı.');
+    var Carver = Java.type('org.pepsoft.worldpainter.tools.scripts.ShallowRiverCarver');
+    var plan = new Carver(dimension, riverPreset.startWidth, riverPreset.endWidth, riverPreset.maxDepth,
+        bankSmoothing, shallowGraniteDetail, shallowGraniteSeed, typeof progress === 'undefined' ? null : progress);
+    // Explicit waypoints are not moved to another valley. Reject an unsuitable
+    // route instead of excavating/filling the surrounding terrain to fit it.
+    plan.enableTerrainPreservation();
+    var xs = [], ys = [];
+    for (var i = 0; i < points.length; i++) {
+        if (typeof progress !== 'undefined' && progress != null) progress.checkForCancel();
+        if (points[i] == null) throw new Error('Nehir yolunda boş koordinat var.');
+        xs.push(coordinate(points[i].x)); ys.push(coordinate(points[i].y));
+    }
+    if (!plan.addPath(Java.to(xs, 'int[]'), Java.to(ys, 'int[]'))) throw new Error(plan.getLastRejection());
+    // This mode has no custom avoid-layer input. Null still validates the
+    // complete wet footprint against current protected/missing cells.
+    if (!plan.isFootprintAllowed(null)) {
+        throw new Error('Son nehir yatağı korunan veya geçersiz bir alana taşıyor. Dünya değiştirilmedi.');
+    }
+    var result = plan.apply();
+    processedBlocks = result.changedCells(); riversCreated = result.paths();
+    shallowGraniteCells = result.graniteCells();
+    print('Sığ yatak azami toplam kazı: ' + result.maximumCut().toFixed(2) + ' blok; azami yerel dolgu: '
+        + result.maximumFill().toFixed(2) + ' blok.');
+    print('Nehir exportu — mod: Nokta yolu; yerel 2×2×2 seçeneği: ' + (shallowGraniteDetail ? 'açık' : 'kapalı')
+        + '; granit hücresi: ' + result.graniteCells()
+        + '; dünya geneli: ' + dimension.getSurfaceSmoothing() + ' (değiştirilmedi).');
+    if (shallowGraniteDetail) print('Yerel slab/merdiven yalnız yeni işaretli, ıslak granitte uygun geometride uygulanır; düz yüzey, dik uçurum ve gerekli taşıyıcı bloklar tam kalır.');
+}
+
+function getRealisticLineWidth(index, length) {
+    if (riverPreset == null) {
+        return riverWidth;
+    }
+    var progress = clamp01(index / Math.max(1, length - 1));
+    var smooth = progress * progress * (3 - 2 * progress);
+    return riverPreset.startWidth + smooth * (riverPreset.endWidth - riverPreset.startWidth);
+}
+
+function boundedRiverWaterLevel(bed, plannedWater, originalCap, maximumDepth) {
+    // Dry fringe cells stay dry; never raise a surface just to guarantee water.
+    return Math.max(Math.floor(bed), Math.floor(Math.min(plannedWater, originalCap, bed + maximumDepth)));
 }
 
 /**
@@ -480,8 +648,10 @@ function linkSparseWaypointsToPath(points, map, layer) {
 
 function clusterWaypoints(points, radius) {
     var used = {};
+    var pointIndex = indexPoints(points);
     var clusters = [];
     for (var i = 0; i < points.length; i++) {
+        if ((i & 127) === 0) checkRiverLineCancel();
         var p = points[i];
         var key = lineKey(p.x, p.y);
         if (used[key]) {
@@ -494,6 +664,7 @@ function clusterWaypoints(points, radius) {
         var count = 0;
         var maxH = -1e9;
         for (var head = 0; head < queue.length; head++) {
+            if ((head & 127) === 0) checkRiverLineCancel();
             var cur = queue[head];
             sumX += cur.x;
             sumY += cur.y;
@@ -510,7 +681,7 @@ function clusterWaypoints(points, radius) {
                     var nx = cur.x + dx;
                     var ny = cur.y + dy;
                     var nKey = lineKey(nx, ny);
-                    if (!used[nKey] && mapHas(points, nx, ny)) {
+                    if (!used[nKey] && pointIndex[nKey]) {
                         used[nKey] = true;
                         queue.push({x: nx, y: ny});
                     }
@@ -522,6 +693,7 @@ function clusterWaypoints(points, radius) {
             y: Math.round(sumY / count),
             height: maxH
         });
+        if (clusters.length > 1024) throw new Error('Çok fazla ayrık waypoint var; en fazla 1024 nokta kümesi kullanın.');
     }
     return clusters;
 }
@@ -559,6 +731,7 @@ function paintTerrainPath(from, to, map, points, layer) {
     var maxSteps = Math.max(64, Math.floor(Math.abs(to.x - from.x) + Math.abs(to.y - from.y)) * 8);
     markPathCell(x, y, map, points, layer);
     while ((x !== to.x || y !== to.y) && guard < maxSteps) {
+        checkRiverLineCancel();
         guard++;
         var best = null;
         var bestScore = Number.MAX_VALUE;
@@ -569,7 +742,7 @@ function paintTerrainPath(from, to, map, points, layer) {
                 }
                 var nx = x + dx;
                 var ny = y + dy;
-                if (nx < minX || ny < minY || nx > maxX || ny > maxY) {
+                if (nx < minX || ny < minY || nx > maxX || ny > maxY || !canEditRiverCell(nx, ny)) {
                     continue;
                 }
                 var dist = Math.abs(nx - to.x) + Math.abs(ny - to.y);
@@ -603,15 +776,14 @@ function paintTerrainPath(from, to, map, points, layer) {
 }
 
 function markPathCell(x, y, map, points, layer) {
+    if (!canEditRiverCell(x, y)) throw new Error('Nehir yolu korunan, eksik veya lavlı arazi üzerinden geçiyor.');
     var key = lineKey(x, y);
     if (!map[key]) {
+        if (points.length >= 65536) throw new Error('Bağlı nehir yolu 65536 nokta sınırını aşıyor.');
         map[key] = true;
         points.push({x: x, y: y});
-        try {
-            dimension.setBitLayerValueAt(layer, x, y, true);
-        } catch (ignore) {
-            // Layer paint is best-effort; in-memory map is enough for carving.
-        }
+        // Planning uses only this temporary map. Never alter the user's marker
+        // layer before the whole path has passed carver validation.
     }
 }
 
@@ -643,8 +815,20 @@ function resolveDrawnCentreline(points, map) {
         }
     }
 
-    var source = highestLinePoint(selected).point;
-    var outlet = lowestLinePoint(selected, source).point;
+    // A ridge or dip inside a drawn line is not an endpoint. Preserve the
+    // complete stroke when its topology identifies two ends; only use height
+    // to orient the stroke. Branches/closed loops retain the legacy policy
+    // until explicit branch and start/end editing is available.
+    var endpoints = [];
+    for (var i = 0; i < selected.length; i++) {
+        if ((i & 127) === 0) checkRiverLineCancel();
+        if (lineNeighbours(selected[i], map, pointByKey).length === 1) {
+            endpoints.push(selected[i]);
+        }
+    }
+    var limits = endpoints.length === 2 ? endpoints : selected;
+    var source = highestLinePoint(limits).point;
+    var outlet = lowestLinePoint(limits, source).point;
     var path = findConnectedLinePath(source, outlet, map, pointByKey);
     return {path: path, source: source, outlet: outlet, componentSize: selected.length};
 }
@@ -654,6 +838,7 @@ function collectLineComponent(start, map, visited, pointByKey) {
     var component = [];
     visited[lineKey(start.x, start.y)] = true;
     for (var head = 0; head < queue.length; head++) {
+        if ((head & 127) === 0) checkRiverLineCancel();
         var point = queue[head];
         component.push(point);
         var neighbours = lineNeighbours(point, map, pointByKey);
@@ -676,6 +861,7 @@ function findConnectedLinePath(source, outlet, map, pointByKey) {
     var parent = {};
     seen[sourceKey] = true;
     for (var head = 0; head < queue.length; head++) {
+        if ((head & 127) === 0) checkRiverLineCancel();
         var point = queue[head];
         var currentKey = lineKey(point.x, point.y);
         if (currentKey === outletKey) {
@@ -710,6 +896,12 @@ function lineNeighbours(point, map, pointByKey) {
     for (var dx = -1; dx <= 1; dx++) {
         for (var dy = -1; dy <= 1; dy++) {
             if (dx === 0 && dy === 0) {
+                continue;
+            }
+            // Prefer the painted orthogonal corner over a diagonal shortcut.
+            // True diagonal strokes still connect when neither bridge exists.
+            if (dx !== 0 && dy !== 0
+                    && (map[lineKey(point.x + dx, point.y)] || map[lineKey(point.x, point.y + dy)])) {
                 continue;
             }
             var key = lineKey(point.x + dx, point.y + dy);
@@ -763,6 +955,7 @@ function createTributaries(mainRiverPoints) {
     print("Yan kollar oluşturuluyor (" + tributaryCount + " tane)...");
     
     for (var t = 0; t < tributaryCount; t++) {
+        checkRiverLineCancel();
         // Random start position
         var startX = minX + Math.floor(Math.random() * worldWidth);
         var startY = minY + Math.floor(Math.random() * (worldHeight * 0.7)); // Tributaries start from top 70%
@@ -790,8 +983,10 @@ function createTributaries(mainRiverPoints) {
             for (var p = 0; p < path.length; p++) {
                 var point = path[p];
                 var progress = p / path.length;
-                var currentWidth = Math.max(2, Math.floor(riverWidth * (1 - progress * 0.8)));
-                var currentDepth = riverDepth * (1 - progress * 0.5);
+                var currentWidth = riverPreset == null ? Math.max(2, Math.floor(riverWidth * (1 - progress * 0.8)))
+                        : Math.max(2, getRealisticLineWidth(p, path.length) * 0.5);
+                var currentDepth = riverPreset == null ? riverDepth * (1 - progress * 0.5)
+                        : riverDepth * (0.5 + progress * 0.25);
                 
                 drawRiverSegment(point.x, point.y, currentWidth, currentDepth, getLineTangent(path, p));
             }
@@ -861,8 +1056,9 @@ function smoothBanks(riverPoints, halfWidth) {
         var length = Math.sqrt(tangent.x * tangent.x + tangent.y * tangent.y);
         var normalX = -tangent.y / length;
         var normalY = tangent.x / length;
+        var localHalfWidth = riverPreset == null ? halfWidth : Math.floor((getRealisticLineWidth(p, riverPoints.length) - 1) / 2);
         for (var side = -1; side <= 1; side += 2) {
-            for (var offset = halfWidth + 1; offset <= halfWidth + 2; offset++) {
+            for (var offset = localHalfWidth + 1; offset <= localHalfWidth + 2; offset++) {
                 smoothBankCell(Math.round(point.x + normalX * offset * side), Math.round(point.y + normalY * offset * side));
             }
         }
@@ -870,7 +1066,7 @@ function smoothBanks(riverPoints, halfWidth) {
 }
 
 function smoothBankCell(x, y) {
-    if (x < minX || x > maxX || y < minY || y > maxY) {
+    if (x < minX || x > maxX || y < minY || y > maxY || !canEditRiverCell(x, y)) {
         return;
     }
     var heights = [];
@@ -878,7 +1074,7 @@ function smoothBankCell(x, y) {
         for (var dy = -1; dy <= 1; dy++) {
             var nx = x + dx;
             var ny = y + dy;
-            if (nx >= minX && nx <= maxX && ny >= minY && ny <= maxY) {
+            if (nx >= minX && nx <= maxX && ny >= minY && ny <= maxY && canEditRiverCell(nx, ny)) {
                 heights.push(dimension.getHeightAt(nx, ny));
             }
         }

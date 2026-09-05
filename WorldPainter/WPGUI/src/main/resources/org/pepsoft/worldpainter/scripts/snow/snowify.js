@@ -53,38 +53,61 @@
 var SmoothSnow = Java.type('org.pepsoft.worldpainter.tools.scripts.SmoothSnow');
 var Terrain = Java.type('org.pepsoft.worldpainter.Terrain');
 
-if (dimension == null) {
+if (typeof dimension === 'undefined' || dimension == null) {
     throw 'Snowify Smooth must be run from an open WorldPainter dimension.';
 }
 
-function flag(value) {
-    return String(value).toLowerCase() === 'true';
+var snowParams = typeof params === 'undefined' || params == null ? {} : params;
+
+function flag(name, fallback) {
+    var value = snowParams[name];
+    if (value == null) return fallback;
+    var text = String(value).trim().toLowerCase();
+    if (text !== 'true' && text !== 'false') throw name + ' must be true or false.';
+    return text === 'true';
 }
 
-var mode = String(params['targetMode']).trim().toLowerCase();
+function numberParam(name, fallback, integer, minimum, maximum) {
+    var value = snowParams[name];
+    if (value == null) value = fallback;
+    if (String(value).trim() === '') throw name + ' must be a finite number.';
+    value = Number(value);
+    if (!isFinite(value) || (integer && Math.floor(value) !== value)
+            || value < minimum || value > maximum) throw 'Invalid ' + name + '.';
+    return value;
+}
+
+var mode = String(snowParams['targetMode'] == null ? 'annotation' : snowParams['targetMode']).trim().toLowerCase();
 if (mode !== 'annotation' && mode !== 'all') {
     throw 'Target mode must be annotation or all.';
 }
 
-var snowLine = Number(params['snowLineHeight']);
-var fullSnow = Number(params['fullSnowHeight']);
-var maxLayers = Number(params['maxSnowLayers']);
-var slopeStart = Number(params['slopeStart']);
-var slopeReject = Number(params['slopeReject']);
+var snowLine = numberParam('snowLineHeight', 160, false, -3.4e38, 3.4e38);
+var fullSnow = numberParam('fullSnowHeight', 190, false, -3.4e38, 3.4e38);
+var maxLayers = numberParam('maxSnowLayers', 8, true, 1, 8);
+var slopeStart = numberParam('slopeStart', 25, false, 0, 90);
+var slopeReject = numberParam('slopeReject', 55, false, 0, 90);
+var annotationValue = numberParam('annotationValue', 4, true, 0, 15);
+var northBoost = numberParam('northFacingBoost', 0.15, false, 0, 3.4e38);
+var snowSeed = numberParam('seed', 160190, true, -9007199254740991, 9007199254740991);
 if (!(fullSnow > snowLine)) {
     throw 'Full snow height must be greater than snow line height.';
 }
+if (!(slopeReject > slopeStart)) throw 'Snow rejection slope must exceed snow thinning slope.';
 
-var dryRun = flag(params['dryRun']);
-print('Snowify Smooth: ' + (mode === 'annotation' ? 'Annotation ' + params['annotationValue'] : 'all eligible terrain'));
+var dryRun = flag('dryRun', true);
+var clearLowSnow = flag('clearLowSnow', true);
+var addHeight = flag('addHeight', false);
+print('Snowify Smooth: ' + (mode === 'annotation' ? 'Annotation ' + annotationValue : 'all eligible terrain'));
 print('Snow begins at ' + snowLine + ', becomes full at ' + fullSnow + (dryRun ? ' (dry run).' : '.'));
 
-var result = SmoothSnow.apply(
+var result = SmoothSnow.applyScript(
     dimension,
-    mode === 'annotation', Number(params['annotationValue']),
+    mode === 'annotation', annotationValue,
     snowLine, fullSnow, maxLayers,
-    slopeStart, slopeReject, Number(params['northFacingBoost']), Number(params['seed']),
-    flag(params['clearLowSnow']), flag(params['addHeight']), dryRun, Terrain.DEEP_SNOW, progress
+    slopeStart, slopeReject, northBoost, snowSeed,
+    clearLowSnow, addHeight, dryRun, Terrain.DEEP_SNOW,
+    typeof progress === 'undefined' ? null : progress
 );
 
 print((dryRun ? 'Dry run complete.' : 'Snow applied.')

@@ -5,6 +5,8 @@ import org.pepsoft.minecraft.Material;
 import org.pepsoft.worldpainter.*;
 import org.pepsoft.worldpainter.layers.NotPresent;
 import org.pepsoft.worldpainter.layers.NotPresentBlock;
+import org.pepsoft.worldpainter.layers.ReadOnly;
+import org.pepsoft.worldpainter.layers.FloodWithLava;
 import org.pepsoft.worldpainter.layers.Void;
 import org.pepsoft.worldpainter.objects.GenericObject;
 
@@ -14,6 +16,30 @@ import static org.junit.Assert.*;
 import static org.pepsoft.worldpainter.Dimension.Anchor.NORMAL_DETAIL;
 
 public class AxiomTextureTransferTest {
+    @Test
+    public void bothQuiltingAndNativeMixProtectReadOnlyChunksAndLava() throws Exception {
+        for (boolean mixed : new boolean[] {false, true}) {
+            final Dimension target = world(0, 0, 1, 1, 110, false);
+            target.setBitLayerValueAt(ReadOnly.INSTANCE, 32, 32, true);
+            target.setBitLayerValueAt(FloodWithLava.INSTANCE, 80, 80, true);
+            final AxiomTextureTransfer.SnowMaskSink snow = (x, y, white) -> {
+                assertFalse("Protected cells must not reach snow-mask callbacks",
+                        (x >= 32 && x < 48 && y >= 32 && y < 48) || (x == 80 && y == 80));
+            };
+            if (mixed) {
+                AxiomTextureTransfer.applyMixedTerrain(target, Terrain.STONE, (x, y, h, slope) -> true, null, snow);
+            } else {
+                AxiomTextureTransfer.apply(target, stripes(), Map.of(Material.STONE, Terrain.STONE,
+                        Material.DIRT, Terrain.DIRT), 44, null, snow);
+            }
+            for (int y = 32; y < 48; y++) for (int x = 32; x < 48; x++) {
+                assertSame(Terrain.GRASS, target.getTerrainAt(x, y));
+            }
+            assertSame(Terrain.GRASS, target.getTerrainAt(80, 80));
+            assertNotSame(Terrain.GRASS, target.getTerrainAt(0, 0));
+        }
+    }
+
     @Test
     public void extractsStructuralBlocksAndRetainsDistinctStates() throws Exception {
         final int size = 16, height = 8;

@@ -1,64 +1,60 @@
-//-- get info on delimiter here: https://github.com/Captain-Chaos/WorldPainter/blob/219f7eb1402e49d9c79fed72799c82503385d669/WorldPainter/WPGUI/src/test/resources/descriptortest.js
-
 // script.name= Global Set Water Level 0
-// script.description=Sets water level to 0 on the whole current dimension.
+// script.description=Sets water level to 0 on the whole current dimension; protected, absent and lava cells are preserved.
 
-var app = org.pepsoft.worldpainter.App.getInstance();
-var dimension = app.dimension;
-var extent = dimension.getExtent();
-var minTileX = dimension.getLowestX();
-var minTileY = dimension.getLowestY();
-var tileWidth = extent.getWidth();
-var tileHeight = extent.getHeight();
-
-var total = tileWidth * tileHeight * 128 * 128;
+var dim = (typeof dimension !== 'undefined' && dimension != null)
+        ? dimension : org.pepsoft.worldpainter.App.getInstance().getDimension();
+if (dim == null) { throw "Open a dimension before running this operation."; }
+var ReadOnly = Java.type('org.pepsoft.worldpainter.layers.ReadOnly').INSTANCE;
+var VoidLayer = Java.type('org.pepsoft.worldpainter.layers.Void').INSTANCE;
+var NotPresent = Java.type('org.pepsoft.worldpainter.layers.NotPresent').INSTANCE;
+var NotPresentBlock = Java.type('org.pepsoft.worldpainter.layers.NotPresentBlock').INSTANCE;
+var FloodWithLava = Java.type('org.pepsoft.worldpainter.layers.FloodWithLava').INSTANCE;
+var totalBlocks = dim.getTiles().size() * 128 * 128;
 var processed = 0;
-var changed = 0;
-var nextLog = Math.max(10000, parseInt(total / 20));
-var startTime = new Date().getTime();
 
-print("Starting: setting global water level to 0...");
-
-for (var tx = 0; tx < tileWidth; tx++) {
-    for (var ty = 0; ty < tileHeight; ty++) {
-        var tileX = minTileX + tx;
-        var tileY = minTileY + ty;
-
+function hasSurface(tile, x, y) {
+    return tile != null && isFinite(tile.getHeight(x, y))
+            && !tile.getBitLayerValue(VoidLayer, x, y)
+            && !tile.getBitLayerValue(NotPresent, x, y)
+            && !tile.getBitLayerValue(NotPresentBlock, x, y);
+}
+function editable(tile, x, y) {
+    return hasSurface(tile, x, y) && !tile.getBitLayerValue(ReadOnly, x, y)
+            && !tile.getBitLayerValue(FloodWithLava, x, y);
+}
+function reportProgress() {
+    if (typeof progress !== 'undefined' && progress != null) {
+        progress.checkForCancel();
+        progress.setProgress(processed / Math.max(1, totalBlocks));
+    }
+}
+function visitPresentTiles(operation) {
+    reportProgress();
+    var tiles = dim.getTiles().iterator();
+    while (tiles.hasNext()) {
+        var source = tiles.next();
+        var tile = dim.getTileForEditing(source.getX(), source.getY());
+        if (tile == null) { continue; }
         for (var lx = 0; lx < 128; lx++) {
+            if ((lx & 7) === 0) { reportProgress(); }
             for (var ly = 0; ly < 128; ly++) {
-                var x = tileX * 128 + lx;
-                var y = tileY * 128 + ly;
-                var wl = dimension.getWaterLevelAt(x, y);
-
-                if (wl != 0) {
-                    dimension.setWaterLevelAt(x, y, 0);
-                    changed++;
-                }
-
+                if (editable(tile, lx, ly)) { operation(tile, lx, ly); }
                 processed++;
-                if (processed >= nextLog) {
-                    var elapsedMs = new Date().getTime() - startTime;
-                    var progress = processed / total;
-                    var etaMs = progress > 0 ? (elapsedMs / progress) - elapsedMs : 0;
-                    print("Progress: " + parseInt(progress * 100) + "%  (" + processed + "/" + total + ")  ETA: " + formatDurationShort(etaMs));
-                    nextLog += Math.max(10000, parseInt(total / 20));
-                }
             }
         }
     }
+    reportProgress();
 }
 
+if (dim.getMinHeight() > 0 || dim.getMaxHeight() <= 0) {
+    throw "Water level 0 is outside this dimension's supported height range.";
+}
+var changed = 0;
+print("Starting: setting global water level to 0...");
+visitPresentTiles(function (tile, x, y) {
+    if (tile.getWaterLevel(x, y) !== 0) {
+        tile.setWaterLevel(x, y, 0);
+        changed++;
+    }
+});
 print("Done. Updated cells: " + changed);
-
-function formatDurationShort(ms) {
-    if (ms == null || ms < 0 || !isFinite(ms)) {
-        return "?";
-    }
-    var totalSec = parseInt(ms / 1000);
-    var min = parseInt(totalSec / 60);
-    var sec = totalSec % 60;
-    if (min > 0) {
-        return min + "m " + sec + "s";
-    }
-    return sec + "s";
-}

@@ -1,100 +1,87 @@
-//-- get info on delimiter here: https://github.com/Captain-Chaos/WorldPainter/blob/219f7eb1402e49d9c79fed72799c82503385d669/WorldPainter/WPGUI/src/test/resources/descriptortest.js
-
 // script.name= Global Remove Water>=0 + Stone Fill
-// script.description=Removes all water with water level >= 0, then sets terrain to stone for the whole current dimension.
+// script.description=Removes all water with water level >= 0, then sets terrain to stone for the whole current dimension; protected, absent and lava cells are preserved.
 
-var app = org.pepsoft.worldpainter.App.getInstance();
-var dimension = app.dimension;
-var extent = dimension.getExtent();
-var minTileX = dimension.getLowestX();
-var minTileY = dimension.getLowestY();
-var tileWidth = extent.getWidth();
-var tileHeight = extent.getHeight();
-
-var terrainMap = buildTerrainMap();
-var stoneTerrain = resolveTerrain(terrainMap, ["stone", "rock", "barerock"]);
-
-if (stoneTerrain == null) {
-    throw "Could not find a stone/rock terrain in this WorldPainter version.";
-}
-
-var startTime = new Date().getTime();
-var total = tileWidth * tileHeight * 128 * 128;
+var dim = (typeof dimension !== 'undefined' && dimension != null)
+        ? dimension : org.pepsoft.worldpainter.App.getInstance().getDimension();
+if (dim == null) { throw "Open a dimension before running this operation."; }
+var ReadOnly = Java.type('org.pepsoft.worldpainter.layers.ReadOnly').INSTANCE;
+var VoidLayer = Java.type('org.pepsoft.worldpainter.layers.Void').INSTANCE;
+var NotPresent = Java.type('org.pepsoft.worldpainter.layers.NotPresent').INSTANCE;
+var NotPresentBlock = Java.type('org.pepsoft.worldpainter.layers.NotPresentBlock').INSTANCE;
+var FloodWithLava = Java.type('org.pepsoft.worldpainter.layers.FloodWithLava').INSTANCE;
+var totalBlocks = dim.getTiles().size() * 128 * 128;
 var processed = 0;
-var driedCount = 0;
-var nextLog = Math.max(10000, parseInt(total / 20));
 
-print("Starting global operation...");
-print("Step 1: remove water where water level >= 0");
-print("Step 2: set entire terrain to stone");
-
-for (var tx = 0; tx < tileWidth; tx++) {
-    for (var ty = 0; ty < tileHeight; ty++) {
-        var tileX = minTileX + tx;
-        var tileY = minTileY + ty;
-
+function hasSurface(tile, x, y) {
+    return tile != null && isFinite(tile.getHeight(x, y))
+            && !tile.getBitLayerValue(VoidLayer, x, y)
+            && !tile.getBitLayerValue(NotPresent, x, y)
+            && !tile.getBitLayerValue(NotPresentBlock, x, y);
+}
+function editable(tile, x, y) {
+    return hasSurface(tile, x, y) && !tile.getBitLayerValue(ReadOnly, x, y)
+            && !tile.getBitLayerValue(FloodWithLava, x, y);
+}
+function reportProgress() {
+    if (typeof progress !== 'undefined' && progress != null) {
+        progress.checkForCancel();
+        progress.setProgress(processed / Math.max(1, totalBlocks));
+    }
+}
+function visitPresentTiles(operation) {
+    reportProgress();
+    var tiles = dim.getTiles().iterator();
+    while (tiles.hasNext()) {
+        var source = tiles.next();
+        var tile = dim.getTileForEditing(source.getX(), source.getY());
+        if (tile == null) { continue; }
         for (var lx = 0; lx < 128; lx++) {
+            if ((lx & 7) === 0) { reportProgress(); }
             for (var ly = 0; ly < 128; ly++) {
-                var x = tileX * 128 + lx;
-                var y = tileY * 128 + ly;
-                var wl = dimension.getWaterLevelAt(x, y);
-
-                if (wl >= 0) {
-                    dimension.setWaterLevelAt(x, y, -1);
-                    driedCount++;
-                }
-
-                dimension.setTerrainAt(x, y, stoneTerrain);
-
+                if (editable(tile, lx, ly)) { operation(tile, lx, ly); }
                 processed++;
-                if (processed >= nextLog) {
-                    var elapsedMs = new Date().getTime() - startTime;
-                    var progress = processed / total;
-                    var etaMs = progress > 0 ? (elapsedMs / progress) - elapsedMs : 0;
-                    print("Progress: " + parseInt(progress * 100) + "%  (" + processed + "/" + total + ")  ETA: " + formatDurationShort(etaMs));
-                    nextLog += Math.max(10000, parseInt(total / 20));
-                }
             }
         }
     }
+    reportProgress();
 }
 
-print("Done.");
-print("Dried water cells: " + driedCount);
-print("Terrain set to stone on all cells in current dimension.");
+
+// Water storage is unsigned relative to minHeight: writing -1 into a legacy
+// minY=0 world wraps to 255/65535 instead of removing water.
+var dryLevel = Math.max(dim.getMinHeight(), -1);
+if (dryLevel >= dim.getMaxHeight()) { throw "The dimension has an invalid height range."; }
+
 
 function buildTerrainMap() {
     var map = {};
     var terrains = org.pepsoft.worldpainter.Terrain.VALUES;
     for (var i = 0; i < terrains.length; i++) {
-        var terrain = terrains[i];
-        var name1 = terrain.toString().replace(/\s+/g, "").toLowerCase();
-        var name2 = terrain.getName().replace(/\s+/g, "").toLowerCase();
-        map[name1] = terrain;
-        map[name2] = terrain;
+        map[String(terrains[i]).replace(/\s+/g, "").toLowerCase()] = terrains[i];
+        map[String(terrains[i].getName()).replace(/\s+/g, "").toLowerCase()] = terrains[i];
     }
     return map;
 }
-
 function resolveTerrain(map, aliases) {
     for (var i = 0; i < aliases.length; i++) {
-        var key = aliases[i].replace(/\s+/g, "").toLowerCase();
-        if (map[key] != null) {
-            return map[key];
-        }
+        var terrain = map[aliases[i].replace(/\s+/g, "").toLowerCase()];
+        if (terrain != null) { return terrain; }
     }
     return null;
 }
 
-function formatDurationShort(ms) {
-    if (ms == null || ms < 0 || !isFinite(ms)) {
-        return "?";
+var stoneTerrain = resolveTerrain(buildTerrainMap(), ["stone", "rock", "barerock"]);
+if (stoneTerrain == null) { throw "Could not find a stone/rock terrain in this WorldPainter version."; }
+var driedCount = 0;
+var stoneCount = 0;
+print("Starting: remove water where water level >= 0 and set all eligible terrain to stone...");
+visitPresentTiles(function (tile, x, y) {
+    if (tile.getWaterLevel(x, y) >= 0) {
+        tile.setWaterLevel(x, y, dryLevel);
+        driedCount++;
     }
-    var totalSec = parseInt(ms / 1000);
-    var min = parseInt(totalSec / 60);
-    var sec = totalSec % 60;
-    if (min > 0) {
-        return min + "m " + sec + "s";
-    }
-    return sec + "s";
-}
+    // Stone fill applies to dry cells too, as in the original operation.
+    tile.setTerrain(x, y, stoneTerrain);
+    stoneCount++;
+});
+print("Done. Dried water cells: " + driedCount + "; terrain set to stone on " + stoneCount + " cells.");

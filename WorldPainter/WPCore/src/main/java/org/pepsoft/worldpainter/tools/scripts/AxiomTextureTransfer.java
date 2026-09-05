@@ -8,6 +8,8 @@ import org.pepsoft.worldpainter.Terrain;
 import org.pepsoft.worldpainter.Tile;
 import org.pepsoft.worldpainter.layers.NotPresent;
 import org.pepsoft.worldpainter.layers.NotPresentBlock;
+import org.pepsoft.worldpainter.layers.ReadOnly;
+import org.pepsoft.worldpainter.layers.FloodWithLava;
 import org.pepsoft.worldpainter.layers.Void;
 
 import java.util.*;
@@ -154,8 +156,7 @@ public final class AxiomTextureTransfer {
             maxY = Math.max(maxY, tile.getY() * 128 + 127);
             for (int y = 0; y < 128; y++) for (int x = 0; x < 128; x++) {
                 final float h = tile.getHeight(x, y);
-                if (! Float.isFinite(h) || h <= tile.getWaterLevel(x, y) + 1.0f || tile.getBitLayerValue(Void.INSTANCE, x, y)
-                        || tile.getBitLayerValue(NotPresent.INSTANCE, x, y) || tile.getBitLayerValue(NotPresentBlock.INSTANCE, x, y)) {
+                if (! editableDryCell(tile, x, y)) {
                     protectedCells++;
                     continue;
                 }
@@ -494,8 +495,14 @@ public final class AxiomTextureTransfer {
             final float height = tile.getHeight(tx, ty);
             return filter.accept(x, y, height, slopeDegrees(x, y, height));
         }
-        float height(int x, int y, float fallback) { final Tile t = tile(x, y); return t == null || t.getBitLayerValue(Void.INSTANCE, x & 127, y & 127)
-                || t.getBitLayerValue(NotPresent.INSTANCE, x & 127, y & 127) || t.getBitLayerValue(NotPresentBlock.INSTANCE, x & 127, y & 127) ? fallback : t.getHeight(x & 127, y & 127); }
+        float height(int x, int y, float fallback) {
+            final Tile t = tile(x, y);
+            if (t == null || t.getBitLayerValue(Void.INSTANCE, x & 127, y & 127)
+                    || t.getBitLayerValue(NotPresent.INSTANCE, x & 127, y & 127)
+                    || t.getBitLayerValue(NotPresentBlock.INSTANCE, x & 127, y & 127)) return fallback;
+            final float height = t.getHeight(x & 127, y & 127);
+            return Float.isFinite(height) ? height : fallback;
+        }
         boolean paint(int x, int y, Terrain terrain) {
             final Tile tile = tile(x, y);
             if (tile.getTerrain(x & 127, y & 127) == terrain) return false;
@@ -521,10 +528,7 @@ public final class AxiomTextureTransfer {
                     && slopeDegrees(x, y, center) < SUMMIT_WHITE_MAXIMUM_SLOPE;
         }
         private boolean dry(Tile tile, int x, int y) {
-            return tile != null && Float.isFinite(tile.getHeight(x, y))
-                    && tile.getHeight(x, y) > tile.getWaterLevel(x, y) + 1.0f
-                    && ! tile.getBitLayerValue(Void.INSTANCE, x, y) && ! tile.getBitLayerValue(NotPresent.INSTANCE, x, y)
-                    && ! tile.getBitLayerValue(NotPresentBlock.INSTANCE, x, y);
+            return editableDryCell(tile, x, y);
         }
         private float slopeDegrees(int x, int y, float center) {
             final float dx = (height(x + 4, y, center) - height(x - 4, y, center)) / 8.0f;
@@ -534,6 +538,16 @@ public final class AxiomTextureTransfer {
         final Dimension dimension;
         final Tile[] tiles = new Tile[32];
         final long[] keys = new long[32];
+    }
+
+    private static boolean editableDryCell(Tile tile, int x, int y) {
+        return tile != null && Float.isFinite(tile.getHeight(x, y))
+                && tile.getHeight(x, y) > tile.getWaterLevel(x, y) + 1.0f
+                && !tile.getBitLayerValue(ReadOnly.INSTANCE, x, y)
+                && !tile.getBitLayerValue(FloodWithLava.INSTANCE, x, y)
+                && !tile.getBitLayerValue(Void.INSTANCE, x, y)
+                && !tile.getBitLayerValue(NotPresent.INSTANCE, x, y)
+                && !tile.getBitLayerValue(NotPresentBlock.INSTANCE, x, y);
     }
 
     private static long hash(long value) { value = (value ^ (value >>> 30)) * 0xbf58476d1ce4e5b9L; value = (value ^ (value >>> 27)) * 0x94d049bb133111ebL; return value ^ (value >>> 31); }

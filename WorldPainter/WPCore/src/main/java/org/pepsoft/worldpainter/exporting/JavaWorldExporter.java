@@ -458,7 +458,16 @@ public class JavaWorldExporter extends AbstractWorldExporter { // TODO can this 
             if (dimension == null) {
                 return;
             }
-            ExportManifest previous = ExportManifest.load(worldDir);
+            ExportManifest previous;
+            try {
+                previous = ExportManifest.load(worldDir);
+            } catch (IOException e) {
+                // The export has completed. Replace obsolete/corrupt metadata
+                // with hashes for just the tiles actually exported; never mix
+                // sampled legacy hashes with complete-cell fingerprints.
+                logger.info("Replacing incompatible export manifest: {}", e.getMessage());
+                previous = null;
+            }
             final ExportManifest manifest = (previous != null)
                     ? previous
                     : new ExportManifest(world.getName(), platform.id);

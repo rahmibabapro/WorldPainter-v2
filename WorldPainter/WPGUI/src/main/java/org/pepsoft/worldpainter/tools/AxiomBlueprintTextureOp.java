@@ -77,7 +77,7 @@ public final class AxiomBlueprintTextureOp {
             throws IOException, OperationCancelled {
         final App app = App.getInstanceIfExists();
         final boolean activeWorld = (app != null) && (app.getWorld() == world);
-        final ProgressReceiver progress = new ProgressReceiver() {
+        final ProgressReceiver progress = scriptProgress == null ? null : new ProgressReceiver() {
             @Override public void setProgress(float fraction) { scriptProgress.setProgress(fraction); }
             @Override public void checkForCancellation() { scriptProgress.checkForCancel(); }
             @Override public void setMessage(String message) { logger.info(message); }
@@ -129,6 +129,13 @@ public final class AxiomBlueprintTextureOp {
     static Result applyProfiles(World2 world, Dimension dimension, AxiomTextureProfile mountainProfile,
                                 AxiomTextureProfile plainsProfile, boolean activeWorld,
                                 ProgressReceiver progress, long start) throws OperationCancelled {
+        if (world == null || dimension == null || dimension.getWorld() != world) {
+            throw new IllegalArgumentException("The target dimension must belong to the supplied world");
+        }
+        if (!dimension.isUndoAvailable()) {
+            throw new IllegalStateException("Enable Undo before applying Axiom textures.");
+        }
+        if (progress != null) progress.checkForCancellation();
         final Set<org.pepsoft.minecraft.Material> materials = new LinkedHashSet<>(mountainProfile.getRequiredMaterials());
         // Flat plains deliberately retain only the grass state from terrain.bp. The native custom
         // terrain slot is still allocated atomically with mountain states, but cannot introduce

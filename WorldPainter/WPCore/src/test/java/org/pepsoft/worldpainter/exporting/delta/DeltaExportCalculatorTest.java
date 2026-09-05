@@ -44,7 +44,8 @@ public class DeltaExportCalculatorTest {
 
         // Test 2: Modify tile at (1, 1)
         Tile centerTile = dim.getTile(1, 1);
-        centerTile.setHeight(8, 8, 120.0f);
+        // Deliberately not on the old four/eight-cell sampling grid.
+        centerTile.setHeight(1, 1, 120.0f);
 
         // Without border expansion: exactly (1,1) is dirty
         DeltaPlan planModified = DeltaExportCalculator.computeDelta(world, manifest, 0);

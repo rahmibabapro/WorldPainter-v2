@@ -49,12 +49,16 @@
 var SmoothSnow = Java.type('org.pepsoft.worldpainter.tools.scripts.SmoothSnow');
 var Terrain = Java.type('org.pepsoft.worldpainter.Terrain');
 
-if (dimension == null) {
+if (typeof dimension === 'undefined' || dimension == null) {
     throw 'Axiom Mountain Smooth Snow must be run from an open WorldPainter dimension.';
 }
 
-function flag(value) {
-    return String(value).toLowerCase() === 'true';
+function flag(name, fallback) {
+    var value = params[name];
+    if (value == null) { return fallback; }
+    var text = String(value).trim().toLowerCase();
+    if (text !== 'true' && text !== 'false') { throw name + ' must be true or false.'; }
+    return text === 'true';
 }
 
 function normalise(value) {
@@ -66,24 +70,48 @@ function terrainNamed(name) {
     for (var i = 0; i < Terrain.VALUES.length; i++) {
         var terrain = Terrain.VALUES[i];
         if (normalise(terrain.getName()) === wanted || normalise(terrain.toString()) === wanted) {
+            if (terrain.isCustom() && !Terrain.isCustomMaterialConfigured(terrain.getCustomTerrainIndex())) {
+                throw 'Custom summit terrain is not configured: ' + name;
+            }
             return terrain;
         }
     }
     throw 'Unknown summit snow terrain: ' + name;
 }
 
-var snowLine = Number(params['snowLineHeight']);
-var fullSnow = Number(params['fullSnowHeight']);
+function finiteNumber(name) {
+    var value = params[name];
+    var number = value == null || String(value).trim().length === 0 ? NaN : Number(value);
+    if (!isFinite(number)) throw 'A finite numeric value is required for ' + name + '.';
+    return number;
+}
+
+var snowLine = finiteNumber('snowLineHeight');
+var fullSnow = finiteNumber('fullSnowHeight');
+var maximumLayers = finiteNumber('maxSnowLayers');
+var slopeStart = finiteNumber('slopeStart');
+var slopeReject = finiteNumber('slopeReject');
+var northBoost = finiteNumber('northFacingBoost');
+var snowSeed = finiteNumber('seed');
 if (!(fullSnow > snowLine)) {
     throw 'Full snow height must be greater than snow line height.';
 }
-var dryRun = flag(params['dryRun']);
+if (Math.floor(maximumLayers) !== maximumLayers || maximumLayers < 1 || maximumLayers > 8) {
+    throw 'Maximum snow layers must be an integer from 1 to 8.';
+}
+if (Math.floor(snowSeed) !== snowSeed || Math.abs(snowSeed) > 9007199254740991) {
+    throw 'Snow seed must be an exactly representable integer.';
+}
+var dryRun = flag('dryRun', true);
+var clearLowSnow = flag('clearLowSnow', true);
+var addHeight = flag('addHeight', false);
 print('Axiom Mountain Smooth Snow: all eligible terrain; ' + snowLine + ' to ' + fullSnow + (dryRun ? ' (dry run).' : '.'));
 
-var result = SmoothSnow.apply(
-    dimension, false, 4, snowLine, fullSnow, Number(params['maxSnowLayers']),
-    Number(params['slopeStart']), Number(params['slopeReject']), Number(params['northFacingBoost']), Number(params['seed']),
-    flag(params['clearLowSnow']), flag(params['addHeight']), dryRun, terrainNamed(params['snowTerrain']), progress
+var result = SmoothSnow.applyScript(
+    dimension, false, 4, snowLine, fullSnow, maximumLayers,
+    slopeStart, slopeReject, northBoost, snowSeed,
+    clearLowSnow, addHeight, dryRun, terrainNamed(params['snowTerrain']),
+    (typeof progress !== 'undefined' && progress != null) ? progress : null
 );
 print((dryRun ? 'Dry run complete.' : 'Axiom mountain snow applied.')
     + ' Checked: ' + result.checked() + ', snow: ' + result.snowCovered()

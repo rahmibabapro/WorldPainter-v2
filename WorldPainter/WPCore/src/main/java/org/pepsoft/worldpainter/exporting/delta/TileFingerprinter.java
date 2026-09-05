@@ -11,7 +11,9 @@ import static org.pepsoft.worldpainter.layers.Layer.DataSize.BIT_PER_CHUNK;
 
 /**
  * Deterministic 64-bit tile fingerprints for delta export.
- * Samples height, terrain id, and layer values (not height-only).
+ * Covers every height, terrain id, water level and stored layer cell. Sampling
+ * is unsafe here: a missed cell would silently omit an edit from delta export.
+ * Global exporter/material dependencies are not represented by this tile hash.
  */
 public final class TileFingerprinter {
     private TileFingerprinter() {
@@ -27,8 +29,8 @@ public final class TileFingerprinter {
         hash ^= (tile.getX() * 31L + tile.getY());
         hash *= prime;
 
-        for (int x = 0; x < TILE_SIZE; x += 4) {
-            for (int y = 0; y < TILE_SIZE; y += 4) {
+        for (int x = 0; x < TILE_SIZE; x++) {
+            for (int y = 0; y < TILE_SIZE; y++) {
                 final int h = Float.floatToIntBits(tile.getHeight(x, y));
                 hash = fnvMix(hash, prime, h);
 
@@ -50,7 +52,7 @@ public final class TileFingerprinter {
         final List<Layer> layers = tile.getLayers();
         if (layers != null) {
             for (Layer layer : layers) {
-                final String name = layer.getName();
+                final String name = layer.getId();
                 if (name != null) {
                     for (int i = 0; i < name.length(); i++) {
                         hash ^= name.charAt(i);
@@ -59,9 +61,15 @@ public final class TileFingerprinter {
                 }
                 hash ^= layer.getDataSize().ordinal();
                 hash *= prime;
+                if (layer.getDataSize() == Layer.DataSize.NONE) {
+                    continue;
+                }
                 final boolean bit = (layer.getDataSize() == BIT) || (layer.getDataSize() == BIT_PER_CHUNK);
-                for (int x = 0; x < TILE_SIZE; x += 8) {
-                    for (int y = 0; y < TILE_SIZE; y += 8) {
+                // BIT_PER_CHUNK has exactly one value per 16x16 chunk. All
+                // other stored layer types require every individual cell.
+                final int step = layer.getDataSize() == BIT_PER_CHUNK ? 16 : 1;
+                for (int x = 0; x < TILE_SIZE; x += step) {
+                    for (int y = 0; y < TILE_SIZE; y += step) {
                         if (bit) {
                             hash ^= tile.getBitLayerValue(layer, x, y) ? 1 : 0;
                         } else {

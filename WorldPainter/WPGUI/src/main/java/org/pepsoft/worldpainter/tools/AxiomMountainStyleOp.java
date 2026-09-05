@@ -8,6 +8,14 @@ import org.pepsoft.util.swing.ProgressTask;
 import org.pepsoft.worldpainter.App;
 import org.pepsoft.worldpainter.Dimension;
 import org.pepsoft.worldpainter.Terrain;
+import org.pepsoft.worldpainter.Tile;
+import org.pepsoft.worldpainter.layers.FloodWithLava;
+import org.pepsoft.worldpainter.layers.Frost;
+import org.pepsoft.worldpainter.layers.NotPresent;
+import org.pepsoft.worldpainter.layers.NotPresentBlock;
+import org.pepsoft.worldpainter.layers.ReadOnly;
+import org.pepsoft.worldpainter.layers.Void;
+import org.pepsoft.worldpainter.layers.exporters.ExporterSettings;
 import org.pepsoft.worldpainter.tools.scripts.SmoothSnow;
 import org.pepsoft.worldpainter.tools.scripts.MossSuitability;
 
@@ -27,7 +35,6 @@ public final class AxiomMountainStyleOp {
             beepAndShowError(parent, "No dimension is open.", "Error");
             return;
         }
-        dimension.rememberChanges();
         try {
             final Dimension result = ProgressDialog.executeTask(parent, new ProgressTask<>() {
                 @Override
@@ -37,49 +44,73 @@ public final class AxiomMountainStyleOp {
 
                 @Override
                 public Dimension execute(ProgressReceiver progressReceiver) throws OperationCancelled {
-                    dimension.setEventsInhibited(true);
-                    try {
-                        applySurfaceStyle(dimension, new SubProgressReceiver(progressReceiver, 0.0f, 0.50f));
-                        SmoothSnow.apply(dimension, false, 4, SmoothSnow.DEFAULT_SNOW_LINE_HEIGHT,
-                                SmoothSnow.DEFAULT_FULL_SNOW_HEIGHT, 8,
-                                25.0f, 55.0f, 0.15f, STYLE_SEED,
-                                true, false, false, Terrain.DEEP_SNOW,
-                                new SubProgressReceiver(progressReceiver, 0.50f, 0.50f));
-                    } finally {
-                        dimension.setEventsInhibited(false);
-                    }
+                    apply(dimension, progressReceiver);
                     return dimension;
                 }
             });
-            if (result != null) {
-                dimension.armSavePoint();
-                if (app != null) {
-                    app.refreshCurrentDimensionView();
-                }
-            } else if (dimension.undoChanges()) {
-                dimension.clearRedo();
-                if (app != null) {
-                    app.refreshCurrentDimensionView();
-                }
-            }
         } catch (Throwable t) {
             beepAndShowError(parent, "Axiom mountain operation failed:\n" + t.getMessage(), "Error");
+        } finally {
+            if (app != null) app.refreshCurrentDimensionView();
+        }
+    }
+
+    /** One native undo transaction for terrain and snow, including runtime failures. */
+    static void apply(Dimension dimension, ProgressReceiver progress) throws OperationCancelled {
+        if (dimension == null || !dimension.isUndoAvailable()) {
+            throw new IllegalStateException("Enable Undo before applying the Axiom mountain operation.");
+        }
+        final ExporterSettings originalFrost = dimension.getLayerSettings(Frost.INSTANCE);
+        final boolean ownsEvents = !dimension.isEventsInhibited();
+        dimension.rememberChanges();
+        if (ownsEvents) dimension.setEventsInhibited(true);
+        try {
+            if (progress != null) progress.checkForCancellation();
+            applySurfaceStyle(dimension, progress == null ? null : new SubProgressReceiver(progress, 0, 0.5f));
+            SmoothSnow.apply(dimension, false, 4, SmoothSnow.DEFAULT_SNOW_LINE_HEIGHT,
+                    SmoothSnow.DEFAULT_FULL_SNOW_HEIGHT, 8, 25.0f, 55.0f, 0.15f, STYLE_SEED,
+                    true, false, false, Terrain.DEEP_SNOW,
+                    progress == null ? null : new SubProgressReceiver(progress, 0.5f, 0.5f));
+            if (progress != null) progress.checkForCancellation();
+            dimension.armSavePoint();
+        } catch (OperationCancelled | RuntimeException | Error failure) {
+            try {
+                try {
+                    dimension.undoChanges();
+                    dimension.clearRedo();
+                } finally {
+                    dimension.setLayerSettings(Frost.INSTANCE, originalFrost);
+                }
+            } catch (RuntimeException | Error rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+            }
+            throw failure;
+        } finally {
+            if (ownsEvents) dimension.setEventsInhibited(false);
         }
     }
 
     private static void applySurfaceStyle(Dimension dimension, ProgressReceiver progressReceiver) throws OperationCancelled {
         final float steepRock = (float) Math.tan(Math.toRadians(45.0));
         final float rockySlope = (float) Math.tan(Math.toRadians(30.0));
-        dimension.visitTilesForEditing().andDo(tile -> {
+        int visited = 0;
+        for (Tile original : dimension.getTiles()) {
+            final Tile tile = dimension.getTileForEditing(original.getX(), original.getY());
             final int startX = tile.getX() << 7;
             final int startY = tile.getY() << 7;
             for (int localX = 0; localX < 128; localX++) {
+                if (progressReceiver != null && (localX & 31) == 0) progressReceiver.checkForCancellation();
                 for (int localY = 0; localY < 128; localY++) {
                     final int x = startX | localX;
                     final int y = startY | localY;
                     final float height = dimension.getHeightAt(x, y);
                     // Keep flooded land intact; Frost handles snow/ice only on dry mountain cells.
-                    if (height <= dimension.getWaterLevelAt(x, y) + 1.0f) {
+                    if (!Float.isFinite(height) || height <= dimension.getWaterLevelAt(x, y) + 1.0f
+                            || tile.getBitLayerValue(ReadOnly.INSTANCE, localX, localY)
+                            || tile.getBitLayerValue(FloodWithLava.INSTANCE, localX, localY)
+                            || tile.getBitLayerValue(Void.INSTANCE, localX, localY)
+                            || tile.getBitLayerValue(NotPresent.INSTANCE, localX, localY)
+                            || tile.getBitLayerValue(NotPresentBlock.INSTANCE, localX, localY)) {
                         continue;
                     }
                     final float slope = dimension.getSlope(x, y);
@@ -102,7 +133,8 @@ public final class AxiomMountainStyleOp {
                     }
                 }
             }
-        }, progressReceiver);
+            if (progressReceiver != null) progressReceiver.setProgress(++visited / (float) Math.max(1, dimension.getTiles().size()));
+        }
     }
 
     private static float noise(int x, int y) {
