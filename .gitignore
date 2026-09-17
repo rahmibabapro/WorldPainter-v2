@@ -17,3 +17,7 @@ docs/baselines/*-out.txt
 # Node dependencies (reinstall with npm install in tools/mcp-server)
 node_modules/
 **/node_modules/
+
+# Large sample worlds (download from GitHub Releases)
+worlds/*.world
+
