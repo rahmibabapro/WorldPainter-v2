@@ -14,3 +14,6 @@ toolchains.xml
 # Scratch harness logs
 docs/baselines/*-err.txt
 docs/baselines/*-out.txt
+# Node dependencies (reinstall with npm install in tools/mcp-server)
+node_modules/
+**/node_modules/
