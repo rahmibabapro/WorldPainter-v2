@@ -1,17 +1,17 @@
 // script.name=Axiom Mountain Smooth Snow
-// script.description=Applies the Axiom mountain snow profile to all eligible terrain: sparse snow at Y=160, full coverage at Y=190, with slope, aspect and broad weather variation.
+// script.description=Applies mountain snow to eligible terrain using this world's dry-land p80→p95 heights (or explicit overrides), with slope, aspect and weather variation.
 // script.param.snowTerrain.type=string
 // script.param.snowTerrain.description=Terrain used for near-complete summit snow. Use a configured Axiom Snow Ice custom terrain when available; Deep Snow is the safe default.
 // script.param.snowTerrain.displayName=Summit snow terrain
 // script.param.snowTerrain.default=Deep Snow
 // script.param.snowLineHeight.type=float
-// script.param.snowLineHeight.description=Height where sparse snow starts appearing.
-// script.param.snowLineHeight.displayName=Snow line height
-// script.param.snowLineHeight.default=160
+// script.param.snowLineHeight.description=Height where sparse snow starts. Leave blank to use this world's dry-land 80th percentile.
+// script.param.snowLineHeight.displayName=Snow line height (blank=auto)
+// script.param.snowLineHeight.optional=true
 // script.param.fullSnowHeight.type=float
-// script.param.fullSnowHeight.description=Height where summit snow coverage becomes complete.
-// script.param.fullSnowHeight.displayName=Full snow height
-// script.param.fullSnowHeight.default=190
+// script.param.fullSnowHeight.description=Height where summit snow becomes complete. Leave blank to use this world's dry-land 95th percentile.
+// script.param.fullSnowHeight.displayName=Full snow height (blank=auto)
+// script.param.fullSnowHeight.optional=true
 // script.param.maxSnowLayers.type=integer
 // script.param.maxSnowLayers.description=Maximum optional added snow depth, in 1/8-block layers (1 to 8).
 // script.param.maxSnowLayers.displayName=Maximum snow layers
@@ -33,7 +33,7 @@
 // script.param.seed.displayName=Snow seed
 // script.param.seed.default=160190
 // script.param.clearLowSnow.type=boolean
-// script.param.clearLowSnow.description=Clear Frost below Y=160.
+// script.param.clearLowSnow.description=Clear Frost below the snow line.
 // script.param.clearLowSnow.displayName=Clear low snow
 // script.param.clearLowSnow.default=true
 // script.param.addHeight.type=boolean
@@ -47,6 +47,7 @@
 // script.hideCmdLineParams=true
 
 var SmoothSnow = Java.type('org.pepsoft.worldpainter.tools.scripts.SmoothSnow');
+var WorldHeightBands = Java.type('org.pepsoft.worldpainter.tools.scripts.WorldHeightBands');
 var Terrain = Java.type('org.pepsoft.worldpainter.Terrain');
 
 if (typeof dimension === 'undefined' || dimension == null) {
@@ -79,15 +80,25 @@ function terrainNamed(name) {
     throw 'Unknown summit snow terrain: ' + name;
 }
 
-function finiteNumber(name) {
+function optionalFinite(name) {
     var value = params[name];
-    var number = value == null || String(value).trim().length === 0 ? NaN : Number(value);
+    if (value == null || String(value).trim().length === 0) return NaN;
+    var number = Number(value);
     if (!isFinite(number)) throw 'A finite numeric value is required for ' + name + '.';
     return number;
 }
 
-var snowLine = finiteNumber('snowLineHeight');
-var fullSnow = finiteNumber('fullSnowHeight');
+function finiteNumber(name) {
+    var number = optionalFinite(name);
+    if (!isFinite(number)) throw 'A finite numeric value is required for ' + name + '.';
+    return number;
+}
+
+var bands = WorldHeightBands.from(dimension);
+var snowLineOverride = optionalFinite('snowLineHeight');
+var fullSnowOverride = optionalFinite('fullSnowHeight');
+var snowLine = isFinite(snowLineOverride) ? snowLineOverride : bands.snowLine();
+var fullSnow = isFinite(fullSnowOverride) ? fullSnowOverride : bands.fullSnow();
 var maximumLayers = finiteNumber('maxSnowLayers');
 var slopeStart = finiteNumber('slopeStart');
 var slopeReject = finiteNumber('slopeReject');
@@ -105,7 +116,10 @@ if (Math.floor(snowSeed) !== snowSeed || Math.abs(snowSeed) > 9007199254740991) 
 var dryRun = flag('dryRun', true);
 var clearLowSnow = flag('clearLowSnow', true);
 var addHeight = flag('addHeight', false);
-print('Axiom Mountain Smooth Snow: all eligible terrain; ' + snowLine + ' to ' + fullSnow + (dryRun ? ' (dry run).' : '.'));
+var autoNote = (!isFinite(snowLineOverride) || !isFinite(fullSnowOverride))
+    ? ' (auto ' + bands.toString() + ')' : '';
+print('Axiom Mountain Smooth Snow: all eligible terrain; ' + snowLine + ' to ' + fullSnow
+    + autoNote + (dryRun ? ' (dry run).' : '.'));
 
 var result = SmoothSnow.applyScript(
     dimension, false, 4, snowLine, fullSnow, maximumLayers,

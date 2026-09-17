@@ -8,6 +8,7 @@ import java.util.Set;
 import java.util.function.ToDoubleFunction;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class DrawnRiverGraphStrokeHintsTest {
@@ -106,5 +107,22 @@ public class DrawnRiverGraphStrokeHintsTest {
         var marks = Set.of(new DrawnRiverGraph.Pixel(0, 1)); // 1 block from left end
         var snapped = DrawnRiverGraph.snapMarkedOutlets(marks, List.copyOf(component), ends);
         assertEquals(List.of(new DrawnRiverGraph.Pixel(0, 0)), snapped);
+    }
+
+    @Test
+    public void midPathOutletMarksDoNotCrashOrCreateEmptyBasins() {
+        var drawing = line(0, 0, 40, 0);
+        // Paint outlets along the whole centreline (user "selected everywhere")
+        Set<DrawnRiverGraph.Pixel> marks = new HashSet<>(drawing);
+        var hints = new DrawnRiverGraph.StrokeHints(marks, Set.of(), Set.of());
+        var r = DrawnRiverGraph.build(drawing, p -> 50 - p.x() * 0.01, p -> false, 3, 12, null, Set.of(),
+                DrawnRiverGraph.OutletPolicy.auto(), hints, () -> {});
+        // Only the two tips are valid mouths; both may become basins, never empty.
+        assertTrue(r.basins().size() >= 1);
+        for (var b : r.basins()) {
+            assertFalse(b.downstreamFirst().isEmpty());
+            assertTrue(b.outlet().equals(new DrawnRiverGraph.Pixel(0, 0))
+                    || b.outlet().equals(new DrawnRiverGraph.Pixel(40, 0)));
+        }
     }
 }

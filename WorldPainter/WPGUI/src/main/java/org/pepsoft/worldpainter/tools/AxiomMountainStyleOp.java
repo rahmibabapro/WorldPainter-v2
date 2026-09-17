@@ -16,10 +16,13 @@ import org.pepsoft.worldpainter.layers.NotPresentBlock;
 import org.pepsoft.worldpainter.layers.ReadOnly;
 import org.pepsoft.worldpainter.layers.Void;
 import org.pepsoft.worldpainter.layers.exporters.ExporterSettings;
-import org.pepsoft.worldpainter.tools.scripts.SmoothSnow;
+import org.pepsoft.worldpainter.layers.Layer;
 import org.pepsoft.worldpainter.tools.scripts.MossSuitability;
+import org.pepsoft.worldpainter.tools.scripts.RiverDrawingLayerNames;
+import org.pepsoft.worldpainter.tools.scripts.SmoothSnow;
 
 import java.awt.*;
+import java.util.List;
 
 import static org.pepsoft.util.swing.MessageUtils.beepAndShowError;
 
@@ -56,7 +59,7 @@ public final class AxiomMountainStyleOp {
     }
 
     /** One native undo transaction for terrain and snow, including runtime failures. */
-    static void apply(Dimension dimension, ProgressReceiver progress) throws OperationCancelled {
+    public static void apply(Dimension dimension, ProgressReceiver progress) throws OperationCancelled {
         if (dimension == null || !dimension.isUndoAvailable()) {
             throw new IllegalStateException("Enable Undo before applying the Axiom mountain operation.");
         }
@@ -67,8 +70,10 @@ public final class AxiomMountainStyleOp {
         try {
             if (progress != null) progress.checkForCancellation();
             applySurfaceStyle(dimension, progress == null ? null : new SubProgressReceiver(progress, 0, 0.5f));
-            SmoothSnow.apply(dimension, false, 4, SmoothSnow.DEFAULT_SNOW_LINE_HEIGHT,
-                    SmoothSnow.DEFAULT_FULL_SNOW_HEIGHT, 8, 25.0f, 55.0f, 0.15f, STYLE_SEED,
+            final org.pepsoft.worldpainter.tools.scripts.WorldHeightBands bands =
+                    org.pepsoft.worldpainter.tools.scripts.WorldHeightBands.from(dimension);
+            SmoothSnow.apply(dimension, false, 4, bands.snowLine(),
+                    bands.fullSnow(), 8, 25.0f, 55.0f, 0.15f, STYLE_SEED,
                     true, false, false, Terrain.DEEP_SNOW,
                     progress == null ? null : new SubProgressReceiver(progress, 0.5f, 0.5f));
             if (progress != null) progress.checkForCancellation();
@@ -91,8 +96,7 @@ public final class AxiomMountainStyleOp {
     }
 
     private static void applySurfaceStyle(Dimension dimension, ProgressReceiver progressReceiver) throws OperationCancelled {
-        final float steepRock = (float) Math.tan(Math.toRadians(45.0));
-        final float rockySlope = (float) Math.tan(Math.toRadians(30.0));
+        final List<Layer> riverPens = RiverDrawingLayerNames.findOn(dimension);
         int visited = 0;
         for (Tile original : dimension.getTiles()) {
             final Tile tile = dimension.getTileForEditing(original.getX(), original.getY());
@@ -104,30 +108,33 @@ public final class AxiomMountainStyleOp {
                     final int x = startX | localX;
                     final int y = startY | localY;
                     final float height = dimension.getHeightAt(x, y);
-                    // Keep flooded land intact; Frost handles snow/ice only on dry mountain cells.
+                    // Keep flooded land and river pens intact; Frost handles snow only on dry cells.
                     if (!Float.isFinite(height) || height <= dimension.getWaterLevelAt(x, y) + 1.0f
                             || tile.getBitLayerValue(ReadOnly.INSTANCE, localX, localY)
                             || tile.getBitLayerValue(org.pepsoft.worldpainter.layers.River.INSTANCE, localX, localY)
                             || tile.getBitLayerValue(org.pepsoft.worldpainter.layers.RiverSurfaceDetail.INSTANCE, localX, localY)
                             || tile.getBitLayerValue(org.pepsoft.worldpainter.layers.RiverWaterlineDetail.INSTANCE, localX, localY)
+                            || RiverDrawingLayerNames.marked(tile, localX, localY, riverPens)
                             || tile.getBitLayerValue(FloodWithLava.INSTANCE, localX, localY)
                             || tile.getBitLayerValue(Void.INSTANCE, localX, localY)
                             || tile.getBitLayerValue(NotPresent.INSTANCE, localX, localY)
                             || tile.getBitLayerValue(NotPresentBlock.INSTANCE, localX, localY)) {
                         continue;
                     }
-                    final float slope = dimension.getSlope(x, y);
+                    // Broad (8-block) slope in degrees. One-cell getSlope() and a hard 30° cut
+                    // both speckled Akendorf benches (~Y=144) that look flat in the map view but
+                    // measure ~32–36° over a few blocks — keep rock for truly steep faces only.
+                    final float slopeDegrees = broadSlopeDegrees(dimension, x, y, height);
                     final float variation = noise(x, y);
                     final float moss = mossSuitability(dimension, x, y, height);
                     final Terrain target;
-                    if (slope >= steepRock) {
+                    if (slopeDegrees >= 45.0f) {
                         target = Terrain.STONE_MIX;
-                    } else if (slope >= rockySlope) {
+                    } else if (slopeDegrees >= 35.0f) {
                         target = variation < 0.18f ? Terrain.COBBLESTONE : (variation < 0.34f ? Terrain.BASALT : Terrain.STONE_MIX);
-                    } else if (moss >= 0.50f && variation < 0.22f * moss) {
-                        target = variation < 0.16f * moss ? Terrain.MOSS : Terrain.PALE_MOSS;
-                    } else if (height < 115.0f && variation < 0.28f) {
-                        target = Terrain.MUD;
+                    } else if (moss >= 0.65f && variation < 0.12f * moss) {
+                        // Sheltered benches only — open flats stay solid grass (no moss dither).
+                        target = variation < 0.08f * moss ? Terrain.MOSS : Terrain.PALE_MOSS;
                     } else {
                         target = Terrain.GRASS;
                     }
@@ -138,6 +145,13 @@ public final class AxiomMountainStyleOp {
             }
             if (progressReceiver != null) progressReceiver.setProgress(++visited / (float) Math.max(1, dimension.getTiles().size()));
         }
+    }
+
+    /** Eight-block central difference in degrees — ignores one-cell terrace chatter. */
+    private static float broadSlopeDegrees(Dimension dimension, int x, int y, float center) {
+        final float dx = (heightAtOrCenter(dimension, x + 4, y, center) - heightAtOrCenter(dimension, x - 4, y, center)) / 8.0f;
+        final float dy = (heightAtOrCenter(dimension, x, y + 4, center) - heightAtOrCenter(dimension, x, y - 4, center)) / 8.0f;
+        return (float) Math.toDegrees(Math.atan(Math.sqrt(dx * dx + dy * dy)));
     }
 
     private static float noise(int x, int y) {

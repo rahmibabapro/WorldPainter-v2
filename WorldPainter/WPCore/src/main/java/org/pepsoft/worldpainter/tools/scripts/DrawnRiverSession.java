@@ -340,11 +340,12 @@ public final class DrawnRiverSession {
         if(!excludedEdges.isEmpty())return graph;
         var mask=new HashSet<>(drawing);var added=new HashSet<DrawnRiverGraph.Pixel>();
         for(var basin:graph.basins()) {
+            if(basin.downstreamFirst().isEmpty())continue;
             var end=basin.downstreamFirst().getFirst().pixels().getLast();
             if(dimension.getWaterLevelAt(end.x(),end.y())>dimension.getIntHeightAt(end.x(),end.y()))continue;
             DrawnRiverGraph.Pixel target=null;double closest=4.000001;
             for(var other:graph.basins()) {
-                if(other==basin)continue;
+                if(other==basin||other.downstreamFirst().isEmpty())continue;
                 var root=other.downstreamFirst().getFirst().pixels().getLast();
                 if(dimension.getWaterLevelAt(root.x(),root.y())<=dimension.getIntHeightAt(root.x(),root.y()))continue;
                 for(var reach:other.downstreamFirst())for(var p:reach.pixels()) {

@@ -261,6 +261,9 @@ public final class DrawnRiverGraph {
             Rectangle componentBounds = boundsOf(component);
 
             List<Pixel> forcedOutlets = snapMarkedOutlets(hints.markedOutlets(), component, ends);
+            if (forcedOutlets.isEmpty() && !hints.markedOutlets().isEmpty()) {
+                warnings.add("Çıkış kalemi bu grubun açık uçlarına yakın değil; otomatik çıkış kullanıldı.");
+            }
             if (forcedOutlets.isEmpty() && pol.override() != null) {
                 Pixel near = nearestEnd(ends, pol.override(), 2);
                 if (near != null) forcedOutlets = List.of(near);
@@ -269,6 +272,14 @@ public final class DrawnRiverGraph {
             if (!forcedOutlets.isEmpty()) {
                 extractBasinsForOutlets(component, pixels, excluded, forcedOutlets, elev, edge, receivingWater,
                         sourceWidth, maximumWidth, hints, basins, warnings, orientationNotes, diagnostics, check);
+                continue;
+            }
+
+            if (ends.isEmpty()) {
+                diagnostics.add(new DrawnRiverNormalizer.Diagnostic(
+                        DrawnRiverNormalizer.IssueKind.UNRESOLVED, boundsOf(component), List.copyOf(component),
+                        "Açık uç yok; çizimi kontrol edin"));
+                warnings.add(diagnostics.get(diagnostics.size() - 1).message());
                 continue;
             }
 
@@ -394,9 +405,11 @@ public final class DrawnRiverGraph {
                         Pixel current = p;
                         p = neighbours(p, pixels, excluded).stream()
                                 .filter(n -> cellSet.contains(n) && current.equals(downstream.get(n)))
-                                .findFirst().orElseThrow();
+                                .findFirst().orElse(null);
+                        if (p == null) break;
                     }
                     Collections.reverse(line);
+                    if (line.size() < 2) continue;
                     Pixel head = line.get(0);
                     int raw = contributions.getOrDefault(head, 1000);
                     double seed = raw / 1000.0;
@@ -414,6 +427,11 @@ public final class DrawnRiverGraph {
                                 + " yukarı akıyor; çıkış seçimini gözden geçirin.");
                     }
                 }
+            }
+            if (reaches.isEmpty()) {
+                warnings.add("Çıkış " + outlet.x + "," + outlet.y
+                        + " için kol üretilemedi (muhtemelen orta hatta işaret; yalnız uçlara Outlet koyun).");
+                continue;
             }
             basins.add(new Basin(reaches, sources, junctions, outlet, isEdgeOutlet));
         }
@@ -443,28 +461,16 @@ public final class DrawnRiverGraph {
         return false;
     }
 
-    /** Snap outlet-pen marks onto degree-1 ends (prefer) or nearest skeleton pixels. */
+    /**
+     * Snap outlet-pen marks onto degree-1 ends only. Mid-path marks are ignored —
+     * treating them as mouths partitions the tree into empty basins and crashes prepare.
+     */
     static List<Pixel> snapMarkedOutlets(Set<Pixel> marks, List<Pixel> component, List<Pixel> ends) {
-        if (marks == null || marks.isEmpty()) return List.of();
-        Set<Pixel> componentSet = new HashSet<>(component);
+        if (marks == null || marks.isEmpty() || ends == null || ends.isEmpty()) return List.of();
         Set<Pixel> snapped = new HashSet<>();
         for (Pixel mark : marks) {
-            Pixel onEnd = nearestEnd(ends, mark, 3);
-            if (onEnd != null) {
-                snapped.add(onEnd);
-                continue;
-            }
-            Pixel nearest = null;
-            double best = Double.POSITIVE_INFINITY;
-            for (Pixel p : component) {
-                double d = Math.hypot(p.x - mark.x, p.y - mark.y);
-                if (d <= 4 && d < best) {
-                    best = d;
-                    nearest = p;
-                }
-            }
-            if (nearest != null) snapped.add(nearest);
-            else if (componentSet.contains(mark)) snapped.add(mark);
+            Pixel onEnd = nearestEnd(ends, mark, 4);
+            if (onEnd != null) snapped.add(onEnd);
         }
         List<Pixel> ordered = new ArrayList<>(snapped);
         Collections.sort(ordered);

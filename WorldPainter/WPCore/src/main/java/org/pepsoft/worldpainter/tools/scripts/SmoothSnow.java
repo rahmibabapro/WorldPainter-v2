@@ -79,8 +79,9 @@ public final class SmoothSnow {
             progress.checkForCancellation();
         }
         final boolean[][] rows = new boolean[3][width + 2];
+        final List<org.pepsoft.worldpainter.layers.Layer> riverPens = RiverDrawingLayerNames.findOn(dimension);
         final SnowProfile profile = new SnowProfile(seed, snowLineHeight, fullSnowHeight,
-                slopeStart, slopeReject, continuousCoverage);
+                slopeStart, slopeReject, continuousCoverage, riverPens);
         readMaskRow(dimension, rows[0], startX - 1, startY - 1, profile, progress);
         readMaskRow(dimension, rows[1], startX - 1, startY, profile, progress);
         readMaskRow(dimension, rows[2], startX - 1, startY + 1, profile, progress);
@@ -110,7 +111,7 @@ public final class SmoothSnow {
                 checked++;
                 final int tx = x & 127, ty = y & 127;
                 final float height = tile.getHeight(tx, ty);
-                if (!eligible(dimension, tile, tx, ty)) {
+                if (!eligible(dimension, tile, tx, ty, profile.riverPens())) {
                     continue;
                 }
                 final boolean sourceWhite = tile.getBitLayerValue(Frost.INSTANCE, tx, ty);
@@ -177,7 +178,7 @@ public final class SmoothSnow {
             final Tile tile = dimension.getTile(x >> 7, y >> 7);
             row[i] = false;
             if (tile == null || !tile.getBitLayerValue(Frost.INSTANCE, x & 127, y & 127)
-                    || !eligible(dimension, tile, x & 127, y & 127)) continue;
+                    || !eligible(dimension, tile, x & 127, y & 127, profile.riverPens())) continue;
             final float density = coverage(tile.getHeight(x & 127, y & 127), getSlopeDegrees(dimension, x, y),
                     northFacingFactor(dimension, x, y, 0.15f), profile.seed, x, y,
                     profile.snowLine, profile.fullSnow, profile.slopeStart, profile.slopeReject);
@@ -186,7 +187,8 @@ public final class SmoothSnow {
     }
 
     private record SnowProfile(long seed, float snowLine, float fullSnow,
-                               float slopeStart, float slopeReject, boolean continuous) {}
+                               float slopeStart, float slopeReject, boolean continuous,
+                               List<org.pepsoft.worldpainter.layers.Layer> riverPens) {}
 
     private static float coherentThreshold(long seed, int x, int y) {
         final int value = Math.min(255, (int) (valueNoise(seed ^ 0x5eaf131aL, x, y, 8) * 256));
@@ -271,6 +273,7 @@ public final class SmoothSnow {
         }
         if (progress != null) progress.report(0);
         final OriginalHeightWindow originalHeights = addHeight && !dryRun ? new OriginalHeightWindow(dimension) : null;
+        final List<org.pepsoft.worldpainter.layers.Layer> riverPens = RiverDrawingLayerNames.findOn(dimension);
         long checked = 0, snowCovered = 0, cleared = 0, deepSnow = 0;
         for (Tile tile : tiles) {
                 final int startX = tile.getX() * 128;
@@ -282,7 +285,7 @@ public final class SmoothSnow {
                         final int y = startY + ty;
                         checked++;
                         if (progress != null && (checked & 1023) == 0) progress.report((double) checked / total);
-                        if (!eligible(dimension, tile, tx, ty)) continue;
+                        if (!eligible(dimension, tile, tx, ty, riverPens)) continue;
                         if (annotationsOnly && dimension.getLayerValueAt(Annotations.INSTANCE, x, y) != annotationValue) {
                             continue;
                         }
@@ -342,6 +345,7 @@ public final class SmoothSnow {
         if (biome < 0 || biome > 255) throw new IllegalArgumentException("Biome id must be between 0 and 255");
         final List<Tile> tiles = orderedTiles(dimension);
         final long total = tiles.size() * 16384L;
+        final List<org.pepsoft.worldpainter.layers.Layer> riverPens = RiverDrawingLayerNames.findOn(dimension);
         long checked = 0, covered = 0, cleared = 0;
         if (progress != null) { progress.checkForCancel(); progress.setProgress(0); }
         for (Tile tile : tiles) {
@@ -353,7 +357,7 @@ public final class SmoothSnow {
                         progress.checkForCancel();
                         progress.setProgress(checked / (double) total);
                     }
-                    if (!eligible(dimension, tile, tx, ty)) continue;
+                    if (!eligible(dimension, tile, tx, ty, riverPens)) continue;
                     final int x = startX + tx, y = startY + ty;
                     final float height = tile.getHeight(tx, ty);
                     float slope = 0;
@@ -419,7 +423,8 @@ public final class SmoothSnow {
         return tiles;
     }
 
-    private static boolean eligible(Dimension dimension, Tile tile, int x, int y) {
+    private static boolean eligible(Dimension dimension, Tile tile, int x, int y,
+                                    java.util.List<org.pepsoft.worldpainter.layers.Layer> riverPens) {
         final float height = tile.getHeight(x, y);
         return Float.isFinite(height) && height > tile.getWaterLevel(x, y) + 1.0f
                 && tile.getIntHeight(x, y) < dimension.getMaxHeight() - 1
@@ -430,6 +435,7 @@ public final class SmoothSnow {
                 && !tile.getBitLayerValue(org.pepsoft.worldpainter.layers.River.INSTANCE, x, y)
                 && !tile.getBitLayerValue(org.pepsoft.worldpainter.layers.RiverSurfaceDetail.INSTANCE, x, y)
                 && !tile.getBitLayerValue(org.pepsoft.worldpainter.layers.RiverWaterlineDetail.INSTANCE, x, y)
+                && !RiverDrawingLayerNames.marked(tile, x, y, riverPens)
                 && !tile.getBitLayerValue(FloodWithLava.INSTANCE, x, y);
     }
 
@@ -500,9 +506,19 @@ public final class SmoothSnow {
         if (height >= fullSnowHeight) {
             return slope;
         }
+        // Gentle mid-band flats (grass plateaus) must not receive the sparse 8% coherent-noise
+        // frost that reads as salt-and-pepper. Snow on slopes below slopeStart only after the
+        // height ramp is well past the sparse start; ridges keep the normal transition.
+        float gentleFlatGate = 1.0f;
+        if (slopeStart > 0.0f && slopeDegrees < slopeStart) {
+            gentleFlatGate = smoothStep((elevation - 0.40f) / 0.35f);
+            if (gentleFlatGate <= 0.0f) {
+                return 0.0f;
+            }
+        }
         // Large, softly interpolated patches prevent one-cell salt-and-pepper snow.
         final float weather = 0.82f + 0.36f * valueNoise(seed, x, y, 48);
-        return clamp(elevation * slope * northFactor * weather);
+        return clamp(elevation * slope * northFactor * weather * gentleFlatGate);
     }
 
     private static float getSlopeDegrees(Dimension dimension, int x, int y) {

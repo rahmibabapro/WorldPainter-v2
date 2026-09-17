@@ -63,11 +63,12 @@ public class SmoothSnowTest {
     }
 
     @Test
-    public void summitWhiteSnowStartsAt150AndCoversEveryRetainedMaskCell() throws Exception {
-        final Dimension low = snowDimension(149), start = snowDimension(150), full = snowDimension(190);
-        assertEquals(0, SmoothSnow.applySummitBlueprintMask(low, 733L, null, 150, 190, 30).snowCovered());
-        assertEquals(32768L, SmoothSnow.applySummitBlueprintMask(start, 733L, null, 150, 190, 30).snowCovered());
-        assertEquals(32768L, SmoothSnow.applySummitBlueprintMask(full, 733L, null, 150, 190, 30).snowCovered());
+    public void summitWhiteSnowRespectsExplicitBandAndCoversEveryRetainedMaskCell() throws Exception {
+        // Explicit snowLine/fullSnow (not vanilla constants) — callers pass WorldHeightBands.
+        final Dimension low = snowDimension(89), start = snowDimension(90), full = snowDimension(110);
+        assertEquals(0, SmoothSnow.applySummitBlueprintMask(low, 733L, null, 90, 110, 30).snowCovered());
+        assertEquals(32768L, SmoothSnow.applySummitBlueprintMask(start, 733L, null, 90, 110, 30).snowCovered());
+        assertEquals(32768L, SmoothSnow.applySummitBlueprintMask(full, 733L, null, 90, 110, 30).snowCovered());
         for (int y = 0; y < 256; y++) {
             for (int x = 0; x < 128; x++) {
                 assertFalse(low.getBitLayerValueAt(Frost.INSTANCE, x, y));
@@ -108,12 +109,12 @@ public class SmoothSnowTest {
     }
 
     @Test
-    public void heightCoverageStartsAt160AndFinishesAt190() {
-        assertEquals(0.0f, SmoothSnow.heightCoverage(159.99f, 160.0f, 190.0f), 0.00001f);
-        assertEquals(0.08f, SmoothSnow.heightCoverage(160.0f, 160.0f, 190.0f), 0.00001f);
-        assertEquals(1.0f, SmoothSnow.heightCoverage(190.0f, 160.0f, 190.0f), 0.00001f);
-        assertTrue(SmoothSnow.heightCoverage(175.0f, 160.0f, 190.0f) > 0.08f);
-        assertTrue(SmoothSnow.heightCoverage(175.0f, 160.0f, 190.0f) < 1.0f);
+    public void heightCoverageStartsAtSnowLineAndFinishesAtFullSnow() {
+        assertEquals(0.0f, SmoothSnow.heightCoverage(89.99f, 90.0f, 110.0f), 0.00001f);
+        assertEquals(0.08f, SmoothSnow.heightCoverage(90.0f, 90.0f, 110.0f), 0.00001f);
+        assertEquals(1.0f, SmoothSnow.heightCoverage(110.0f, 90.0f, 110.0f), 0.00001f);
+        assertTrue(SmoothSnow.heightCoverage(100.0f, 90.0f, 110.0f) > 0.08f);
+        assertTrue(SmoothSnow.heightCoverage(100.0f, 90.0f, 110.0f) < 1.0f);
     }
 
     @Test

@@ -15,6 +15,7 @@ import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.HashSet;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -237,12 +238,17 @@ public final class DrawnRiverDialog extends WorldPainterDialog {
     }
     static String explain(Exception e){
         Throwable t=e;while(t.getCause()!=null)t=t.getCause();
-        String m=String.valueOf(t.getMessage());
+        String m=t.getMessage();
+        if(m==null||m.isBlank()||"null".equals(m)) {
+            m=t.getClass().getSimpleName();
+            if(t instanceof NullPointerException)m="beklenmeyen boş değer (NPE)";
+            else if(t instanceof NoSuchElementException)m="ağ/çıkış çözülemedi (boş havza); Outlet kalemini yalnız açık uçlara koyun";
+        }
         if(t instanceof CancellationException) {
             if(m.contains("bütçe"))return "Süre doldu: "+m;
             return "İptal: "+m;
         }
-        return "Hesap hatası: "+m+" Dünya değiştirilmedi.";
+        return "Hesap hatası: "+m+". Dünya değiştirilmedi.";
     }
     private static final class PreviewPanel extends JPanel {
         DrawnRiverSession.Preview data;

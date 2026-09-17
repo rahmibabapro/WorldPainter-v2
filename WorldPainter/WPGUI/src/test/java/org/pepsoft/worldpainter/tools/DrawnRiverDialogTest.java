@@ -12,6 +12,10 @@ public class DrawnRiverDialogTest {
         assertTrue(DrawnRiverDialog.explain(new CancellationException("İptal edildi; dünya değiştirilmedi.")).startsWith("İptal"));
         assertTrue(DrawnRiverDialog.explain(new CancellationException("Planlama bütçesi doldu; dünya değiştirilmedi.")).startsWith("Süre doldu"));
         assertTrue(DrawnRiverDialog.explain(new IllegalStateException("beklenmeyen")).startsWith("Hesap hatası"));
+        String npe = DrawnRiverDialog.explain(new java.util.concurrent.ExecutionException(new NullPointerException()));
+        assertTrue(npe.contains("beklenmeyen boş değer") || npe.contains("NPE"));
+        String empty = DrawnRiverDialog.explain(new java.util.concurrent.ExecutionException(new java.util.NoSuchElementException()));
+        assertTrue(empty.contains("Outlet") || empty.contains("uç"));
     }
     @Test public void previewStatusIncludesIdentityStageAndMaxCut() {
         var p=new DrawnRiverSession.Preview(java.util.List.of(),java.util.List.of(),java.util.List.of(),java.util.List.of(),

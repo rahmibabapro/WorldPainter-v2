@@ -122,7 +122,7 @@ public final class AxiomTextureTransfer {
                     }
                     final int wx = worldX + x, wy = worldY + y;
                     final float height = tile.getHeight(x, y);
-                    if (! targetFilter.accept(wx, wy, height, target.slopeDegrees(wx, wy, height))) {
+                    if (! targetFilter.accept(wx, wy, height, target.broadSlopeDegrees(wx, wy, height))) {
                         rejected++;
                         continue;
                     }
@@ -149,6 +149,7 @@ public final class AxiomTextureTransfer {
         long eligible = 0, protectedCells = 0;
         int checked = 0;
         final Collection<? extends Tile> tiles = dimension.getTiles();
+        final List<org.pepsoft.worldpainter.layers.Layer> riverPens = RiverDrawingLayerNames.findOn(dimension);
         for (Tile tile : tiles) {
             minX = Math.min(minX, tile.getX() * 128);
             minY = Math.min(minY, tile.getY() * 128);
@@ -156,7 +157,7 @@ public final class AxiomTextureTransfer {
             maxY = Math.max(maxY, tile.getY() * 128 + 127);
             for (int y = 0; y < 128; y++) for (int x = 0; x < 128; x++) {
                 final float h = tile.getHeight(x, y);
-                if (! editableDryCell(tile, x, y)) {
+                if (! editableDryCell(tile, x, y, riverPens)) {
                     protectedCells++;
                     continue;
                 }
@@ -436,7 +437,10 @@ public final class AxiomTextureTransfer {
         return Objects.requireNonNull(mapped[label], "Missing exact terrain mapping for " + materialKey(profile.palette[label]));
     }
 
-    /** White summit terrain and its snow mask are valid only at/above this elevation. */
+    /**
+     * Legacy vanilla summit floor (Y=150). Prefer {@link WorldHeightBands#summitWhiteMinimum()}
+     * for the open world's dry-land percentiles.
+     */
     public static final float SUMMIT_WHITE_MINIMUM_HEIGHT = 150.0f;
 
     /** At this slope and steeper summit white is replaced by its measured undercoat/rock. */
@@ -477,7 +481,12 @@ public final class AxiomTextureTransfer {
     }
 
     private static final class Target {
-        Target(Dimension dimension) { this.dimension = dimension; Arrays.fill(keys, Long.MIN_VALUE); }
+        Target(Dimension dimension) {
+            this.dimension = dimension;
+            this.bands = WorldHeightBands.from(dimension);
+            this.riverPens = RiverDrawingLayerNames.findOn(dimension);
+            Arrays.fill(keys, Long.MIN_VALUE);
+        }
         Tile tile(int x, int y) {
             final int tx = x >> 7, ty = y >> 7, slot = (tx * 31 + ty) & 31;
             final long key = ((long) tx << 32) ^ (ty & 0xffffffffL);
@@ -524,11 +533,11 @@ public final class AxiomTextureTransfer {
         }
         boolean supportsSummitWhite(int x, int y) {
             final float center = height(x, y, Float.NaN);
-            return Float.isFinite(center) && center >= SUMMIT_WHITE_MINIMUM_HEIGHT
+            return Float.isFinite(center) && center >= bands.summitWhiteMinimum()
                     && slopeDegrees(x, y, center) < SUMMIT_WHITE_MAXIMUM_SLOPE;
         }
         private boolean dry(Tile tile, int x, int y) {
-            return editableDryCell(tile, x, y);
+            return editableDryCell(tile, x, y, riverPens);
         }
         private float slopeDegrees(int x, int y, float center) {
             final float dx = (height(x + 4, y, center) - height(x - 4, y, center)) / 8.0f;
@@ -541,18 +550,32 @@ public final class AxiomTextureTransfer {
             return (float) Math.toDegrees(Math.atan(Math.sqrt(Math.max(dx * dx + dy * dy,
                     localDx * localDx + localDy * localDy))));
         }
+        /** Eight-block slope only — for rock/grass so plateau micro-noise does not speckled-paint. */
+        private float broadSlopeDegrees(int x, int y, float center) {
+            final float dx = (height(x + 4, y, center) - height(x - 4, y, center)) / 8.0f;
+            final float dy = (height(x, y + 4, center) - height(x, y - 4, center)) / 8.0f;
+            return (float) Math.toDegrees(Math.atan(Math.sqrt(dx * dx + dy * dy)));
+        }
         final Dimension dimension;
+        final WorldHeightBands bands;
+        final List<org.pepsoft.worldpainter.layers.Layer> riverPens;
         final Tile[] tiles = new Tile[32];
         final long[] keys = new long[32];
     }
 
     private static boolean editableDryCell(Tile tile, int x, int y) {
+        return editableDryCell(tile, x, y, List.of());
+    }
+
+    private static boolean editableDryCell(Tile tile, int x, int y,
+                                           List<org.pepsoft.worldpainter.layers.Layer> riverPens) {
         return tile != null && Float.isFinite(tile.getHeight(x, y))
                 && tile.getHeight(x, y) > tile.getWaterLevel(x, y) + 1.0f
                 && !tile.getBitLayerValue(ReadOnly.INSTANCE, x, y)
                 && !tile.getBitLayerValue(org.pepsoft.worldpainter.layers.River.INSTANCE, x, y)
                 && !tile.getBitLayerValue(org.pepsoft.worldpainter.layers.RiverSurfaceDetail.INSTANCE, x, y)
                 && !tile.getBitLayerValue(org.pepsoft.worldpainter.layers.RiverWaterlineDetail.INSTANCE, x, y)
+                && !RiverDrawingLayerNames.marked(tile, x, y, riverPens)
                 && !tile.getBitLayerValue(FloodWithLava.INSTANCE, x, y)
                 && !tile.getBitLayerValue(Void.INSTANCE, x, y)
                 && !tile.getBitLayerValue(NotPresent.INSTANCE, x, y)
@@ -595,7 +618,7 @@ public final class AxiomTextureTransfer {
         boolean accept(int x, int y, float height, float slopeDegrees);
     }
 
-    /** Mountain moss stays in its measured 80–120 band; plains moss follows the flat source itself. */
+    /** Mountain moss uses slope/aspect suitability; plains moss follows the flat source itself. */
     public enum MossPolicy {
         MOUNTAIN_BAND,
         ROLLING_PLAINS

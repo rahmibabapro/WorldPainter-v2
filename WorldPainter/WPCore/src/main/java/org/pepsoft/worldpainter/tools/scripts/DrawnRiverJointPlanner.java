@@ -20,6 +20,10 @@ final class DrawnRiverJointPlanner {
         int rejected=0;
         for(var basin:graph.basins()) {
             check.run();
+            if(basin.downstreamFirst().isEmpty()) {
+                messages.add("Boş havza atlandı (çıkış kalemini yalnız açık uçlara koyun).");
+                continue;
+            }
             var root=basin.outlet()!=null?basin.outlet():basin.downstreamFirst().getFirst().pixels().getLast();
             boolean wetOutlet = d.getWaterLevelAt(root.x(),root.y()) > d.getIntHeightAt(root.x(),root.y());
             Set<Long> edgeKeys=new HashSet<>();

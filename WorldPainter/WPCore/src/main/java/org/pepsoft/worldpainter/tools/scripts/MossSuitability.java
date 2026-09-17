@@ -2,13 +2,18 @@ package org.pepsoft.worldpainter.tools.scripts;
 
 /**
  * Small, deterministic terrain rule shared by the Axiom surface passes. Mountain moss is a damp,
- * sheltered middle-mountain texture; rolling-plains moss retains its measured pattern but never
- * becomes a colour that can appear on bare cliffs. Heights are WorldPainter heights, and negative
- * Y is north (as in {@link SmoothSnow}).
+ * sheltered texture; rolling-plains moss retains its measured pattern but never becomes a colour
+ * that can appear on bare cliffs. Heights are WorldPainter heights, and negative Y is north
+ * (as in {@link SmoothSnow}). Coverage is slope/aspect/moisture only — no absolute Y band —
+ * so low-ceiling maps (e.g. Akendorf8k) still get moss on suitable benches.
  */
 public final class MossSuitability {
-    public static final float MIN_HEIGHT = 80.0f;
-    public static final float MAX_HEIGHT = 120.0f;
+    /** @deprecated Absolute Y gates removed; kept for binary compatibility with older tests. */
+    @Deprecated
+    public static final float MIN_HEIGHT = Float.NEGATIVE_INFINITY;
+    /** @deprecated Absolute Y gates removed; kept for binary compatibility with older tests. */
+    @Deprecated
+    public static final float MAX_HEIGHT = Float.POSITIVE_INFINITY;
     public static final float MAX_SLOPE_DEGREES = 30.0f;
 
     private MossSuitability() {
@@ -20,18 +25,15 @@ public final class MossSuitability {
      * positive concavity means that the cell sits below its four-block neighbourhood.
      */
     public static float coverage(float height, float dx, float dy, float north, float south, float concavity) {
-        if (! Float.isFinite(height) || height <= MIN_HEIGHT || height >= MAX_HEIGHT) {
+        if (! Float.isFinite(height)) {
             return 0.0f;
         }
-        // A four-block edge band prevents a visible horizontal vegetation line at 80 or 120.
-        final float elevation = Math.min(smoothStep((height - MIN_HEIGHT) / 4.0f),
-                smoothStep((MAX_HEIGHT - height) / 4.0f));
-        return clamp(elevation * surfaceCoverage(dx, dy, north, south, concavity));
+        return clamp(surfaceCoverage(dx, dy, north, south, concavity));
     }
 
     /**
      * The rolling-plains blueprint carries its own moss distribution, so it keeps the same
-     * slope/aspect/moisture protection without importing the mountain-only 80–120 height band.
+     * slope/aspect/moisture protection without importing a mountain height band.
      */
     public static boolean acceptsRollingPlainsMoss(float dx, float dy, float north, float south, float concavity) {
         return surfaceCoverage(dx, dy, north, south, concavity) >= 0.50f;

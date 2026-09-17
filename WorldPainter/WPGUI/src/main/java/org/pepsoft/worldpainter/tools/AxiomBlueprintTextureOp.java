@@ -17,6 +17,7 @@ import org.pepsoft.worldpainter.tools.scripts.AxiomTextureProfile;
 import org.pepsoft.worldpainter.tools.scripts.AxiomTextureTransfer;
 import org.pepsoft.worldpainter.tools.scripts.ScriptProgress;
 import org.pepsoft.worldpainter.tools.scripts.SmoothSnow;
+import org.pepsoft.worldpainter.tools.scripts.WorldHeightBands;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -153,6 +154,7 @@ public final class AxiomBlueprintTextureOp {
         }
         try {
             terrains.install();
+            final WorldHeightBands bands = WorldHeightBands.from(dimension);
             final float mountainStart = (plainsProfile == null) ? 0.25f : 0.32f;
             final float mountainExtent = (plainsProfile == null) ? 0.52f : 0.29f;
             final AxiomTextureTransfer.Summary mountainTransfer = AxiomTextureTransfer.apply(dimension, mountainProfile,
@@ -167,17 +169,17 @@ public final class AxiomBlueprintTextureOp {
             // whose maximum slope is below the rock threshold, so it cannot be overwritten.
             final float rockStart = (plainsProfile == null) ? 0.77f : 0.61f;
             final AxiomTextureTransfer.MixedTerrainSummary rockTransfer = AxiomTextureTransfer.applyMixedTerrain(dimension,
-                    Terrain.STONE, AxiomTextureTransfer.steepRockFilter(AxiomTextureTransfer.SUMMIT_WHITE_MAXIMUM_SLOPE),
+                    Terrain.STONE, AxiomTextureTransfer.steepRockFilter(35.0f),
                     sub(progress, rockStart, 0.08f), (x, y, ignored) -> {
                         dimension.setBitLayerValueAt(Frost.INSTANCE, x, y, false);
                         dimension.setLayerValueAt(SnowDepth.INSTANCE, x, y, 0);
                     });
             final String plainsTransfer;
             if (plainsProfile != null) {
-                // Flat land is grass only. It clears all prior snow values it replaces, while the
-                // filter keeps the grass below Y=150 and away from the steep-rock treatment.
+                // Grass follows slope only — never clip by snow-line height, or high benches keep
+                // mountain-quilt dither (the Y≈144 plateau bug on Akendorf-scale maps).
                 plainsTransfer = plainsMix + "; " + AxiomTextureTransfer.applyMixedTerrain(dimension,
-                        terrains.getMixedTerrain(), AxiomTextureTransfer.rollingPlainsFilter(PLAINS_MAXIMUM_HEIGHT,
+                        terrains.getMixedTerrain(), AxiomTextureTransfer.rollingPlainsFilter(Float.MAX_VALUE,
                                 PLAINS_HEIGHT_TRANSITION, PLAINS_FULL_SLOPE, PLAINS_REJECTED_SLOPE,
                                 TEXTURE_SEED ^ PLAINS_SEED_SALT), sub(progress, 0.69f, 0.16f),
                         (x, y, ignoredSourceSnow) -> {
@@ -187,17 +189,16 @@ public final class AxiomBlueprintTextureOp {
             } else {
                 plainsTransfer = null;
             }
-            // Summit white starts at Y=150 and is retained only below 30 degrees. Every retained
-            // white block receives explicit, smoothly thickening snow rather than sparse holes.
+            // Summit white / snow follow dry-land p80→p95 for this world, not vanilla Y=150/190.
             final SmoothSnow.Result snow = SmoothSnow.applySummitBlueprintMask(dimension, TEXTURE_SEED,
-                    sub(progress, 0.85f, 0.15f), AxiomTextureTransfer.SUMMIT_WHITE_MINIMUM_HEIGHT,
-                    SUMMIT_FULL_SNOW_HEIGHT, AxiomTextureTransfer.SUMMIT_WHITE_MAXIMUM_SLOPE);
+                    sub(progress, 0.85f, 0.15f), bands.snowLine(), bands.fullSnow(),
+                    AxiomTextureTransfer.SUMMIT_WHITE_MAXIMUM_SLOPE);
             if (progress != null) {
                 progress.checkForCancellation();
             }
             final Result result = new Result(terrains, mountainProfile.getSummary().toString(),
                     plainsProfile != null ? plainsProfile.getSummary().toString() : null,
-                    mountainTransfer + "; steep rock: " + rockTransfer, plainsTransfer, snow,
+                    mountainTransfer + "; steep rock: " + rockTransfer + "; " + bands, plainsTransfer, snow,
                     (System.nanoTime() - start) / 1_000_000L);
             dimension.armSavePoint();
             committed = true;
@@ -263,10 +264,8 @@ public final class AxiomBlueprintTextureOp {
 
     private static final long TEXTURE_SEED = 8647981921575488628L;
     private static final long PLAINS_SEED_SALT = 0x45b2f33d7a1c9e0bL;
-    private static final float PLAINS_MAXIMUM_HEIGHT = AxiomTextureTransfer.SUMMIT_WHITE_MINIMUM_HEIGHT;
     private static final float PLAINS_HEIGHT_TRANSITION = 8.0f;
     private static final float PLAINS_FULL_SLOPE = 18.0f;
-    private static final float PLAINS_REJECTED_SLOPE = 30.0f;
-    private static final float SUMMIT_FULL_SNOW_HEIGHT = 190.0f;
+    private static final float PLAINS_REJECTED_SLOPE = 35.0f;
     private static final Logger logger = LoggerFactory.getLogger(AxiomBlueprintTextureOp.class);
 }

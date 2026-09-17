@@ -34,30 +34,35 @@ public class AxiomBlueprintTextureOpTest {
         assertTrue(white>0);
     }
     @Test public void exactSnowLineAndRejectedSlopeUseTheRealCombinedOperation() throws Exception {
+        // Large high plateau + low bench + steep face so dry p80 lands on the plateau (not vanilla 150).
         for(int y=0;y<128;y++)for(int x=0;x<128;x++)
-            dimension.setHeightAt(x,y,x<32?149:x<64?150:
-                    (float)(160+(x-64)*Math.tan(Math.toRadians(31))));
+            dimension.setHeightAt(x,y,x<40?90:x<100?130:
+                    (float)(130+(x-100)*Math.tan(Math.toRadians(31))));
+        final org.pepsoft.worldpainter.tools.scripts.WorldHeightBands bands =
+                org.pepsoft.worldpainter.tools.scripts.WorldHeightBands.from(dimension);
+        assertTrue("Expected snow line on the plateau, got " + bands.snowLine(),
+                bands.snowLine() >= 120f && bands.snowLine() <= 130.01f);
         AxiomBlueprintTextureOp.applyProfiles(world,dimension,profile,null,false,null,System.nanoTime());
         boolean whiteAtBoundary=false;
         for(int y=8;y<120;y++)for(int x=8;x<120;x++) {
-            if(x>=28&&x<36||x>=60&&x<72)continue;
+            if(x>=36&&x<44||x>=96&&x<104)continue;
             float h=dimension.getHeightAt(x,y);
             var material=dimension.getTerrainAt(x,y).getMaterial(world.getPlatform(),0L,x,y,h,Math.round(h));
-            if(x<28) {
+            if(x<36) {
                 assertNotEquals("minecraft:birch_wood",material.name);
                 assertFalse(dimension.getBitLayerValueAt(Frost.INSTANCE,x,y));
                 assertEquals(0,dimension.getLayerValueAt(SnowDepth.INSTANCE,x,y));
-            } else if(x<60&&material.name.equals("minecraft:birch_wood")) {
+            } else if(x<96&&material.name.equals("minecraft:birch_wood")) {
                 whiteAtBoundary=true;
                 assertTrue(dimension.getBitLayerValueAt(Frost.INSTANCE,x,y));
                 assertTrue(dimension.getLayerValueAt(SnowDepth.INSTANCE,x,y)>0);
-            } else if(x>=72) {
+            } else if(x>=104) {
                 assertSame(Terrain.STONE,dimension.getTerrainAt(x,y));
                 assertFalse(dimension.getBitLayerValueAt(Frost.INSTANCE,x,y));
                 assertEquals(0,dimension.getLayerValueAt(SnowDepth.INSTANCE,x,y));
             }
         }
-        assertTrue("White terrain must be possible at exactly Y=150",whiteAtBoundary);
+        assertTrue("White terrain must be possible at the world snow line",whiteAtBoundary);
     }
     @Before
     public void setUp() throws Exception {
@@ -169,9 +174,8 @@ public class AxiomBlueprintTextureOpTest {
     }
 
     @Test
-    public void plainsProfileOverlaysOnlyLowGentleLandAndStillUsesOneUndo() throws Exception {
-        // A low flat island belongs to terrain.bp; the adjacent 45-degree ramp and high plateau
-        // must retain the mountain source. Leave generous margins so feature samples are local.
+    public void plainsProfileOverlaysGentleSlopesAtAnyHeightAndStillUsesOneUndo() throws Exception {
+        // Flat land gets grass by slope; a 45-degree ramp must keep mountain/rock treatment.
         for (int y = 16; y < 112; y++) {
             for (int x = 16; x < 48; x++) {
                 dimension.setHeightAt(x, y, 100);
@@ -190,15 +194,6 @@ public class AxiomBlueprintTextureOpTest {
         assertNotEquals("A 45-degree ramp must not receive plains texture", "minecraft:grass_block", steep.name);
         assertFalse(dimension.getBitLayerValueAt(Frost.INSTANCE, 32, 64));
         assertEquals(0, dimension.getLayerValueAt(SnowDepth.INSTANCE, 32, 64));
-
-        boolean highMountainSnow = false;
-        for (int y = 16; y < 112; y++) {
-            for (int x = 104; x < 124; x++) {
-                highMountainSnow |= dimension.getBitLayerValueAt(Frost.INSTANCE, x, y)
-                        && dimension.getLayerValueAt(SnowDepth.INSTANCE, x, y) > 0;
-            }
-        }
-        assertTrue("High mountain source-white cells should still get smooth snow", highMountainSnow);
         assertTrue(undo.undo());
         assertOriginalCells();
     }
@@ -226,37 +221,44 @@ public class AxiomBlueprintTextureOpTest {
     }
 
     @Test
-    public void steepTerrainIsStoneAndWhiteSummitsAreSnowyOnlyFrom150() throws Exception {
+    public void steepTerrainIsStoneAndWhiteSummitsAreSnowyOnlyFromWorldSnowLine() throws Exception {
         for (int y = 16; y < 112; y++) {
-            for (int x = 16; x < 48; x++) {
-                dimension.setHeightAt(x, y, 149);
+            for (int x = 16; x < 40; x++) {
+                dimension.setHeightAt(x, y, 90);
             }
-            for (int x = 48; x < 80; x++) {
-                dimension.setHeightAt(x, y, 170);
+            for (int x = 40; x < 100; x++) {
+                dimension.setHeightAt(x, y, 130);
             }
-            for (int x = 80; x < 112; x++) {
+            for (int x = 100; x < 112; x++) {
                 dimension.setHeightAt(x, y, 60 + (x - 80) * 2);
+            }
+        }
+        // Fill the rest so sampling is dominated by the 90/130 relief above.
+        for (int y = 0; y < 128; y++) {
+            for (int x = 0; x < 128; x++) {
+                if (y >= 16 && y < 112 && x >= 16 && x < 112) continue;
+                dimension.setHeightAt(x, y, 90);
             }
         }
         AxiomBlueprintTextureOp.applyProfiles(world, dimension, profile, null, false, null, System.nanoTime());
 
         boolean sawSnowyWhite = false;
         for (int y = 24; y < 104; y++) {
-            for (int x = 24; x < 40; x++) {
-                final Material material = dimension.getTerrainAt(x, y).getMaterial(world.getPlatform(), 0L, x, y, 149, 149);
+            for (int x = 20; x < 36; x++) {
+                final Material material = dimension.getTerrainAt(x, y).getMaterial(world.getPlatform(), 0L, x, y, 90, 90);
                 assertNotEquals("minecraft:birch_wood", material.name);
                 assertFalse(dimension.getBitLayerValueAt(Frost.INSTANCE, x, y));
                 assertEquals(0, dimension.getLayerValueAt(SnowDepth.INSTANCE, x, y));
             }
-            for (int x = 56; x < 72; x++) {
-                final Material material = dimension.getTerrainAt(x, y).getMaterial(world.getPlatform(), 0L, x, y, 170, 170);
+            for (int x = 56; x < 88; x++) {
+                final Material material = dimension.getTerrainAt(x, y).getMaterial(world.getPlatform(), 0L, x, y, 130, 130);
                 if (material.name.equals("minecraft:birch_wood")) {
                     sawSnowyWhite = true;
                     assertTrue(dimension.getBitLayerValueAt(Frost.INSTANCE, x, y));
                     assertTrue(dimension.getLayerValueAt(SnowDepth.INSTANCE, x, y) >= 1);
                 }
             }
-            for (int x = 88; x < 104; x++) {
+            for (int x = 104; x < 110; x++) {
                 assertSame(Terrain.STONE, dimension.getTerrainAt(x, y));
                 assertFalse(dimension.getBitLayerValueAt(Frost.INSTANCE, x, y));
                 assertEquals(0, dimension.getLayerValueAt(SnowDepth.INSTANCE, x, y));

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 
 /**
  * WorldPainter MCP server — stdio JSON-RPC to the live bridge at 127.0.0.1:8765.
