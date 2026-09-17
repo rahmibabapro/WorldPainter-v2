@@ -37,11 +37,11 @@ public class RiverToolsDialogTest {
     public void drawingBrushInstructionsDescribeTheDedicatedOneBlockCentrelineWorkflow() {
         final String help = RiverToolsDialog.drawingBrushHelpText();
         assertTrue(help.contains("River Path"));
-        assertTrue(help.contains("Pencil"));
-        assertTrue(help.contains("tek blokluk merkez hattı"));
-        assertTrue(help.contains("Sol tuşla sürükleyerek"));
-        assertTrue(help.contains("sağ tuşla hatayı sil"));
-        assertTrue(help.contains("genişliğini fırça değil"));
-        assertTrue(help.contains("Uygula'ya bas"));
+        assertTrue(help.contains("River Mini"));
+        assertTrue(help.contains("River Outlet"));
+        assertTrue(help.contains("River Continue"));
+        assertTrue(help.contains("tek blokluk Pencil"));
+        assertTrue(help.contains("Nehri hazırla"));
+        assertTrue(help.contains("Uygula"));
     }
 }

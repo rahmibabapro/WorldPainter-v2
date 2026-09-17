@@ -31,12 +31,18 @@ public enum RiverPreset {
 
     public Map<String, Object> parameters(Mode mode, int count, int targetLevel,
                                           boolean waterfalls, boolean smoothBanks) {
+        return parameters(mode, count, targetLevel, waterfalls, smoothBanks, true);
+    }
+
+    public Map<String, Object> parameters(Mode mode, int count, int targetLevel,
+                                          boolean waterfalls, boolean smoothBanks, boolean waterlineBankDetail) {
         if (count < 1 || count > 12) throw new IllegalArgumentException("River count must be 1–12");
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("presetId", id);
         params.put("bankSmoothing", smoothBanks);
         params.put("enableWaterfalls", waterfalls);
         params.put("shallowGraniteDetail", true);
+        params.put("waterlineBankDetail", waterlineBankDetail);
         if (mode == Mode.WAYPOINTS) {
             params.put("riverLayer", RiverPathSupport.RIVER_PATH_LAYER_NAME);
             params.put("riverWidth", maximumWidth);

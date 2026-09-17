@@ -179,7 +179,8 @@ public class RiverScriptBridgeTest {
                     final float original = oldHeights[x + y * 128];
                     final float current = d.getHeightAt(x, y);
                     assertTrue("No terrain fill: " + context, current <= original);
-                    assertTrue("Only shallow cuts: " + context, original - current <= 1.855);
+                    assertTrue("Only shallow cuts plus the automatic interior dirt correction: " + context,
+                            allowedRiverCut(d,x,y,original-current,1.855));
                     if (d.getWaterLevelAt(x, y) <= d.getIntHeightAt(x, y)) {
                         assertEquals("Dry terrain must not be flattened: " + context, original, current, 0);
                         assertEquals("Dry terrain material must stay intact: " + context, Terrain.GRASS, d.getTerrainAt(x, y));
@@ -388,7 +389,9 @@ public class RiverScriptBridgeTest {
     private ScriptEngine engine(Dimension d, String file, String... functions) throws Exception {
         ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine();
         engine.put("dimension", d);
-        engine.eval("var riverPreset={startWidth:5,endWidth:12,maxDepth:1.10}; var bankSmoothing=true;"
+        // ScriptRunner supplies params in the application; extracted helper
+        // tests must provide the same binding (including default waterline flag).
+        engine.eval("var params={}; var riverPreset={startWidth:5,endWidth:12,maxDepth:1.10}; var bankSmoothing=true;"
                 + "var shallowGraniteDetail=true,shallowGraniteSeed=1337;var progress=null;"
                 + "function checkForAbort(){};function print(){};");
         try (InputStream in = getClass().getResourceAsStream("/org/pepsoft/worldpainter/scripts/rivers/" + file)) {
@@ -434,7 +437,8 @@ public class RiverScriptBridgeTest {
     private void assertDescendingChannel(Dimension d) {
         for (int x=20;x<=308;x++) {
             assertTrue("Centre must stay wet at " + x, d.getWaterLevelAt(x,64)>d.getIntHeightAt(x,64));
-            assertTrue("No deep trench at " + x, (104f-x/80f)-d.getHeightAt(x,64)<=1.855);
+            assertTrue("No deep trench at " + x,allowedRiverCut(d,x,64,
+                    (104f-x/80f)-d.getHeightAt(x,64),1.855));
         }
         assertTrue(d.getWaterLevelAt(24,64)>d.getWaterLevelAt(304,64));
         assertEquals(Terrain.GRASS,d.getTerrainAt(164,40));
@@ -444,11 +448,18 @@ public class RiverScriptBridgeTest {
         int granite = 0;
         for (int x=20;x<=108;x++) {
             assertTrue(d.getWaterLevelAt(x,64)>d.getIntHeightAt(x,64));
-            assertTrue(100-d.getHeightAt(x,64)<=1.85);
+            assertTrue(allowedRiverCut(d,x,64,100-d.getHeightAt(x,64),1.85));
         }
         for (int y=48;y<80;y++) for (int x=16;x<112;x++) if(d.getTerrainAt(x,y)==Terrain.GRANITE) granite++;
         assertTrue(granite>0);
         assertEquals(Terrain.GRASS,d.getTerrainAt(64,40));
         assertEquals(100f,d.getHeightAt(64,40),0);
+    }
+
+    private static boolean allowedRiverCut(Dimension dimension,int x,int y,double cut,double normalLimit) {
+        // The mandatory bed-coherence pass may lower only an interior dirt
+        // cell by one extra block. Every other material retains the old cap.
+        return cut<=normalLimit+0.001
+                || (dimension.getTerrainAt(x,y)==Terrain.DIRT&&cut<=normalLimit+1.001);
     }
 }

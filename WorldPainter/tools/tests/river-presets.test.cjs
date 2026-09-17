@@ -23,6 +23,7 @@ test('UI metadata exposes preset, smoothing and waypoint transport',()=>{
     for (const key of ['presetId','bankSmoothing','shallowGraniteDetail']) {
         for (const script of [source,line]) assert.match(script,new RegExp('script\\.param\\.'+key+'\\.type='));
     }
+    for (const script of [source,line]) assert.doesNotMatch(script,/script\.param\.lowerInteriorDirt\.type=/);
     assert.match(line,/script\.param\.linkSparseWaypoints\.type=boolean/);
 });
 for(let id=1;id<=5;id++) test('preset '+id+' shares shallow width/depth contract',()=>{
@@ -58,6 +59,7 @@ function bridge(script,name,reject=false) {
     class Carver {
         constructor(...args){state.options=args;state.carverOptions.push(args);}
         enableTerrainPreservation(){state.preserved=true;}
+        setLowerInteriorDirt(enabled){state.lowerInteriorDirt=enabled;}
         enableTerrainAdaptation(){assert.fail('Named presets must not enable broad terrain grading');}
         addPath(xs,ys){state.paths.push([Array.from(xs),Array.from(ys)]);if(!reject)state.accepted++;return !reject;}
         getAcceptedPaths(){return state.accepted;}
@@ -92,6 +94,7 @@ test('source bridge reverses outlet-first coordinates and applies exactly once',
     assert.deepEqual(state.paths,[[[20,50,90],[50,50,50]]]);
     assert.equal(state.applied,1);
     assert.equal(state.preserved,true);
+    assert.equal(state.lowerInteriorDirt,true);
     assert.deepEqual(state.options.slice(1,7),[5,12,1.1,true,true,1337]);
 });
 for (const named of [true, false]) test('hydrology producer direction is explicit; named='+named,()=>{

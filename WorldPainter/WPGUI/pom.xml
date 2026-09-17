@@ -160,6 +160,14 @@
                                     <mainClass>org.pepsoft.worldpainter.Main</mainClass>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                <!-- A normal Maven package must work without the PowerShell repair step. -->
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.DontIncludeResourceTransformer">
+                                    <resource>org.pepsoft.worldpainter.plugins</resource>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
+                                    <resource>org.pepsoft.worldpainter.plugins</resource>
+                                    <file>${project.basedir}/src/main/packaging/org.pepsoft.worldpainter.plugins</file>
+                                </transformer>
                             </transformers>
                             <filters>
                                 <filter>

@@ -1,0 +1,615 @@
+population	block	count	percent
+side_above_neighbor_east	minecraft:grass_block	102	67.54966887
+side_above_neighbor_east	minecraft:stone	16	10.59602649
+side_above_neighbor_east	minecraft:dark_oak_log	8	5.29801325
+side_above_neighbor_east	minecraft:dirt	6	3.97350993
+side_above_neighbor_east	minecraft:sugar_cane	6	3.97350993
+side_above_neighbor_east	minecraft:brown_stained_glass_pane	4	2.64900662
+side_above_neighbor_east	minecraft:sea_pickle	4	2.64900662
+side_above_neighbor_east	minecraft:lily_pad	3	1.98675497
+side_above_neighbor_east	minecraft:coarse_dirt	1	0.66225166
+side_above_neighbor_east	minecraft:horn_coral_fan	1	0.66225166
+side_above_neighbor_north	minecraft:grass_block	33	45.20547945
+side_above_neighbor_north	minecraft:stone	14	19.17808219
+side_above_neighbor_north	minecraft:sugar_cane	7	9.58904110
+side_above_neighbor_north	minecraft:dark_oak_log	6	8.21917808
+side_above_neighbor_north	minecraft:sea_pickle	5	6.84931507
+side_above_neighbor_north	minecraft:brown_stained_glass_pane	3	4.10958904
+side_above_neighbor_north	minecraft:lily_pad	2	2.73972603
+side_above_neighbor_north	minecraft:coarse_dirt	1	1.36986301
+side_above_neighbor_north	minecraft:dirt	1	1.36986301
+side_above_neighbor_north	minecraft:horn_coral_fan	1	1.36986301
+side_above_neighbor_south	minecraft:grass_block	108	72.48322148
+side_above_neighbor_south	minecraft:stone	10	6.71140940
+side_above_neighbor_south	minecraft:sugar_cane	7	4.69798658
+side_above_neighbor_south	minecraft:dark_oak_log	5	3.35570470
+side_above_neighbor_south	minecraft:dirt	5	3.35570470
+side_above_neighbor_south	minecraft:brown_stained_glass_pane	4	2.68456376
+side_above_neighbor_south	minecraft:sea_pickle	4	2.68456376
+side_above_neighbor_south	minecraft:lily_pad	3	2.01342282
+side_above_neighbor_south	minecraft:coarse_dirt	2	1.34228188
+side_above_neighbor_south	minecraft:horn_coral_fan	1	0.67114094
+side_above_neighbor_west	minecraft:grass_block	35	44.30379747
+side_above_neighbor_west	minecraft:stone	16	20.25316456
+side_above_neighbor_west	minecraft:sugar_cane	7	8.86075949
+side_above_neighbor_west	minecraft:dirt	6	7.59493671
+side_above_neighbor_west	minecraft:dark_oak_log	5	6.32911392
+side_above_neighbor_west	minecraft:sea_pickle	5	6.32911392
+side_above_neighbor_west	minecraft:brown_stained_glass_pane	2	2.53164557
+side_above_neighbor_west	minecraft:lily_pad	2	2.53164557
+side_above_neighbor_west	minecraft:horn_coral_fan	1	1.26582278
+side_internal_east	minecraft:short_grass	208	27.51322751
+side_internal_east	minecraft:grass_block	103	13.62433862
+side_internal_east	minecraft:tall_grass	100	13.22751323
+side_internal_east	minecraft:large_fern	63	8.33333333
+side_internal_east	minecraft:fern	61	8.06878307
+side_internal_east	minecraft:granite_slab	45	5.95238095
+side_internal_east	minecraft:spruce_leaves	35	4.62962963
+side_internal_east	minecraft:oak_leaves	18	2.38095238
+side_internal_east	minecraft:dirt	17	2.24867725
+side_internal_east	minecraft:stone	16	2.11640212
+side_internal_east	minecraft:water	15	1.98412698
+side_internal_east	minecraft:birch_leaves	9	1.19047619
+side_internal_east	minecraft:dark_oak_leaves	9	1.19047619
+side_internal_east	minecraft:andesite_slab	8	1.05820106
+side_internal_east	minecraft:dark_oak_log	8	1.05820106
+side_internal_east	minecraft:stone_slab	8	1.05820106
+side_internal_east	minecraft:granite_stairs	6	0.79365079
+side_internal_east	minecraft:sugar_cane	6	0.79365079
+side_internal_east	minecraft:andesite_stairs	5	0.66137566
+side_internal_east	minecraft:brown_stained_glass_pane	4	0.52910053
+side_internal_east	minecraft:sea_pickle	4	0.52910053
+side_internal_east	minecraft:lily_pad	3	0.39682540
+side_internal_east	minecraft:coarse_dirt	1	0.13227513
+side_internal_east	minecraft:dark_oak_stairs	1	0.13227513
+side_internal_east	minecraft:horn_coral_fan	1	0.13227513
+side_internal_east	minecraft:jungle_door	1	0.13227513
+side_internal_east	minecraft:mossy_cobblestone_slab	1	0.13227513
+side_internal_north	minecraft:short_grass	164	26.66666667
+side_internal_north	minecraft:tall_grass	95	15.44715447
+side_internal_north	minecraft:large_fern	60	9.75609756
+side_internal_north	minecraft:fern	56	9.10569106
+side_internal_north	minecraft:granite_slab	52	8.45528455
+side_internal_north	minecraft:spruce_leaves	44	7.15447154
+side_internal_north	minecraft:grass_block	33	5.36585366
+side_internal_north	minecraft:dirt	14	2.27642276
+side_internal_north	minecraft:stone	14	2.27642276
+side_internal_north	minecraft:oak_leaves	13	2.11382114
+side_internal_north	minecraft:birch_leaves	10	1.62601626
+side_internal_north	minecraft:dark_oak_leaves	8	1.30081301
+side_internal_north	minecraft:dark_oak_log	8	1.30081301
+side_internal_north	minecraft:granite_stairs	7	1.13821138
+side_internal_north	minecraft:sugar_cane	7	1.13821138
+side_internal_north	minecraft:stone_slab	6	0.97560976
+side_internal_north	minecraft:sea_pickle	5	0.81300813
+side_internal_north	minecraft:andesite_slab	4	0.65040650
+side_internal_north	minecraft:andesite_stairs	3	0.48780488
+side_internal_north	minecraft:brown_stained_glass_pane	3	0.48780488
+side_internal_north	minecraft:lily_pad	2	0.32520325
+side_internal_north	minecraft:mossy_cobblestone_slab	2	0.32520325
+side_internal_north	minecraft:coarse_dirt	1	0.16260163
+side_internal_north	minecraft:cobblestone_stairs	1	0.16260163
+side_internal_north	minecraft:dark_oak_stairs	1	0.16260163
+side_internal_north	minecraft:horn_coral_fan	1	0.16260163
+side_internal_north	minecraft:water	1	0.16260163
+side_internal_south	minecraft:short_grass	201	27.68595041
+side_internal_south	minecraft:grass_block	108	14.87603306
+side_internal_south	minecraft:tall_grass	102	14.04958678
+side_internal_south	minecraft:large_fern	58	7.98898072
+side_internal_south	minecraft:fern	52	7.16253444
+side_internal_south	minecraft:granite_slab	40	5.50964187
+side_internal_south	minecraft:spruce_leaves	29	3.99449036
+side_internal_south	minecraft:dirt	19	2.61707989
+side_internal_south	minecraft:oak_leaves	16	2.20385675
+side_internal_south	minecraft:water	13	1.79063361
+side_internal_south	minecraft:birch_leaves	11	1.51515152
+side_internal_south	minecraft:granite_stairs	11	1.51515152
+side_internal_south	minecraft:stone	10	1.37741047
+side_internal_south	minecraft:stone_slab	9	1.23966942
+side_internal_south	minecraft:andesite_slab	7	0.96418733
+side_internal_south	minecraft:dark_oak_leaves	7	0.96418733
+side_internal_south	minecraft:sugar_cane	7	0.96418733
+side_internal_south	minecraft:dark_oak_log	5	0.68870523
+side_internal_south	minecraft:brown_stained_glass_pane	4	0.55096419
+side_internal_south	minecraft:sea_pickle	4	0.55096419
+side_internal_south	minecraft:lily_pad	3	0.41322314
+side_internal_south	minecraft:mossy_cobblestone_slab	3	0.41322314
+side_internal_south	minecraft:andesite_stairs	2	0.27548209
+side_internal_south	minecraft:coarse_dirt	2	0.27548209
+side_internal_south	minecraft:dark_oak_stairs	2	0.27548209
+side_internal_south	minecraft:horn_coral_fan	1	0.13774105
+side_internal_west	minecraft:short_grass	158	26.73434856
+side_internal_west	minecraft:tall_grass	87	14.72081218
+side_internal_west	minecraft:large_fern	67	11.33671743
+side_internal_west	minecraft:fern	57	9.64467005
+side_internal_west	minecraft:spruce_leaves	40	6.76818951
+side_internal_west	minecraft:grass_block	35	5.92216582
+side_internal_west	minecraft:granite_slab	29	4.90693739
+side_internal_west	minecraft:oak_leaves	16	2.70727580
+side_internal_west	minecraft:stone	16	2.70727580
+side_internal_west	minecraft:dirt	15	2.53807107
+side_internal_west	minecraft:birch_leaves	12	2.03045685
+side_internal_west	minecraft:andesite_slab	8	1.35363790
+side_internal_west	minecraft:dark_oak_leaves	8	1.35363790
+side_internal_west	minecraft:granite_stairs	7	1.18443316
+side_internal_west	minecraft:sugar_cane	7	1.18443316
+side_internal_west	minecraft:stone_slab	6	1.01522843
+side_internal_west	minecraft:dark_oak_log	5	0.84602369
+side_internal_west	minecraft:sea_pickle	5	0.84602369
+side_internal_west	minecraft:mossy_cobblestone_slab	3	0.50761421
+side_internal_west	minecraft:brown_stained_glass_pane	2	0.33840948
+side_internal_west	minecraft:cobblestone_stairs	2	0.33840948
+side_internal_west	minecraft:jungle_door	2	0.33840948
+side_internal_west	minecraft:lily_pad	2	0.33840948
+side_internal_west	minecraft:dark_oak_stairs	1	0.16920474
+side_internal_west	minecraft:horn_coral_fan	1	0.16920474
+top_substrate_name	minecraft:grass_block	1812	57.52380952
+top_substrate_name	minecraft:dirt	778	24.69841270
+top_substrate_name	minecraft:coarse_dirt	297	9.42857143
+top_substrate_name	minecraft:dirt_path	63	2.00000000
+top_substrate_name	minecraft:andesite	59	1.87301587
+top_substrate_name	minecraft:podzol	49	1.55555556
+top_substrate_name	minecraft:gravel	29	0.92063492
+top_substrate_name	minecraft:stone	23	0.73015873
+top_substrate_name	minecraft:dark_oak_log	8	0.25396825
+top_substrate_name	minecraft:farmland	8	0.25396825
+top_substrate_name	minecraft:sugar_cane	8	0.25396825
+top_substrate_name	minecraft:sea_pickle	5	0.15873016
+top_substrate_name	minecraft:mossy_cobblestone	4	0.12698413
+top_substrate_name	minecraft:lily_pad	3	0.09523810
+top_substrate_name	minecraft:oak_wood	3	0.09523810
+top_substrate_name	minecraft:horn_coral_fan	1	0.03174603
+top_substrate_state	minecraft:grass_block[snowy=false]	1812	57.52380952
+top_substrate_state	minecraft:dirt	778	24.69841270
+top_substrate_state	minecraft:coarse_dirt	297	9.42857143
+top_substrate_state	minecraft:dirt_path	63	2.00000000
+top_substrate_state	minecraft:andesite	59	1.87301587
+top_substrate_state	minecraft:podzol[snowy=false]	49	1.55555556
+top_substrate_state	minecraft:gravel	29	0.92063492
+top_substrate_state	minecraft:stone	23	0.73015873
+top_substrate_state	minecraft:farmland[moisture=7]	8	0.25396825
+top_substrate_state	minecraft:sea_pickle[pickles=1, waterlogged=false]	5	0.15873016
+top_substrate_state	minecraft:mossy_cobblestone	4	0.12698413
+top_substrate_state	minecraft:dark_oak_log[axis=y]	3	0.09523810
+top_substrate_state	minecraft:dark_oak_log[axis=z]	3	0.09523810
+top_substrate_state	minecraft:lily_pad	3	0.09523810
+top_substrate_state	minecraft:oak_wood[axis=y]	3	0.09523810
+top_substrate_state	minecraft:dark_oak_log[axis=x]	2	0.06349206
+top_substrate_state	minecraft:sugar_cane[age=1]	2	0.06349206
+top_substrate_state	minecraft:horn_coral_fan[waterlogged=false]	1	0.03174603
+top_substrate_state	minecraft:sugar_cane[age=10]	1	0.03174603
+top_substrate_state	minecraft:sugar_cane[age=11]	1	0.03174603
+top_substrate_state	minecraft:sugar_cane[age=13]	1	0.03174603
+top_substrate_state	minecraft:sugar_cane[age=14]	1	0.03174603
+top_substrate_state	minecraft:sugar_cane[age=5]	1	0.03174603
+top_substrate_state	minecraft:sugar_cane[age=9]	1	0.03174603
+top_support_including_shapes_name	minecraft:grass_block	1808	57.39682540
+top_support_including_shapes_name	minecraft:dirt	402	12.76190476
+top_support_including_shapes_name	minecraft:coarse_dirt	281	8.92063492
+top_support_including_shapes_name	minecraft:granite_slab	257	8.15873016
+top_support_including_shapes_name	minecraft:granite_stairs	125	3.96825397
+top_support_including_shapes_name	minecraft:dirt_path	63	2.00000000
+top_support_including_shapes_name	minecraft:podzol	49	1.55555556
+top_support_including_shapes_name	minecraft:andesite	42	1.33333333
+top_support_including_shapes_name	minecraft:gravel	24	0.76190476
+top_support_including_shapes_name	minecraft:andesite_slab	19	0.60317460
+top_support_including_shapes_name	minecraft:stone	18	0.57142857
+top_support_including_shapes_name	minecraft:stone_slab	9	0.28571429
+top_support_including_shapes_name	minecraft:farmland	8	0.25396825
+top_support_including_shapes_name	minecraft:sugar_cane	8	0.25396825
+top_support_including_shapes_name	minecraft:dark_oak_log	7	0.22222222
+top_support_including_shapes_name	minecraft:mossy_cobblestone_slab	7	0.22222222
+top_support_including_shapes_name	minecraft:andesite_stairs	5	0.15873016
+top_support_including_shapes_name	minecraft:sea_pickle	5	0.15873016
+top_support_including_shapes_name	minecraft:dark_oak_stairs	3	0.09523810
+top_support_including_shapes_name	minecraft:lily_pad	3	0.09523810
+top_support_including_shapes_name	minecraft:mossy_cobblestone	3	0.09523810
+top_support_including_shapes_name	minecraft:oak_wood	3	0.09523810
+top_support_including_shapes_name	minecraft:horn_coral_fan	1	0.03174603
+top_support_including_shapes_state	minecraft:grass_block[snowy=false]	1808	57.39682540
+top_support_including_shapes_state	minecraft:dirt	402	12.76190476
+top_support_including_shapes_state	minecraft:coarse_dirt	281	8.92063492
+top_support_including_shapes_state	minecraft:granite_slab[type=bottom, waterlogged=false]	155	4.92063492
+top_support_including_shapes_state	minecraft:granite_slab[type=bottom, waterlogged=true]	102	3.23809524
+top_support_including_shapes_state	minecraft:dirt_path	63	2.00000000
+top_support_including_shapes_state	minecraft:podzol[snowy=false]	49	1.55555556
+top_support_including_shapes_state	minecraft:andesite	42	1.33333333
+top_support_including_shapes_state	minecraft:gravel	24	0.76190476
+top_support_including_shapes_state	minecraft:andesite_slab[type=bottom, waterlogged=false]	18	0.57142857
+top_support_including_shapes_state	minecraft:stone	18	0.57142857
+top_support_including_shapes_state	minecraft:granite_stairs[facing=north, half=bottom, shape=straight, waterlogged=false]	15	0.47619048
+top_support_including_shapes_state	minecraft:granite_stairs[facing=south, half=bottom, shape=straight, waterlogged=false]	12	0.38095238
+top_support_including_shapes_state	minecraft:granite_stairs[facing=west, half=bottom, shape=straight, waterlogged=true]	12	0.38095238
+top_support_including_shapes_state	minecraft:granite_stairs[facing=west, half=bottom, shape=straight, waterlogged=false]	11	0.34920635
+top_support_including_shapes_state	minecraft:granite_stairs[facing=north, half=bottom, shape=straight, waterlogged=true]	9	0.28571429
+top_support_including_shapes_state	minecraft:farmland[moisture=7]	8	0.25396825
+top_support_including_shapes_state	minecraft:granite_stairs[facing=south, half=bottom, shape=straight, waterlogged=true]	8	0.25396825
+top_support_including_shapes_state	minecraft:granite_stairs[facing=east, half=bottom, shape=straight, waterlogged=true]	7	0.22222222
+top_support_including_shapes_state	minecraft:granite_stairs[facing=east, half=bottom, shape=straight, waterlogged=false]	6	0.19047619
+top_support_including_shapes_state	minecraft:mossy_cobblestone_slab[type=bottom, waterlogged=false]	5	0.15873016
+top_support_including_shapes_state	minecraft:sea_pickle[pickles=1, waterlogged=false]	5	0.15873016
+top_support_including_shapes_state	minecraft:stone_slab[type=bottom, waterlogged=false]	5	0.15873016
+top_support_including_shapes_state	minecraft:granite_stairs[facing=west, half=bottom, shape=outer_left, waterlogged=true]	4	0.12698413
+top_support_including_shapes_state	minecraft:dark_oak_log[axis=y]	3	0.09523810
+top_support_including_shapes_state	minecraft:dark_oak_log[axis=z]	3	0.09523810
+top_support_including_shapes_state	minecraft:granite_stairs[facing=east, half=bottom, shape=inner_left, waterlogged=false]	3	0.09523810
+top_support_including_shapes_state	minecraft:granite_stairs[facing=north, half=bottom, shape=outer_right, waterlogged=false]	3	0.09523810
+top_support_including_shapes_state	minecraft:granite_stairs[facing=south, half=bottom, shape=outer_right, waterlogged=true]	3	0.09523810
+top_support_including_shapes_state	minecraft:lily_pad	3	0.09523810
+top_support_including_shapes_state	minecraft:mossy_cobblestone	3	0.09523810
+top_support_including_shapes_state	minecraft:oak_wood[axis=y]	3	0.09523810
+top_support_including_shapes_state	minecraft:granite_stairs[facing=east, half=bottom, shape=outer_left, waterlogged=true]	2	0.06349206
+top_support_including_shapes_state	minecraft:granite_stairs[facing=north, half=bottom, shape=inner_left, waterlogged=true]	2	0.06349206
+top_support_including_shapes_state	minecraft:granite_stairs[facing=north, half=bottom, shape=inner_right, waterlogged=false]	2	0.06349206
+top_support_including_shapes_state	minecraft:granite_stairs[facing=north, half=bottom, shape=inner_right, waterlogged=true]	2	0.06349206
+top_support_including_shapes_state	minecraft:granite_stairs[facing=north, half=bottom, shape=outer_left, waterlogged=true]	2	0.06349206
+top_support_including_shapes_state	minecraft:granite_stairs[facing=north, half=bottom, shape=outer_right, waterlogged=true]	2	0.06349206
+top_support_including_shapes_state	minecraft:granite_stairs[facing=south, half=bottom, shape=inner_right, waterlogged=true]	2	0.06349206
+top_support_including_shapes_state	minecraft:granite_stairs[facing=south, half=bottom, shape=outer_right, waterlogged=false]	2	0.06349206
+top_support_including_shapes_state	minecraft:granite_stairs[facing=west, half=bottom, shape=inner_left, waterlogged=false]	2	0.06349206
+top_support_including_shapes_state	minecraft:granite_stairs[facing=west, half=bottom, shape=inner_left, waterlogged=true]	2	0.06349206
+top_support_including_shapes_state	minecraft:granite_stairs[facing=west, half=bottom, shape=inner_right, waterlogged=true]	2	0.06349206
+top_support_including_shapes_state	minecraft:granite_stairs[facing=west, half=bottom, shape=outer_left, waterlogged=false]	2	0.06349206
+top_support_including_shapes_state	minecraft:mossy_cobblestone_slab[type=bottom, waterlogged=true]	2	0.06349206
+top_support_including_shapes_state	minecraft:stone_slab[type=double, waterlogged=false]	2	0.06349206
+top_support_including_shapes_state	minecraft:stone_slab[type=top, waterlogged=false]	2	0.06349206
+top_support_including_shapes_state	minecraft:sugar_cane[age=1]	2	0.06349206
+top_support_including_shapes_state	minecraft:andesite_slab[type=bottom, waterlogged=true]	1	0.03174603
+top_support_including_shapes_state	minecraft:andesite_stairs[facing=north, half=bottom, shape=straight, waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:andesite_stairs[facing=south, half=bottom, shape=outer_right, waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:andesite_stairs[facing=south, half=bottom, shape=straight, waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:andesite_stairs[facing=west, half=bottom, shape=outer_left, waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:andesite_stairs[facing=west, half=bottom, shape=straight, waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:dark_oak_log[axis=x]	1	0.03174603
+top_support_including_shapes_state	minecraft:dark_oak_stairs[facing=east, half=bottom, shape=straight, waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:dark_oak_stairs[facing=north, half=bottom, shape=straight, waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:dark_oak_stairs[facing=west, half=top, shape=straight, waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:granite_stairs[facing=east, half=bottom, shape=outer_left, waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:granite_stairs[facing=east, half=bottom, shape=outer_right, waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:granite_stairs[facing=north, half=bottom, shape=inner_left, waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:granite_stairs[facing=north, half=bottom, shape=outer_left, waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:granite_stairs[facing=south, half=bottom, shape=inner_left, waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:granite_stairs[facing=south, half=bottom, shape=outer_left, waterlogged=true]	1	0.03174603
+top_support_including_shapes_state	minecraft:granite_stairs[facing=west, half=bottom, shape=outer_right, waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:granite_stairs[facing=west, half=bottom, shape=outer_right, waterlogged=true]	1	0.03174603
+top_support_including_shapes_state	minecraft:horn_coral_fan[waterlogged=false]	1	0.03174603
+top_support_including_shapes_state	minecraft:sugar_cane[age=10]	1	0.03174603
+top_support_including_shapes_state	minecraft:sugar_cane[age=11]	1	0.03174603
+top_support_including_shapes_state	minecraft:sugar_cane[age=13]	1	0.03174603
+top_support_including_shapes_state	minecraft:sugar_cane[age=14]	1	0.03174603
+top_support_including_shapes_state	minecraft:sugar_cane[age=5]	1	0.03174603
+top_support_including_shapes_state	minecraft:sugar_cane[age=9]	1	0.03174603
+top_visible_category	substrate	1534	48.69841270
+top_visible_category	plant	812	25.77777778
+top_visible_category	shaped_detail	352	11.17460317
+top_visible_category	fluid	338	10.73015873
+top_visible_category	leaves	114	3.61904762
+top_visible_name	minecraft:grass_block	980	31.11111111
+top_visible_name	minecraft:short_grass	481	15.26984127
+top_visible_name	minecraft:water	338	10.73015873
+top_visible_name	minecraft:coarse_dirt	243	7.71428571
+top_visible_name	minecraft:granite_slab	225	7.14285714
+top_visible_name	minecraft:dirt	153	4.85714286
+top_visible_name	minecraft:tall_grass	133	4.22222222
+top_visible_name	minecraft:fern	121	3.84126984
+top_visible_name	minecraft:granite_stairs	89	2.82539683
+top_visible_name	minecraft:dirt_path	63	2.00000000
+top_visible_name	minecraft:large_fern	63	2.00000000
+top_visible_name	minecraft:spruce_leaves	56	1.77777778
+top_visible_name	minecraft:oak_leaves	25	0.79365079
+top_visible_name	minecraft:birch_leaves	22	0.69841270
+top_visible_name	minecraft:gravel	22	0.69841270
+top_visible_name	minecraft:andesite_slab	19	0.60317460
+top_visible_name	minecraft:podzol	18	0.57142857
+top_visible_name	minecraft:stone	17	0.53968254
+top_visible_name	minecraft:seagrass	14	0.44444444
+top_visible_name	minecraft:dark_oak_leaves	11	0.34920635
+top_visible_name	minecraft:andesite	9	0.28571429
+top_visible_name	minecraft:stone_slab	8	0.25396825
+top_visible_name	minecraft:sugar_cane	8	0.25396825
+top_visible_name	minecraft:andesite_stairs	5	0.15873016
+top_visible_name	minecraft:farmland	5	0.15873016
+top_visible_name	minecraft:mossy_cobblestone_slab	5	0.15873016
+top_visible_name	minecraft:sea_pickle	5	0.15873016
+top_visible_name	minecraft:dark_oak_log	4	0.12698413
+top_visible_name	minecraft:lily_pad	3	0.09523810
+top_visible_name	minecraft:oak_wood	3	0.09523810
+top_visible_name	minecraft:dark_oak_stairs	1	0.03174603
+top_visible_name	minecraft:horn_coral_fan	1	0.03174603
+top_visible_state	minecraft:grass_block[snowy=false]	980	31.11111111
+top_visible_state	minecraft:short_grass	481	15.26984127
+top_visible_state	minecraft:coarse_dirt	243	7.71428571
+top_visible_state	minecraft:water[level=0]	200	6.34920635
+top_visible_state	minecraft:granite_slab[type=bottom, waterlogged=false]	155	4.92063492
+top_visible_state	minecraft:dirt	153	4.85714286
+top_visible_state	minecraft:fern	121	3.84126984
+top_visible_state	minecraft:tall_grass[half=lower]	71	2.25396825
+top_visible_state	minecraft:granite_slab[type=bottom, waterlogged=true]	70	2.22222222
+top_visible_state	minecraft:dirt_path	63	2.00000000
+top_visible_state	minecraft:tall_grass[half=upper]	62	1.96825397
+top_visible_state	minecraft:large_fern[half=upper]	59	1.87301587
+top_visible_state	minecraft:oak_leaves[distance=7, persistent=true, waterlogged=false]	25	0.79365079
+top_visible_state	minecraft:spruce_leaves[distance=7, persistent=true, waterlogged=false]	25	0.79365079
+top_visible_state	minecraft:water[level=1]	24	0.76190476
+top_visible_state	minecraft:water[level=2]	23	0.73015873
+top_visible_state	minecraft:birch_leaves[distance=7, persistent=true, waterlogged=false]	22	0.69841270
+top_visible_state	minecraft:gravel	22	0.69841270
+top_visible_state	minecraft:water[level=3]	22	0.69841270
+top_visible_state	minecraft:water[level=4]	22	0.69841270
+top_visible_state	minecraft:andesite_slab[type=bottom, waterlogged=false]	18	0.57142857
+top_visible_state	minecraft:podzol[snowy=false]	18	0.57142857
+top_visible_state	minecraft:water[level=5]	18	0.57142857
+top_visible_state	minecraft:stone	17	0.53968254
+top_visible_state	minecraft:water[level=6]	16	0.50793651
+top_visible_state	minecraft:granite_stairs[facing=north, half=bottom, shape=straight, waterlogged=false]	15	0.47619048
+top_visible_state	minecraft:spruce_leaves[distance=2, persistent=true, waterlogged=false]	15	0.47619048
+top_visible_state	minecraft:seagrass	14	0.44444444
+top_visible_state	minecraft:water[level=7]	13	0.41269841
+top_visible_state	minecraft:granite_stairs[facing=south, half=bottom, shape=straight, waterlogged=false]	12	0.38095238
+top_visible_state	minecraft:dark_oak_leaves[distance=7, persistent=true, waterlogged=false]	11	0.34920635
+top_visible_state	minecraft:granite_stairs[facing=west, half=bottom, shape=straight, waterlogged=false]	11	0.34920635
+top_visible_state	minecraft:spruce_leaves[distance=1, persistent=true, waterlogged=false]	10	0.31746032
+top_visible_state	minecraft:andesite	9	0.28571429
+top_visible_state	minecraft:granite_stairs[facing=east, half=bottom, shape=straight, waterlogged=false]	6	0.19047619
+top_visible_state	minecraft:granite_stairs[facing=south, half=bottom, shape=straight, waterlogged=true]	6	0.19047619
+top_visible_state	minecraft:farmland[moisture=7]	5	0.15873016
+top_visible_state	minecraft:mossy_cobblestone_slab[type=bottom, waterlogged=false]	5	0.15873016
+top_visible_state	minecraft:sea_pickle[pickles=1, waterlogged=false]	5	0.15873016
+top_visible_state	minecraft:spruce_leaves[distance=3, persistent=true, waterlogged=false]	5	0.15873016
+top_visible_state	minecraft:granite_stairs[facing=west, half=bottom, shape=outer_left, waterlogged=true]	4	0.12698413
+top_visible_state	minecraft:granite_stairs[facing=west, half=bottom, shape=straight, waterlogged=true]	4	0.12698413
+top_visible_state	minecraft:large_fern[half=lower]	4	0.12698413
+top_visible_state	minecraft:stone_slab[type=bottom, waterlogged=false]	4	0.12698413
+top_visible_state	minecraft:dark_oak_log[axis=y]	3	0.09523810
+top_visible_state	minecraft:granite_stairs[facing=east, half=bottom, shape=inner_left, waterlogged=false]	3	0.09523810
+top_visible_state	minecraft:granite_stairs[facing=east, half=bottom, shape=straight, waterlogged=true]	3	0.09523810
+top_visible_state	minecraft:granite_stairs[facing=north, half=bottom, shape=outer_right, waterlogged=false]	3	0.09523810
+top_visible_state	minecraft:lily_pad	3	0.09523810
+top_visible_state	minecraft:oak_wood[axis=y]	3	0.09523810
+top_visible_state	minecraft:granite_stairs[facing=north, half=bottom, shape=inner_right, waterlogged=false]	2	0.06349206
+top_visible_state	minecraft:granite_stairs[facing=north, half=bottom, shape=straight, waterlogged=true]	2	0.06349206
+top_visible_state	minecraft:granite_stairs[facing=south, half=bottom, shape=outer_right, waterlogged=false]	2	0.06349206
+top_visible_state	minecraft:granite_stairs[facing=west, half=bottom, shape=inner_left, waterlogged=false]	2	0.06349206
+top_visible_state	minecraft:granite_stairs[facing=west, half=bottom, shape=outer_left, waterlogged=false]	2	0.06349206
+top_visible_state	minecraft:stone_slab[type=double, waterlogged=false]	2	0.06349206
+top_visible_state	minecraft:stone_slab[type=top, waterlogged=false]	2	0.06349206
+top_visible_state	minecraft:sugar_cane[age=1]	2	0.06349206
+top_visible_state	minecraft:andesite_slab[type=bottom, waterlogged=true]	1	0.03174603
+top_visible_state	minecraft:andesite_stairs[facing=north, half=bottom, shape=straight, waterlogged=false]	1	0.03174603
+top_visible_state	minecraft:andesite_stairs[facing=south, half=bottom, shape=outer_right, waterlogged=false]	1	0.03174603
+top_visible_state	minecraft:andesite_stairs[facing=south, half=bottom, shape=straight, waterlogged=false]	1	0.03174603
+top_visible_state	minecraft:andesite_stairs[facing=west, half=bottom, shape=outer_left, waterlogged=false]	1	0.03174603
+top_visible_state	minecraft:andesite_stairs[facing=west, half=bottom, shape=straight, waterlogged=false]	1	0.03174603
+top_visible_state	minecraft:dark_oak_log[axis=z]	1	0.03174603
+top_visible_state	minecraft:dark_oak_stairs[facing=east, half=bottom, shape=straight, waterlogged=false]	1	0.03174603
+top_visible_state	minecraft:granite_stairs[facing=east, half=bottom, shape=outer_left, waterlogged=false]	1	0.03174603
+top_visible_state	minecraft:granite_stairs[facing=east, half=bottom, shape=outer_left, waterlogged=true]	1	0.03174603
+top_visible_state	minecraft:granite_stairs[facing=east, half=bottom, shape=outer_right, waterlogged=false]	1	0.03174603
+top_visible_state	minecraft:granite_stairs[facing=north, half=bottom, shape=inner_left, waterlogged=false]	1	0.03174603
+top_visible_state	minecraft:granite_stairs[facing=north, half=bottom, shape=outer_left, waterlogged=false]	1	0.03174603
+top_visible_state	minecraft:granite_stairs[facing=south, half=bottom, shape=inner_left, waterlogged=false]	1	0.03174603
+top_visible_state	minecraft:granite_stairs[facing=south, half=bottom, shape=inner_right, waterlogged=true]	1	0.03174603
+top_visible_state	minecraft:granite_stairs[facing=south, half=bottom, shape=outer_left, waterlogged=true]	1	0.03174603
+top_visible_state	minecraft:granite_stairs[facing=south, half=bottom, shape=outer_right, waterlogged=true]	1	0.03174603
+top_visible_state	minecraft:granite_stairs[facing=west, half=bottom, shape=inner_left, waterlogged=true]	1	0.03174603
+top_visible_state	minecraft:granite_stairs[facing=west, half=bottom, shape=outer_right, waterlogged=false]	1	0.03174603
+top_visible_state	minecraft:granite_stairs[facing=west, half=bottom, shape=outer_right, waterlogged=true]	1	0.03174603
+top_visible_state	minecraft:horn_coral_fan[waterlogged=false]	1	0.03174603
+top_visible_state	minecraft:spruce_leaves[distance=7, persistent=true, waterlogged=true]	1	0.03174603
+top_visible_state	minecraft:sugar_cane[age=10]	1	0.03174603
+top_visible_state	minecraft:sugar_cane[age=11]	1	0.03174603
+top_visible_state	minecraft:sugar_cane[age=13]	1	0.03174603
+top_visible_state	minecraft:sugar_cane[age=14]	1	0.03174603
+top_visible_state	minecraft:sugar_cane[age=5]	1	0.03174603
+top_visible_state	minecraft:sugar_cane[age=9]	1	0.03174603
+up_faces_all_name	minecraft:grass_block	996	31.10555903
+up_faces_all_name	minecraft:short_grass	493	15.39662711
+up_faces_all_name	minecraft:water	338	10.55590256
+up_faces_all_name	minecraft:coarse_dirt	247	7.71392879
+up_faces_all_name	minecraft:granite_slab	225	7.02685821
+up_faces_all_name	minecraft:dirt	153	4.77826359
+up_faces_all_name	minecraft:tall_grass	133	4.15365397
+up_faces_all_name	minecraft:fern	122	3.81011868
+up_faces_all_name	minecraft:granite_stairs	89	2.77951280
+up_faces_all_name	minecraft:dirt_path	63	1.96752030
+up_faces_all_name	minecraft:large_fern	63	1.96752030
+up_faces_all_name	minecraft:spruce_leaves	57	1.78013741
+up_faces_all_name	minecraft:podzol	28	0.87445347
+up_faces_all_name	minecraft:oak_leaves	25	0.78076202
+up_faces_all_name	minecraft:birch_leaves	22	0.68707058
+up_faces_all_name	minecraft:gravel	22	0.68707058
+up_faces_all_name	minecraft:andesite_slab	19	0.59337914
+up_faces_all_name	minecraft:stone	17	0.53091818
+up_faces_all_name	minecraft:seagrass	14	0.43722673
+up_faces_all_name	minecraft:dark_oak_leaves	11	0.34353529
+up_faces_all_name	minecraft:andesite	9	0.28107433
+up_faces_all_name	minecraft:stone_slab	8	0.24984385
+up_faces_all_name	minecraft:sugar_cane	8	0.24984385
+up_faces_all_name	minecraft:dark_oak_log	7	0.21861337
+up_faces_all_name	minecraft:andesite_stairs	5	0.15615240
+up_faces_all_name	minecraft:farmland	5	0.15615240
+up_faces_all_name	minecraft:mossy_cobblestone_slab	5	0.15615240
+up_faces_all_name	minecraft:sea_pickle	5	0.15615240
+up_faces_all_name	minecraft:cobblestone_stairs	4	0.12492192
+up_faces_all_name	minecraft:lily_pad	3	0.09369144
+up_faces_all_name	minecraft:oak_wood	3	0.09369144
+up_faces_all_name	minecraft:dark_oak_stairs	1	0.03123048
+up_faces_all_name	minecraft:horn_coral_fan	1	0.03123048
+up_faces_all_name	minecraft:jungle_door	1	0.03123048
+up_faces_substrate_name	minecraft:grass_block	996	63.56094448
+up_faces_substrate_name	minecraft:coarse_dirt	247	15.76260370
+up_faces_substrate_name	minecraft:dirt	153	9.76388003
+up_faces_substrate_name	minecraft:dirt_path	63	4.02042119
+up_faces_substrate_name	minecraft:podzol	28	1.78685386
+up_faces_substrate_name	minecraft:gravel	22	1.40395660
+up_faces_substrate_name	minecraft:stone	17	1.08487556
+up_faces_substrate_name	minecraft:andesite	9	0.57434588
+up_faces_substrate_name	minecraft:sugar_cane	8	0.51052967
+up_faces_substrate_name	minecraft:dark_oak_log	7	0.44671347
+up_faces_substrate_name	minecraft:farmland	5	0.31908105
+up_faces_substrate_name	minecraft:sea_pickle	5	0.31908105
+up_faces_substrate_name	minecraft:lily_pad	3	0.19144863
+up_faces_substrate_name	minecraft:oak_wood	3	0.19144863
+up_faces_substrate_name	minecraft:horn_coral_fan	1	0.06381621
+volume_category	substrate	28148	93.76103394
+volume_category	plant	936	3.11781753
+volume_category	shaped_detail	442	1.47230272
+volume_category	fluid	348	1.15918857
+volume_category	leaves	147	0.48965724
+volume_name	minecraft:dirt	12624	42.05056460
+volume_name	minecraft:stone	11881	39.57563039
+volume_name	minecraft:grass_block	1817	6.05242997
+volume_name	minecraft:andesite	1047	3.48755871
+volume_name	minecraft:short_grass	495	1.64884581
+volume_name	minecraft:water	348	1.15918857
+volume_name	minecraft:coarse_dirt	316	1.05259652
+volume_name	minecraft:granite_slab	257	0.85606742
+volume_name	minecraft:tall_grass	187	0.62289731
+volume_name	minecraft:diorite	126	0.41970621
+volume_name	minecraft:granite_stairs	126	0.41970621
+volume_name	minecraft:fern	122	0.40638220
+volume_name	minecraft:granite	118	0.39305819
+volume_name	minecraft:large_fern	118	0.39305819
+volume_name	minecraft:spruce_leaves	79	0.26314913
+volume_name	minecraft:dirt_path	63	0.20985310
+volume_name	minecraft:podzol	57	0.18986709
+volume_name	minecraft:oak_leaves	32	0.10659205
+volume_name	minecraft:gravel	29	0.09659905
+volume_name	minecraft:birch_leaves	23	0.07661304
+volume_name	minecraft:andesite_slab	19	0.06328903
+volume_name	minecraft:dark_oak_log	18	0.05995803
+volume_name	minecraft:seagrass	14	0.04663402
+volume_name	minecraft:stone_slab	14	0.04663402
+volume_name	minecraft:dark_oak_leaves	13	0.04330302
+volume_name	minecraft:andesite_stairs	9	0.02997901
+volume_name	minecraft:farmland	8	0.02664801
+volume_name	minecraft:sugar_cane	8	0.02664801
+volume_name	minecraft:brown_stained_glass_pane	7	0.02331701
+volume_name	minecraft:mossy_cobblestone_slab	7	0.02331701
+volume_name	minecraft:brown_concrete_powder	6	0.01998601
+volume_name	minecraft:sea_pickle	5	0.01665501
+volume_name	minecraft:cobblestone_stairs	4	0.01332401
+volume_name	minecraft:dark_oak_stairs	4	0.01332401
+volume_name	minecraft:mossy_cobblestone	4	0.01332401
+volume_name	minecraft:oak_wood	4	0.01332401
+volume_name	minecraft:blackstone	3	0.00999300
+volume_name	minecraft:lily_pad	3	0.00999300
+volume_name	minecraft:jungle_door	2	0.00666200
+volume_name	minecraft:brown_concrete	1	0.00333100
+volume_name	minecraft:brown_terracotta	1	0.00333100
+volume_name	minecraft:bubble_coral_block	1	0.00333100
+volume_name	minecraft:horn_coral_fan	1	0.00333100
+volume_state	minecraft:dirt	12624	42.05056460
+volume_state	minecraft:stone	11881	39.57563039
+volume_state	minecraft:grass_block[snowy=false]	1817	6.05242997
+volume_state	minecraft:andesite	1047	3.48755871
+volume_state	minecraft:short_grass	495	1.64884581
+volume_state	minecraft:coarse_dirt	316	1.05259652
+volume_state	minecraft:water[level=0]	209	0.69617934
+volume_state	minecraft:granite_slab[type=bottom, waterlogged=false]	155	0.51630525
+volume_state	minecraft:diorite	126	0.41970621
+volume_state	minecraft:tall_grass[half=lower]	125	0.41637520
+volume_state	minecraft:fern	122	0.40638220
+volume_state	minecraft:granite	118	0.39305819
+volume_state	minecraft:granite_slab[type=bottom, waterlogged=true]	102	0.33976217
+volume_state	minecraft:dirt_path	63	0.20985310
+volume_state	minecraft:tall_grass[half=upper]	62	0.20652210
+volume_state	minecraft:large_fern[half=lower]	59	0.19652910
+volume_state	minecraft:large_fern[half=upper]	59	0.19652910
+volume_state	minecraft:podzol[snowy=false]	57	0.18986709
+volume_state	minecraft:oak_leaves[distance=7, persistent=true, waterlogged=false]	32	0.10659205
+volume_state	minecraft:gravel	29	0.09659905
+volume_state	minecraft:spruce_leaves[distance=7, persistent=true, waterlogged=false]	26	0.08660604
+volume_state	minecraft:water[level=1]	24	0.07994404
+volume_state	minecraft:birch_leaves[distance=7, persistent=true, waterlogged=false]	23	0.07661304
+volume_state	minecraft:water[level=2]	23	0.07661304
+volume_state	minecraft:spruce_leaves[distance=1, persistent=true, waterlogged=false]	22	0.07328204
+volume_state	minecraft:water[level=3]	22	0.07328204
+volume_state	minecraft:water[level=4]	22	0.07328204
+volume_state	minecraft:spruce_leaves[distance=2, persistent=true, waterlogged=false]	21	0.06995103
+volume_state	minecraft:andesite_slab[type=bottom, waterlogged=false]	18	0.05995803
+volume_state	minecraft:water[level=5]	18	0.05995803
+volume_state	minecraft:water[level=6]	16	0.05329603
+volume_state	minecraft:granite_stairs[facing=north, half=bottom, shape=straight, waterlogged=false]	15	0.04996502
+volume_state	minecraft:seagrass	14	0.04663402
+volume_state	minecraft:dark_oak_leaves[distance=7, persistent=true, waterlogged=false]	13	0.04330302
+volume_state	minecraft:water[level=7]	13	0.04330302
+volume_state	minecraft:dark_oak_log[axis=y]	12	0.03997202
+volume_state	minecraft:granite_stairs[facing=south, half=bottom, shape=straight, waterlogged=false]	12	0.03997202
+volume_state	minecraft:granite_stairs[facing=west, half=bottom, shape=straight, waterlogged=true]	12	0.03997202
+volume_state	minecraft:granite_stairs[facing=west, half=bottom, shape=straight, waterlogged=false]	11	0.03664102
+volume_state	minecraft:granite_stairs[facing=north, half=bottom, shape=straight, waterlogged=true]	10	0.03331002
+volume_state	minecraft:farmland[moisture=7]	8	0.02664801
+volume_state	minecraft:granite_stairs[facing=south, half=bottom, shape=straight, waterlogged=true]	8	0.02664801
+volume_state	minecraft:spruce_leaves[distance=3, persistent=true, waterlogged=false]	8	0.02664801
+volume_state	minecraft:granite_stairs[facing=east, half=bottom, shape=straight, waterlogged=true]	7	0.02331701
+volume_state	minecraft:brown_concrete_powder	6	0.01998601
+volume_state	minecraft:granite_stairs[facing=east, half=bottom, shape=straight, waterlogged=false]	6	0.01998601
+volume_state	minecraft:stone_slab[type=bottom, waterlogged=false]	6	0.01998601
+volume_state	minecraft:stone_slab[type=top, waterlogged=false]	6	0.01998601
+volume_state	minecraft:mossy_cobblestone_slab[type=bottom, waterlogged=false]	5	0.01665501
+volume_state	minecraft:sea_pickle[pickles=1, waterlogged=false]	5	0.01665501
+volume_state	minecraft:brown_stained_glass_pane[east=false, north=false, south=false, waterlogged=false, west=false]	4	0.01332401
+volume_state	minecraft:dark_oak_log[axis=z]	4	0.01332401
+volume_state	minecraft:granite_stairs[facing=west, half=bottom, shape=outer_left, waterlogged=true]	4	0.01332401
+volume_state	minecraft:mossy_cobblestone	4	0.01332401
+volume_state	minecraft:oak_wood[axis=y]	4	0.01332401
+volume_state	minecraft:blackstone	3	0.00999300
+volume_state	minecraft:brown_stained_glass_pane[east=false, north=false, south=false, waterlogged=true, west=false]	3	0.00999300
+volume_state	minecraft:granite_stairs[facing=east, half=bottom, shape=inner_left, waterlogged=false]	3	0.00999300
+volume_state	minecraft:granite_stairs[facing=north, half=bottom, shape=outer_right, waterlogged=false]	3	0.00999300
+volume_state	minecraft:granite_stairs[facing=south, half=bottom, shape=outer_right, waterlogged=true]	3	0.00999300
+volume_state	minecraft:lily_pad	3	0.00999300
+volume_state	minecraft:andesite_stairs[facing=west, half=top, shape=straight, waterlogged=false]	2	0.00666200
+volume_state	minecraft:cobblestone_stairs[facing=east, half=bottom, shape=straight, waterlogged=false]	2	0.00666200
+volume_state	minecraft:cobblestone_stairs[facing=south, half=bottom, shape=straight, waterlogged=false]	2	0.00666200
+volume_state	minecraft:dark_oak_log[axis=x]	2	0.00666200
+volume_state	minecraft:dark_oak_stairs[facing=east, half=bottom, shape=straight, waterlogged=false]	2	0.00666200
+volume_state	minecraft:granite_stairs[facing=east, half=bottom, shape=outer_left, waterlogged=true]	2	0.00666200
+volume_state	minecraft:granite_stairs[facing=north, half=bottom, shape=inner_left, waterlogged=true]	2	0.00666200
+volume_state	minecraft:granite_stairs[facing=north, half=bottom, shape=inner_right, waterlogged=false]	2	0.00666200
+volume_state	minecraft:granite_stairs[facing=north, half=bottom, shape=inner_right, waterlogged=true]	2	0.00666200
+volume_state	minecraft:granite_stairs[facing=north, half=bottom, shape=outer_left, waterlogged=true]	2	0.00666200
+volume_state	minecraft:granite_stairs[facing=north, half=bottom, shape=outer_right, waterlogged=true]	2	0.00666200
+volume_state	minecraft:granite_stairs[facing=south, half=bottom, shape=inner_right, waterlogged=true]	2	0.00666200
+volume_state	minecraft:granite_stairs[facing=south, half=bottom, shape=outer_right, waterlogged=false]	2	0.00666200
+volume_state	minecraft:granite_stairs[facing=west, half=bottom, shape=inner_left, waterlogged=false]	2	0.00666200
+volume_state	minecraft:granite_stairs[facing=west, half=bottom, shape=inner_left, waterlogged=true]	2	0.00666200
+volume_state	minecraft:granite_stairs[facing=west, half=bottom, shape=inner_right, waterlogged=true]	2	0.00666200
+volume_state	minecraft:granite_stairs[facing=west, half=bottom, shape=outer_left, waterlogged=false]	2	0.00666200
+volume_state	minecraft:mossy_cobblestone_slab[type=bottom, waterlogged=true]	2	0.00666200
+volume_state	minecraft:stone_slab[type=double, waterlogged=false]	2	0.00666200
+volume_state	minecraft:sugar_cane[age=1]	2	0.00666200
+volume_state	minecraft:andesite_slab[type=bottom, waterlogged=true]	1	0.00333100
+volume_state	minecraft:andesite_stairs[facing=north, half=bottom, shape=straight, waterlogged=false]	1	0.00333100
+volume_state	minecraft:andesite_stairs[facing=south, half=bottom, shape=outer_right, waterlogged=false]	1	0.00333100
+volume_state	minecraft:andesite_stairs[facing=south, half=bottom, shape=straight, waterlogged=false]	1	0.00333100
+volume_state	minecraft:andesite_stairs[facing=south, half=top, shape=inner_right, waterlogged=false]	1	0.00333100
+volume_state	minecraft:andesite_stairs[facing=south, half=top, shape=straight, waterlogged=false]	1	0.00333100
+volume_state	minecraft:andesite_stairs[facing=west, half=bottom, shape=outer_left, waterlogged=false]	1	0.00333100
+volume_state	minecraft:andesite_stairs[facing=west, half=bottom, shape=straight, waterlogged=false]	1	0.00333100
+volume_state	minecraft:brown_concrete	1	0.00333100
+volume_state	minecraft:brown_terracotta	1	0.00333100
+volume_state	minecraft:bubble_coral_block	1	0.00333100
+volume_state	minecraft:dark_oak_stairs[facing=north, half=bottom, shape=straight, waterlogged=false]	1	0.00333100
+volume_state	minecraft:dark_oak_stairs[facing=west, half=top, shape=straight, waterlogged=false]	1	0.00333100
+volume_state	minecraft:granite_stairs[facing=east, half=bottom, shape=outer_left, waterlogged=false]	1	0.00333100
+volume_state	minecraft:granite_stairs[facing=east, half=bottom, shape=outer_right, waterlogged=false]	1	0.00333100
+volume_state	minecraft:granite_stairs[facing=north, half=bottom, shape=inner_left, waterlogged=false]	1	0.00333100
+volume_state	minecraft:granite_stairs[facing=north, half=bottom, shape=outer_left, waterlogged=false]	1	0.00333100
+volume_state	minecraft:granite_stairs[facing=south, half=bottom, shape=inner_left, waterlogged=false]	1	0.00333100
+volume_state	minecraft:granite_stairs[facing=south, half=bottom, shape=outer_left, waterlogged=true]	1	0.00333100
+volume_state	minecraft:granite_stairs[facing=west, half=bottom, shape=outer_right, waterlogged=false]	1	0.00333100
+volume_state	minecraft:granite_stairs[facing=west, half=bottom, shape=outer_right, waterlogged=true]	1	0.00333100
+volume_state	minecraft:horn_coral_fan[waterlogged=false]	1	0.00333100
+volume_state	minecraft:jungle_door[facing=east, half=lower, hinge=right, open=false, powered=false]	1	0.00333100
+volume_state	minecraft:jungle_door[facing=east, half=upper, hinge=right, open=false, powered=false]	1	0.00333100
+volume_state	minecraft:spruce_leaves[distance=4, persistent=true, waterlogged=false]	1	0.00333100
+volume_state	minecraft:spruce_leaves[distance=7, persistent=true, waterlogged=true]	1	0.00333100
+volume_state	minecraft:sugar_cane[age=10]	1	0.00333100
+volume_state	minecraft:sugar_cane[age=11]	1	0.00333100
+volume_state	minecraft:sugar_cane[age=13]	1	0.00333100
+volume_state	minecraft:sugar_cane[age=14]	1	0.00333100
+volume_state	minecraft:sugar_cane[age=5]	1	0.00333100
+volume_state	minecraft:sugar_cane[age=9]	1	0.00333100
+volume_state	minecraft:water[level=8]	1	0.00333100

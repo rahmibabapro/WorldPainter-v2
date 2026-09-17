@@ -937,13 +937,15 @@ public final class ShallowRiverRouter {
             water = Math.min(water, upper);
             if (outletWater != null) water = Math.max(outletWater, water);
             if (centre.wet && water != centre.water) return null;
-            if (!centre.wet && (centre.height - water > maximumCut - (preservation ? 0.65 : depth) + 0.001
+            if (!centre.wet && (RiverWaterProfile.exceedsCut(centre.height, water,
+                    preservation ? RiverWaterProfile.MIN_WET_DEPTH : depth, maximumCut)
                     || water - depth - centre.height > maximumFill + 0.001)) return null;
             for (Sample bank : core) {
                 // Existing upstream water must match this section's plane,
                 // not the lower lake/sea level at the final outlet.
                 if (preservation && bank.wet && bank.water != water) return null;
-                if (!bank.wet && bank.height - water > maximumCut - 0.65 + 0.001) return null;
+                if (!bank.wet && RiverWaterProfile.exceedsCut(bank.height, water,
+                        RiverWaterProfile.MIN_WET_DEPTH, maximumCut)) return null;
             }
             if (water - depth < dimension.getMinHeight()) return null;
             if (preservation && !centre.wet) {
@@ -972,7 +974,7 @@ public final class ShallowRiverRouter {
 
     // Exported full terrain support uses round(height), not floor(height).
     // Flooring wrongly forces an extra block of excavation on fractional ground.
-    private int dryWaterUpper(double height) { return Math.round((float) height); }
+    private int dryWaterUpper(double height) { return RiverWaterProfile.dryWaterCeiling(height); }
 
     private double turnPenalty(int previous, int current, int next, int sourceX, int sourceY) {
         final double ax = grid.x(current) - (previous >= 0 ? grid.x(previous) : sourceX);

@@ -1,0 +1,10 @@
+{
+  "name": "WorldPainter",
+  "version": "2.0.0-v2-SNAPSHOT",
+  "classes": [
+    "org.pepsoft.worldpainter.DefaultPlugin",
+    "org.pepsoft.worldpainter.platforms.JavaPlatformProvider",
+    "org.pepsoft.worldpainter.DefaultCustomObjectProvider",
+    "org.pepsoft.worldpainter.layers.DefaultLayerEditorProvider"
+  ]
+}

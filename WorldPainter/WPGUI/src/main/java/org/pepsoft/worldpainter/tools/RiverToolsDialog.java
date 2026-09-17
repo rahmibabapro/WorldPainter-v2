@@ -61,16 +61,44 @@ public class RiverToolsDialog extends WorldPainterDialog {
         addRow(autoPanel, 1, "Ana nehir sayısı:", autoRiverCount);
 
         final JTextArea waypointsHelp = helpText(drawingBrushHelpText());
-        final JButton paintWaypointsButton = new JButton("Nehir çizim fırçasını aç…");
-        paintWaypointsButton.setToolTipText("River Path katmanını, Pencil aracını ve tek blokluk merkez hattı fırçasını seçer.");
+        final JButton paintWaypointsButton = new JButton("Ana hat (River Path)…");
+        paintWaypointsButton.setToolTipText("Mavi merkez hattı kalemi.");
         paintWaypointsButton.addActionListener(e -> {
             PREFERENCES.putInt("easyMode", MODE_WAYPOINTS);
             dispose();
+            RiverPathSupport.ensureAllRiverDrawingLayers(app);
             app.selectRiverPathLayerForPainting();
+        });
+        final JButton paintMiniButton = new JButton("Mini kaynak…");
+        paintMiniButton.setToolTipText("Yeşil: dağdan 1 blok başlayan ince kollar.");
+        paintMiniButton.addActionListener(e -> {
+            PREFERENCES.putInt("easyMode", MODE_WAYPOINTS);
+            dispose();
+            RiverPathSupport.ensureAllRiverDrawingLayers(app);
+            app.selectRiverMiniLayerForPainting();
+        });
+        final JButton paintOutletButton = new JButton("Çıkış ağzı…");
+        paintOutletButton.setToolTipText("Kırmızı: bir veya daha fazla çıkış pikseli işaretle.");
+        paintOutletButton.addActionListener(e -> {
+            PREFERENCES.putInt("easyMode", MODE_WAYPOINTS);
+            dispose();
+            RiverPathSupport.ensureAllRiverDrawingLayers(app);
+            app.selectRiverOutletLayerForPainting();
+        });
+        final JButton paintContinueButton = new JButton("Devam / gövde…");
+        paintContinueButton.setToolTipText("Turuncu: kenardan gelen veya kalın ana gövde.");
+        paintContinueButton.addActionListener(e -> {
+            PREFERENCES.putInt("easyMode", MODE_WAYPOINTS);
+            dispose();
+            RiverPathSupport.ensureAllRiverDrawingLayers(app);
+            app.selectRiverContinueLayerForPainting();
         });
         final JPanel waypointsPanel = new JPanel(new GridBagLayout());
         waypointsPanel.add(waypointsHelp, gridCell(0, 0, 2, 1, GridBagConstraints.HORIZONTAL, 1.0));
-        waypointsPanel.add(paintWaypointsButton, gridCell(0, 1, 2, 1, GridBagConstraints.NONE, 0));
+        waypointsPanel.add(paintWaypointsButton, gridCell(0, 1, 1, 1, GridBagConstraints.NONE, 0));
+        waypointsPanel.add(paintMiniButton, gridCell(1, 1, 1, 1, GridBagConstraints.NONE, 0));
+        waypointsPanel.add(paintOutletButton, gridCell(0, 2, 1, 1, GridBagConstraints.NONE, 0));
+        waypointsPanel.add(paintContinueButton, gridCell(1, 2, 1, 1, GridBagConstraints.NONE, 0));
 
         final JTextArea sourcesHelp = helpText(
                 "Cyan \"river\" terrain ile kaynak boya. O noktadan başlayan, mevcut vadilere uyan sığ rota aranır. "
@@ -103,10 +131,12 @@ public class RiverToolsDialog extends WorldPainterDialog {
         final JCheckBox waterfalls = new JCheckBox("Ek şelale kazısı (sığ profillerde kapalı)", false);
         final JCheckBox smoothBanks = new JCheckBox("Yalnız su altı yatak kesitini yumuşat", PREFERENCES.getBoolean("smoothBanks", true));
         smoothBanks.setToolTipText("Sadece ıslak kanalın kesitini etkiler. Kuru kıyılar ve çevredeki yamaçlar düzleştirilmez; dolgu yapılmaz.");
+        final JCheckBox waterlineBanks = new JCheckBox("Üst su hizasını doğal yumuşat", PREFERENCES.getBoolean("waterlineBankDetail", true));
+        waterlineBanks.setToolTipText("En üst su bloğunun yanındaki kuru kıyı dudağına waterlogged stair/slab uygular. Kaçak riskli noktalar tam blok kalır.");
         final Runnable showMode = () -> {
             final boolean waypointMode = waypointsRadio.isSelected();
             modeCards.show(modeCardPanel, autoRadio.isSelected() ? "auto" : waypointMode ? "waypoints" : "sources");
-            waterLevel.setEnabled(false);
+            waterLevel.setEnabled(autoRadio.isSelected() || waypointMode);
             waterfalls.setEnabled(false);
             waterfalls.setToolTipText("Sığ blueprint profilleri ek derin havuz kazmaz; arazinin doğal kot geçişleri korunur.");
         };
@@ -120,17 +150,19 @@ public class RiverToolsDialog extends WorldPainterDialog {
         addRow(settings, 1, "Referans deniz Y (mevcut su korunur):", waterLevel);
         settings.add(waterfalls, gridCell(0, 2, 2, 1, GridBagConstraints.NONE, 0));
         settings.add(smoothBanks, gridCell(0, 3, 2, 1, GridBagConstraints.NONE, 0));
+        settings.add(waterlineBanks, gridCell(0, 4, 2, 1, GridBagConstraints.NONE, 0));
         final JTextArea profileSummary = helpText(selectedPreset.description());
-        settings.add(profileSummary, gridCell(0, 4, 2, 1, GridBagConstraints.HORIZONTAL, 1.0));
+        settings.add(profileSummary, gridCell(0, 5, 2, 1, GridBagConstraints.HORIZONTAL, 1.0));
         final JButton resetPreset = new JButton("Hazır ayara dön");
-        settings.add(resetPreset, gridCell(0, 5, 2, 1, GridBagConstraints.NONE, 0));
+        settings.add(resetPreset, gridCell(0, 6, 2, 1, GridBagConstraints.NONE, 0));
         final JTextArea exportHint = helpText(exportHintText(dimension.getSurfaceSmoothing()));
-        settings.add(exportHint, gridCell(0, 6, 2, 1, GridBagConstraints.HORIZONTAL, 1.0));
+        settings.add(exportHint, gridCell(0, 7, 2, 1, GridBagConstraints.HORIZONTAL, 1.0));
         final Runnable resetOptions = () -> {
             final RiverPreset style = (RiverPreset) styleCombo.getSelectedItem();
             if (style != null) {
                 waterfalls.setSelected(style.waterfalls);
                 smoothBanks.setSelected(true);
+                waterlineBanks.setSelected(true);
                 profileSummary.setText(style.description());
             }
         };
@@ -155,14 +187,15 @@ public class RiverToolsDialog extends WorldPainterDialog {
         form.add(settings);
 
         final JButton applyButton = new JButton("Uygula");
-        applyButton.setText(autoRadio.isSelected() ? "Rota ara / Önizleme…" : "Uygula");
+        applyButton.setText(sourcesRadio.isSelected() ? "Uygula"
+                : waypointsRadio.isSelected() ? "Nehri hazırla…" : "Rota ara / Önizleme…");
         autoRadio.addActionListener(e -> applyButton.setText("Rota ara / Önizleme…"));
-        waypointsRadio.addActionListener(e -> applyButton.setText("Uygula"));
+        waypointsRadio.addActionListener(e -> applyButton.setText("Nehri hazırla…"));
         sourcesRadio.addActionListener(e -> applyButton.setText("Uygula"));
         applyButton.addActionListener(e -> {
             final int mode = autoRadio.isSelected() ? MODE_AUTO
                     : waypointsRadio.isSelected() ? MODE_WAYPOINTS : MODE_SOURCES;
-            runApply(mode, autoRiverCount, styleCombo, waterLevel, waterfalls, smoothBanks);
+            runApply(mode, autoRiverCount, styleCombo, waterLevel, waterfalls, smoothBanks, waterlineBanks);
         });
         final JButton cancelButton = new JButton("İptal");
         cancelButton.addActionListener(e -> dispose());
@@ -180,7 +213,7 @@ public class RiverToolsDialog extends WorldPainterDialog {
     }
 
     private void runApply(int mode, JSpinner autoRiverCount, JComboBox<RiverPreset> styleCombo,
-            JSpinner waterLevel, JCheckBox waterfalls, JCheckBox smoothBanks) {
+            JSpinner waterLevel, JCheckBox waterfalls, JCheckBox smoothBanks, JCheckBox waterlineBanks) {
         final RiverPreset style = (RiverPreset) styleCombo.getSelectedItem();
         final int level = ((Number) waterLevel.getValue()).intValue();
         PREFERENCES.putInt("easyMode", mode);
@@ -189,24 +222,25 @@ public class RiverToolsDialog extends WorldPainterDialog {
         PREFERENCES.putInt("waterLevel", level);
         PREFERENCES.putBoolean("waterfalls", waterfalls.isSelected());
         PREFERENCES.putBoolean("smoothBanks", smoothBanks.isSelected());
+        PREFERENCES.putBoolean("waterlineBankDetail", waterlineBanks.isSelected());
 
         if (mode == MODE_AUTO) {
             dispose();
-            new RiverSearchDialog(app, dimension, style, (Integer) autoRiverCount.getValue(), smoothBanks.isSelected()).setVisible(true);
+            new RiverSearchDialog(app, dimension, style, (Integer) autoRiverCount.getValue(),
+                    smoothBanks.isSelected(), waterlineBanks.isSelected(), level).setVisible(true);
             return;
         }
 
         if (mode == MODE_WAYPOINTS) {
+            RiverPathSupport.ensureAllRiverDrawingLayers(app);
             final CustomLayer pathLayer = RiverPathSupport.ensureRiverPathLayer(app);
             if (pathLayer == null) {
                 beepAndShowWarning(this, "River Path layer oluşturulamadı.", "Nehir");
                 return;
             }
-            final Map<String, Object> params = style.parameters(RiverPreset.Mode.WAYPOINTS, 1, level,
-                    waterfalls.isSelected(), smoothBanks.isSelected());
             dispose();
-            ScriptLibraryActions.runBundledScript(app, app.getWorld(), dimension, app.getUndoManagersForScripts(),
-                    Category.RIVERS, "river_from_line", params);
+            new DrawnRiverDialog(app, dimension, pathLayer, style, smoothBanks.isSelected(),
+                    waterlineBanks.isSelected()).setVisible(true);
             return;
         }
 
@@ -218,7 +252,8 @@ public class RiverToolsDialog extends WorldPainterDialog {
         }
 
         final Map<String, Object> params = style.parameters(mode == MODE_AUTO ? RiverPreset.Mode.AUTO : RiverPreset.Mode.SOURCES,
-                (Integer) autoRiverCount.getValue(), level, waterfalls.isSelected(), smoothBanks.isSelected());
+                (Integer) autoRiverCount.getValue(), level, waterfalls.isSelected(), smoothBanks.isSelected(),
+                waterlineBanks.isSelected());
         dispose();
         ScriptLibraryActions.runBundledScript(app, app.getWorld(), dimension, app.getUndoManagersForScripts(),
                 Category.RIVERS, "river_script", params);
@@ -237,6 +272,10 @@ public class RiverToolsDialog extends WorldPainterDialog {
             PREFERENCES.putBoolean("smoothBanks", true);
             PREFERENCES.putInt("riverSafetyVersion", 4);
         }
+        if (PREFERENCES.getInt("riverSafetyVersion", 0) < 5) {
+            PREFERENCES.putBoolean("waterlineBankDetail", true);
+            PREFERENCES.putInt("riverSafetyVersion", 5);
+        }
     }
 
     /** Pure display logic: river creation never changes the whole-dimension export setting. */
@@ -250,11 +289,12 @@ public class RiverToolsDialog extends WorldPainterDialog {
     }
 
     static String drawingBrushHelpText() {
-        return "Fırçayı açınca mavi River Path katmanı, Pencil aracı ve tek blokluk merkez hattı otomatik seçilir. "
-                + "Sol tuşla sürükleyerek tek parça rota çiz; Shift+tık ile düz bölüm ekle, sağ tuşla hatayı sil. "
-                + "Nehir genişliğini fırça değil seçtiğin stil belirler. Çizim bitince Araçlar → Nehir ekranını yeniden aç, "
-                + "Çizim fırçası modunu seç ve Uygula'ya bas. Hat yüksek ucundan alçak ucuna işlenir; küçük kopukluklar "
-                + "araziye uygun biçimde birleştirilir, rota başka bir vadiye taşınmaz.";
+        return "Dört kalem (hepsi tek blokluk Pencil): "
+                + "mavi River Path = ana hat; yeşil River Mini = dağdan 1 blok başlayan ince kollar; "
+                + "kırmızı River Outlet = çıkış ağızları (birden fazla işaretlenebilir — ağ her ağza yönlenir); "
+                + "turuncu River Continue = kenardan gelen veya kalın gövde. "
+                + "Shift+tık düz bölüm, sağ tuş siler. Çizim bitince bu ekranı yeniden aç → Çizim fırçası → Nehri hazırla. "
+                + "Genişlik kalem rolünden ve birleşen kaynaklardan hesaplanır; yalnız doğrulanmış parçalar Uygula ile yazılır.";
     }
 
     private static JTextArea helpText(String text) {

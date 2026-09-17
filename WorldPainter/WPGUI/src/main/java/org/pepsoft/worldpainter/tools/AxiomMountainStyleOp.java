@@ -107,6 +107,9 @@ public final class AxiomMountainStyleOp {
                     // Keep flooded land intact; Frost handles snow/ice only on dry mountain cells.
                     if (!Float.isFinite(height) || height <= dimension.getWaterLevelAt(x, y) + 1.0f
                             || tile.getBitLayerValue(ReadOnly.INSTANCE, localX, localY)
+                            || tile.getBitLayerValue(org.pepsoft.worldpainter.layers.River.INSTANCE, localX, localY)
+                            || tile.getBitLayerValue(org.pepsoft.worldpainter.layers.RiverSurfaceDetail.INSTANCE, localX, localY)
+                            || tile.getBitLayerValue(org.pepsoft.worldpainter.layers.RiverWaterlineDetail.INSTANCE, localX, localY)
                             || tile.getBitLayerValue(FloodWithLava.INSTANCE, localX, localY)
                             || tile.getBitLayerValue(Void.INSTANCE, localX, localY)
                             || tile.getBitLayerValue(NotPresent.INSTANCE, localX, localY)

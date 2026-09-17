@@ -1,0 +1,12 @@
+﻿{
+  "mcpServers": {
+    "worldpainter": {
+      "command": "node",
+      "args": ["${workspaceFolder}/tools/mcp-server/index.js"],
+      "cwd": "${workspaceFolder}/tools/mcp-server",
+      "env": {
+        "WP_BRIDGE_URL": "http://127.0.0.1:8765"
+      }
+    }
+  }
+}

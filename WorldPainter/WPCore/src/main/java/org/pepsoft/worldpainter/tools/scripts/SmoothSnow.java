@@ -427,6 +427,9 @@ public final class SmoothSnow {
                 && !tile.getBitLayerValue(NotPresent.INSTANCE, x, y)
                 && !tile.getBitLayerValue(NotPresentBlock.INSTANCE, x, y)
                 && !tile.getBitLayerValue(ReadOnly.INSTANCE, x, y)
+                && !tile.getBitLayerValue(org.pepsoft.worldpainter.layers.River.INSTANCE, x, y)
+                && !tile.getBitLayerValue(org.pepsoft.worldpainter.layers.RiverSurfaceDetail.INSTANCE, x, y)
+                && !tile.getBitLayerValue(org.pepsoft.worldpainter.layers.RiverWaterlineDetail.INSTANCE, x, y)
                 && !tile.getBitLayerValue(FloodWithLava.INSTANCE, x, y);
     }
 

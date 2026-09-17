@@ -16,6 +16,23 @@ import org.pepsoft.worldpainter.presets.MapQuickPresetExecutor;
 import static org.junit.Assert.*;
 
 public class GlobalSlopeTerrainOpTest {
+    @Test public void nativeSlopePassPreservesRiverMaterialsAndUndo() throws Exception {
+        Fixture f=fixture(-64,320,true);var d=f.dimension;
+        d.setTerrainAt(64,64,Terrain.GRANITE);
+        d.setBitLayerValueAt(org.pepsoft.worldpainter.layers.RiverSurfaceDetail.INSTANCE,64,64,true);
+        d.setBitLayerValueAt(org.pepsoft.worldpainter.layers.River.INSTANCE,65,64,true);
+        float height=d.getHeightAt(64,64);int water=d.getWaterLevelAt(64,64);
+        GlobalSlopeTerrainOp.apply(d,45,null);
+        assertSame(Terrain.GRANITE,d.getTerrainAt(64,64));
+        assertSame(Terrain.MUD,d.getTerrainAt(65,64));
+        assertSame(Terrain.GRASS,d.getTerrainAt(63,64));
+        assertEquals(height,d.getHeightAt(64,64),0);
+        assertEquals(water,d.getWaterLevelAt(64,64));
+        assertTrue(f.undo.undo());
+        assertSame(Terrain.MUD,d.getTerrainAt(63,64));
+        assertSame(Terrain.GRANITE,d.getTerrainAt(64,64));
+        assertTrue(d.getBitLayerValueAt(org.pepsoft.worldpainter.layers.RiverSurfaceDetail.INSTANCE,64,64));
+    }
     @Test public void disabledUndoAndInvalidThresholdFailBeforePainting() {
         Fixture fixture = fixture(-64, 320, false);
         assertThrows(IllegalStateException.class, () -> GlobalSlopeTerrainOp.apply(fixture.dimension, 45, null));

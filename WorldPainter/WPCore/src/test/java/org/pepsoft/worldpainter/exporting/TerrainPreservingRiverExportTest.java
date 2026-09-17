@@ -12,6 +12,7 @@ import org.pepsoft.worldpainter.layers.FloodWithLava;
 import org.pepsoft.worldpainter.layers.NotPresent;
 import org.pepsoft.worldpainter.layers.ReadOnly;
 import org.pepsoft.worldpainter.layers.RiverSurfaceDetail;
+import org.pepsoft.worldpainter.layers.RiverWaterlineDetail;
 import org.pepsoft.worldpainter.tools.scripts.ShallowRiverCarver;
 
 import java.awt.Rectangle;
@@ -336,12 +337,24 @@ public class TerrainPreservingRiverExportTest {
                     assertFalse(SurfaceSmoother.isSmoothedSurfacePartial(support));
                 }
                 if (dimension.getWaterLevelAt(x, z) < groundY) {
-                    assertFalse("Original dry banks must not gain waterlogged fragments", hasWater(surface));
-                    for (int[] offset : CARDINALS) {
-                        if (MC_WATER.equals(exported.material(x + offset[0], groundY, z + offset[1]).name)) {
-                            sealedBanks++;
-                            assertEquals("An original dry bank next to actual water must retain its whole voxel",
-                                    MC_GRANITE, surface.name);
+                    final boolean waterlineLip = dimension.getBitLayerValueAt(RiverWaterlineDetail.INSTANCE, x, z)
+                            && SurfaceSmoother.isSmoothedSurfacePartial(surface)
+                            && Boolean.TRUE.equals(surface.getProperty(WATERLOGGED));
+                    if (waterlineLip) {
+                        assertUpright(surface);
+                        for (int[] offset : CARDINALS) {
+                            if (MC_WATER.equals(exported.material(x + offset[0], groundY, z + offset[1]).name)) {
+                                sealedBanks++;
+                            }
+                        }
+                    } else {
+                        assertFalse("Original dry banks must not gain waterlogged fragments", hasWater(surface));
+                        for (int[] offset : CARDINALS) {
+                            if (MC_WATER.equals(exported.material(x + offset[0], groundY, z + offset[1]).name)) {
+                                sealedBanks++;
+                                assertEquals("An original dry bank next to actual water must retain its whole voxel",
+                                        MC_GRANITE, surface.name);
+                            }
                         }
                     }
                 }

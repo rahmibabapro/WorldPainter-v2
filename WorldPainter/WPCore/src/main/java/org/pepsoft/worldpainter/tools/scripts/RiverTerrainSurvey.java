@@ -19,10 +19,14 @@ final class RiverTerrainSurvey {
     private final Dimension dimension;
     private final Runnable check;
     private final BiPredicate<Integer,Integer> avoid;
+    private final int seaLevel;
     private final LinkedHashMap<Long, TileData> tiles = new LinkedHashMap<>(32, .75f, true);
 
     RiverTerrainSurvey(Dimension dimension, Runnable check, BiPredicate<Integer,Integer> avoid) {
-        this.dimension = dimension; this.check = check; this.avoid = avoid;
+        this(dimension, check, avoid, 62);
+    }
+    RiverTerrainSurvey(Dimension dimension, Runnable check, BiPredicate<Integer,Integer> avoid, int seaLevel) {
+        this.dimension = dimension; this.check = check; this.avoid = avoid; this.seaLevel = seaLevel;
         int lx = Integer.MAX_VALUE, ly = Integer.MAX_VALUE, hx = Integer.MIN_VALUE, hy = Integer.MIN_VALUE;
         for (Tile t : dimension.getTiles()) {
             check.run();
@@ -58,14 +62,17 @@ final class RiverTerrainSurvey {
                     if (data.blocked[local]) continue;
                     int wx=tile.getX()*128+x, wy=tile.getY()*128+y;
                     int cell=(int)(((long)wx-minX)/step)+(int)(((long)wy-minY)/step)*columns;
-                    float h=data.water[local]>Math.round(data.height[local]) ? data.water[local] : data.height[local];
+                    boolean flooded=data.water[local]>Math.round(data.height[local]);
+                    // seaLevel<=0 means "use painted water only" — do not treat dry Y=0 as ocean.
+                    boolean sea=flooded || (seaLevel>0 && data.height[local]<=seaLevel);
+                    float h=flooded ? data.water[local] : data.height[local];
                     // Equal-height minima should represent the middle of the
                     // cell, not its first raster corner (often the valley wall).
                     double cx=minX+(cell%columns+.5)*step-.5,cy=minY+(cell/columns+.5)*step-.5;
                     if (h<heights[cell] || (h==heights[cell]
                             && Math.hypot(wx-cx,wy-cy)<Math.hypot(xs[cell]-cx,ys[cell]-cy))) {
                         heights[cell]=h; xs[cell]=wx; ys[cell]=wy;
-                        wet[cell]=data.water[local]>Math.round(data.height[local]);
+                        wet[cell]=sea;
                     }
                 }
             }

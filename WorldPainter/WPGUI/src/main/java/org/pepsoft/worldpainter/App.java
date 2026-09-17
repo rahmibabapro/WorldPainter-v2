@@ -442,6 +442,43 @@ public final class App extends JFrame implements BrushControl,
         return dimension;
     }
 
+    /** Undo the most recent save point on the active dimension. */
+    public boolean performUndo() {
+        if (currentUndoManager == null) {
+            return false;
+        }
+        return currentUndoManager.undo();
+    }
+
+    /** Redo the most recently undone save point on the active dimension. */
+    public boolean performRedo() {
+        if (currentUndoManager == null) {
+            return false;
+        }
+        return currentUndoManager.redo();
+    }
+
+    /**
+     * Save the loaded world to its last known file without opening a dialog.
+     * Returns {@code false} when no world is loaded or no save path is known.
+     */
+    public boolean saveCurrentWorld() {
+        if (world == null || lastSelectedFile == null) {
+            return false;
+        }
+        return save(lastSelectedFile);
+    }
+
+    /** Absolute path of the last successfully opened/saved world file, or {@code null}. */
+    public File getCurrentWorldFile() {
+        return lastSelectedFile;
+    }
+
+    /** Whether the loaded world differs from the last successful save. */
+    public boolean isWorldDirty() {
+        return world != null && world.getChangeNo() != lastSavedState;
+    }
+
     public void setDimension(final Dimension dimension) {
         Configuration config = Configuration.getInstance();
         if (this.dimension != null) {
@@ -2034,6 +2071,18 @@ public final class App extends JFrame implements BrushControl,
         RiverPathSupport.selectRiverPathLayerForPainting(this);
     }
 
+    public void selectRiverMiniLayerForPainting() {
+        RiverPathSupport.selectRiverMiniLayerForPainting(this);
+    }
+
+    public void selectRiverOutletLayerForPainting() {
+        RiverPathSupport.selectRiverOutletLayerForPainting(this);
+    }
+
+    public void selectRiverContinueLayerForPainting() {
+        RiverPathSupport.selectRiverContinueLayerForPainting(this);
+    }
+
     /**
      * Activates the line-oriented paint tool used for drawing a river centreline.
      * A radius of zero is intentional: it produces a one-block input path while
@@ -2051,34 +2100,10 @@ public final class App extends JFrame implements BrushControl,
      */
     public void registerCustomLayer(CustomLayer layer, boolean activate) {
         customLayerController.registerCustomLayer(layer, activate);
-        saveCustomLayers();
-    }
-
-    boolean performUndo() {
-        if ((currentUndoManager != null) && currentUndoManager.undo()) {
-            currentUndoManager.armSavePoint();
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    boolean performRedo() {
-        if ((currentUndoManager != null) && currentUndoManager.redo()) {
-            currentUndoManager.armSavePoint();
-            return true;
-        } else {
-            return false;
-        }
     }
 
     /**
-     * {@link JLabel#setText(String)} does not check whether the new value is
-     * different. On the other hand {@link JLabel#getText()} is a very simple
-     * method which just returns a field. So if the text will frequently not
-     * have changed, it is cheaper to check with {@code getText()} whether
-     * the text is different and only invoke {@code setText()} if it is,
-     * which is what this method does.
+     * Sets the label text only when it differs from the current value.
      *
      * @param label The label on which to set the {@code text} property.
      * @param text The text to set.

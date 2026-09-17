@@ -17,6 +17,29 @@ import org.pepsoft.worldpainter.layers.exporters.FrostExporter.FrostSettings;
 import static org.junit.Assert.*;
 
 public class AxiomMountainStyleOpTest {
+    @Test public void dryRiverDetailIsNotRepaintedOrSnowCovered() throws Exception {
+        Fixture f=fixture(true);
+        var d=f.dimension;
+        d.setBitLayerValueAt(org.pepsoft.worldpainter.layers.RiverSurfaceDetail.INSTANCE,64,64,true);
+        d.setBitLayerValueAt(org.pepsoft.worldpainter.layers.River.INSTANCE,65,64,true);
+        AxiomMountainStyleOp.apply(d,null);
+        for(int x:new int[]{64,65}) {
+            assertSame(Terrain.MUD,d.getTerrainAt(x,64));
+            assertFalse(d.getBitLayerValueAt(Frost.INSTANCE,x,64));
+            assertEquals(0,d.getLayerValueAt(SnowDepth.INSTANCE,x,64));
+        }
+        assertNotSame(Terrain.MUD,d.getTerrainAt(63,64));
+    }
+    @Test public void mixedTexturePassPreservesDryRiverMasks() throws Exception {
+        Fixture f=fixture(true);var d=f.dimension;
+        d.setBitLayerValueAt(org.pepsoft.worldpainter.layers.RiverSurfaceDetail.INSTANCE,64,64,true);
+        d.setBitLayerValueAt(org.pepsoft.worldpainter.layers.River.INSTANCE,65,64,true);
+        org.pepsoft.worldpainter.tools.scripts.AxiomTextureTransfer.applyMixedTerrain(
+                d,Terrain.GRASS,(x,y,h,s)->true,null,null);
+        assertSame(Terrain.MUD,d.getTerrainAt(64,64));
+        assertSame(Terrain.MUD,d.getTerrainAt(65,64));
+        assertSame(Terrain.GRASS,d.getTerrainAt(63,64));
+    }
     @Test public void rejectsDisabledUndoBeforeChangingTheWorld() {
         Fixture fixture = fixture(false);
         assertThrows(IllegalStateException.class, () -> AxiomMountainStyleOp.apply(fixture.dimension, null));

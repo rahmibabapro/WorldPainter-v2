@@ -24,6 +24,27 @@ import static org.pepsoft.minecraft.Material.*;
  * sub-voxel occupancy patterns.
  */
 public final class SurfaceSmoother {
+    /** Shared by the exporter and detached river-bed preview. */
+    public static Material riverSurfaceMaterial(Dimension dimension, ChunkHeightSnapshot snapshot,
+                                                 int x, int y, int height, Material material) {
+        Material result = smoothSurfaceMaterial(dimension, snapshot, x, y, height, material);
+        // Wet shoreline must still become mud-brick even when the smoother refuses
+        // a partial (dry seam / full-block stencil). Soft banks are the priority here.
+        if (isWetShorelineEdge(dimension, snapshot, x, y, height)) {
+            if (result == null) result = material;
+            result = retextureSurface(result, getFamily(Material.get("minecraft:mud_bricks")));
+            if (!hasWetRoundedContourNeighbour(dimension, snapshot, x, y, height)
+                    && result != null && "minecraft:mud_bricks".equals(result.name)) {
+                result = Material.get("minecraft:mud_brick_slab").withProperty(TYPE, "bottom");
+            }
+            // Prefer a bank-facing stair when the dry support is one block above the
+            // wet surface — sharper valleys read as a soft step instead of a cliff.
+            result = preferShoreStairTowardBank(dimension, snapshot, x, y, height, result);
+            return waterlogIfFluidOccupies(result, height, dimension.getWaterLevelAt(x, y));
+        }
+        if (result == null) return material;
+        return waterlogIfFluidOccupies(result, height, dimension.getWaterLevelAt(x, y));
+    }
     private SurfaceSmoother() {
     }
 
@@ -139,7 +160,9 @@ public final class SurfaceSmoother {
         for (int[] offset : CARDINAL_NEIGHBOURS) {
             final int x = worldX + offset[0], y = worldY + offset[1];
             final float height = heightAt(dimension, snapshot, x, y);
-            if (isMissingHeight(height) || height - centre > 1.5f || Math.round(height) < waterLevel
+            // Soft river banks are often 2–4 blocks above the wet bed. Only a
+            // genuine multi-block cliff should refuse mud-brick shoreline detail.
+            if (isMissingHeight(height) || height - centre > 4.0f || Math.round(height) < waterLevel
                     || dimension.getWaterLevelAt(x, y) >= waterLevel) continue;
             if (dimension.getBitLayerValueAt(FloodWithLava.INSTANCE, x, y)
                     || dimension.getBitLayerValueAt(org.pepsoft.worldpainter.layers.Void.INSTANCE, x, y)
@@ -151,6 +174,156 @@ public final class SurfaceSmoother {
         return false;
     }
 
+    /**
+     * Height/water/protection columns for waterline lip planning and export.
+     * Preview passes planned river water; export wraps the live dimension.
+     */
+    public interface WaterlineColumns {
+        float height(int x, int y);
+        int water(int x, int y);
+        boolean tilePresent(int x, int y);
+        boolean blocked(int x, int y);
+    }
+
+    /** Live dimension + optional chunk height snapshot. */
+    public static WaterlineColumns columnsOf(Dimension dimension, ChunkHeightSnapshot snapshot) {
+        if (dimension == null) return null;
+        return new WaterlineColumns() {
+            @Override public float height(int x, int y) {
+                return heightAt(dimension, snapshot, x, y);
+            }
+            @Override public int water(int x, int y) {
+                return dimension.getWaterLevelAt(x, y);
+            }
+            @Override public boolean tilePresent(int x, int y) {
+                return dimension.isTilePresent(x >> 7, y >> 7);
+            }
+            @Override public boolean blocked(int x, int y) {
+                return dimension.getBitLayerValueAt(FloodWithLava.INSTANCE, x, y)
+                        || dimension.getBitLayerValueAt(ReadOnly.INSTANCE, x, y)
+                        || dimension.getBitLayerValueAt(NotPresent.INSTANCE, x, y)
+                        || dimension.getBitLayerValueAt(NotPresentBlock.INSTANCE, x, y)
+                        || dimension.getBitLayerValueAt(org.pepsoft.worldpainter.layers.Void.INSTANCE, x, y);
+            }
+        };
+    }
+
+    /**
+     * Dry bank lip at the top waterline: surface height equals adjacent river
+     * water W, column is dry, and a cardinal neighbour is open wet water with
+     * air above that water band. Used by export to reject stale markers.
+     */
+    public static boolean isDryWaterlineEdge(Dimension dimension, ChunkHeightSnapshot snapshot,
+                                              int worldX, int worldY, int waterlineY) {
+        return isDryWaterlineEdge(columnsOf(dimension, snapshot), worldX, worldY, waterlineY);
+    }
+
+    public static boolean isDryWaterlineEdge(WaterlineColumns columns, int worldX, int worldY, int waterlineY) {
+        if (columns == null) return false;
+        final float centre = columns.height(worldX, worldY);
+        if (isMissingHeight(centre)) return false;
+        final int intHeight = Math.round(centre);
+        if (intHeight != waterlineY) return false;
+        if (columns.water(worldX, worldY) > intHeight) return false;
+        if (columns.blocked(worldX, worldY)) return false;
+        boolean wetNeighbour = false;
+        for (int[] offset : CARDINAL_NEIGHBOURS) {
+            final int x = worldX + offset[0], y = worldY + offset[1];
+            if (!columns.tilePresent(x, y) || columns.blocked(x, y)) continue;
+            final float height = columns.height(x, y);
+            if (isMissingHeight(height)) continue;
+            final int nh = Math.round(height);
+            final int nw = columns.water(x, y);
+            if (nw > nh && nw == waterlineY) {
+                wetNeighbour = true;
+                break;
+            }
+        }
+        return wetNeighbour;
+    }
+
+    /**
+     * Every cardinal face at Y=W is sealed only when the neighbour either has
+     * solid land at/above W, or water that actually occupies block Y=W
+     * ({@code waterLevel >= W}). Lower water in a depression leaves air at W.
+     */
+    public static boolean isWaterlineSideSealed(WaterlineColumns columns, int worldX, int worldY, int waterlineY) {
+        if (columns == null) return false;
+        for (int[] offset : CARDINAL_NEIGHBOURS) {
+            final int nx = worldX + offset[0], ny = worldY + offset[1];
+            if (!columns.tilePresent(nx, ny)) return false;
+            if (columns.blocked(nx, ny)) return false;
+            final float nh = columns.height(nx, ny);
+            if (isMissingHeight(nh)) return false;
+            final int nih = Math.round(nh);
+            final int nw = columns.water(nx, ny);
+            if (nih >= waterlineY) continue; // solid land at/above waterline
+            if (fluidOccupiesBlock(waterlineY, nw)) continue; // water reaches Y=W
+            return false;
+        }
+        return true;
+    }
+
+    public static boolean isWaterlineSideSealed(Dimension dimension, ChunkHeightSnapshot snapshot,
+                                                 int worldX, int worldY, int waterlineY) {
+        return isWaterlineSideSealed(columnsOf(dimension, snapshot), worldX, worldY, waterlineY);
+    }
+
+    /**
+     * Waterlogged bottom stair/slab on a marked dry top-waterline lip.
+     * Bypasses {@link #hasAdjacentFullWater} only when live topology still
+     * matches; otherwise returns {@code null} so the exporter keeps a full block.
+     */
+    public static Material dryWaterlineMaterial(Dimension dimension, ChunkHeightSnapshot snapshot,
+                                                 int x, int y, int intHeight, Material surfaceMaterial,
+                                                 int riverWater) {
+        return dryWaterlineMaterial(columnsOf(dimension, snapshot), x, y, intHeight, surfaceMaterial, riverWater);
+    }
+
+    public static Material dryWaterlineMaterial(WaterlineColumns columns,
+                                                 int x, int y, int intHeight, Material surfaceMaterial,
+                                                 int riverWater) {
+        if (!isDryWaterlineEdge(columns, x, y, riverWater)) return null;
+        if (!isWaterlineSideSealed(columns, x, y, riverWater)) return null;
+        if (intHeight != riverWater) return null;
+        Direction facingWater = null;
+        int wetSides = 0;
+        for (int[] offset : CARDINAL_NEIGHBOURS) {
+            final int nx = x + offset[0], ny = y + offset[1];
+            final float height = columns.height(nx, ny);
+            if (isMissingHeight(height)) continue;
+            final int nh = Math.round(height);
+            final int nw = columns.water(nx, ny);
+            if (nw > nh && nw == riverWater) {
+                wetSides++;
+                if (facingWater == null) {
+                    if (offset[0] < 0) facingWater = Direction.WEST;
+                    else if (offset[0] > 0) facingWater = Direction.EAST;
+                    else if (offset[1] < 0) facingWater = Direction.NORTH;
+                    else facingWater = Direction.SOUTH;
+                }
+            }
+        }
+        if (facingWater == null) return null;
+        SmoothableBlockFamily family = getFamily(surfaceMaterial);
+        if (family == null && surfaceMaterial != null) {
+            // Dirt/grass banks use mud-brick; rocks keep their family.
+            family = getFamily(Material.get("minecraft:mud_bricks"));
+        }
+        if (family == null) return null;
+        Material result;
+        if (wetSides >= 2) {
+            result = family.slab().withProperty(TYPE, "bottom");
+        } else {
+            result = family.stair()
+                    .withProperty(HALF, "bottom")
+                    .withProperty(SHAPE, "straight")
+                    .withProperty(FACING, facingWater);
+        }
+        if (result.hasProperty(WATERLOGGED)) result = result.withProperty(WATERLOGGED, true);
+        return result;
+    }
+
     /** Whether this wet surface participates in a required one-block rounded-height bridge. */
     static boolean hasWetRoundedContourNeighbour(Dimension dimension, ChunkHeightSnapshot snapshot,
                                                  int worldX, int worldY, int intHeight) {
@@ -160,9 +333,15 @@ public final class SurfaceSmoother {
             final float height = heightAt(dimension, snapshot, x, y);
             if (isMissingHeight(height)) continue;
             final int neighbourHeight = Math.round(height);
-            if (Math.abs(neighbourHeight - intHeight) == 1
-                    && dimension.getWaterLevelAt(x, y) > neighbourHeight
-                    && !dimension.getBitLayerValueAt(FloodWithLava.INSTANCE, x, y)) return true;
+            if (Math.abs(neighbourHeight - intHeight) != 1
+                    || dimension.getWaterLevelAt(x, y) <= neighbourHeight
+                    || dimension.getBitLayerValueAt(FloodWithLava.INSTANCE, x, y)) continue;
+            // Soft dirt/grass bed height shifts (e.g. interior dirt −1) must not
+            // rewrite shoreline mud-brick slab/stair choice — only hard contour rock.
+            final Terrain terrain = dimension.getTerrainAt(x, y);
+            if (terrain == Terrain.DIRT || terrain == Terrain.GRASS || terrain == Terrain.PERMADIRT
+                    || terrain == Terrain.BARE_GRASS) continue;
+            return true;
         }
         return false;
     }
@@ -445,6 +624,45 @@ public final class SurfaceSmoother {
         }
         return Boolean.TRUE.equals(material.getProperty(WATERLOGGED)) && result.hasProperty(WATERLOGGED)
                 ? result.withProperty(WATERLOGGED, true) : result;
+    }
+
+    /**
+     * When shoreline smoothing only produced a flat slab/full block, face a
+     * bottom stair toward the supporting dry bank for a softer step.
+     */
+    private static Material preferShoreStairTowardBank(Dimension dimension, ChunkHeightSnapshot snapshot,
+                                                       int worldX, int worldY, int intHeight, Material material) {
+        if (material == null || material.name == null) return material;
+        if (material.name.endsWith("_stairs")) return material;
+        Direction facing = null;
+        final int waterLevel = dimension.getWaterLevelAt(worldX, worldY);
+        final float centre = heightAt(dimension, snapshot, worldX, worldY);
+        if (isMissingHeight(centre)) return material;
+        for (int[] offset : CARDINAL_NEIGHBOURS) {
+            final int x = worldX + offset[0], y = worldY + offset[1];
+            final float height = heightAt(dimension, snapshot, x, y);
+            if (isMissingHeight(height) || height - centre > 4.0f || Math.round(height) < waterLevel
+                    || dimension.getWaterLevelAt(x, y) >= waterLevel) continue;
+            if (dimension.getBitLayerValueAt(FloodWithLava.INSTANCE, x, y)
+                    || dimension.getBitLayerValueAt(org.pepsoft.worldpainter.layers.Void.INSTANCE, x, y)
+                    || dimension.getBitLayerValueAt(NotPresent.INSTANCE, x, y)
+                    || dimension.getBitLayerValueAt(NotPresentBlock.INSTANCE, x, y)
+                    || dimension.getBitLayerValueAt(ReadOnly.INSTANCE, x, y)) continue;
+            // Only force a stair when the bank rises above the wet surface.
+            if (Math.round(height) <= intHeight) continue;
+            if (offset[0] < 0) facing = Direction.WEST;
+            else if (offset[0] > 0) facing = Direction.EAST;
+            else if (offset[1] < 0) facing = Direction.NORTH;
+            else facing = Direction.SOUTH;
+            break;
+        }
+        if (facing == null) return material;
+        final SmoothableBlockFamily family = getFamily(Material.get("minecraft:mud_bricks"));
+        if (family == null) return material;
+        return family.stair()
+                .withProperty(HALF, "bottom")
+                .withProperty(SHAPE, "straight")
+                .withProperty(FACING, facing);
     }
 
     /**

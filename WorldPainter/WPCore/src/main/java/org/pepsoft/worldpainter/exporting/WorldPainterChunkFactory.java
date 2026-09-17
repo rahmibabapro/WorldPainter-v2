@@ -130,7 +130,7 @@ public class WorldPainterChunkFactory implements ChunkFactory {
         final Chunk chunk = platformProvider.createChunk(platform, chunkX, chunkZ, minHeight, maxHeight);
         result.chunk = chunk;
         final ChunkHeightSnapshot heightSnapshot = (coverSteepTerrain || surfaceSmoothing == Dimension.SurfaceSmoothing.SLABS_AND_STAIRS
-                || tile.hasLayer(RiverSurfaceDetail.INSTANCE))
+                || tile.hasLayer(RiverSurfaceDetail.INSTANCE) || tile.hasLayer(RiverWaterlineDetail.INSTANCE))
                 ? ChunkHeightSnapshot.create(dimension, chunkX, chunkZ) : null;
 
         if (copyBiomes && (biomesSupported3D || biomesSupportedNamed)) {
@@ -315,29 +315,26 @@ public class WorldPainterChunkFactory implements ChunkFactory {
                 // wet side of an actual dry bank the same marker selects a
                 // waterlogged mud-brick slab/stair fringe. Dry terrain, lava and
                 // stale non-granite markers still have no effect.
+                // Separately, RiverWaterlineDetail opts dry Y=W bank lips into
+                // waterlogged bottom stair/slab detail (stale/leaky → full block).
                 final boolean riverSurfaceDetail = underWater && !floodWithLava && terrain == Terrain.GRANITE
                         && tile.getBitLayerValue(RiverSurfaceDetail.INSTANCE, xInTile, yInTile);
-                final boolean riverShoreDetail = riverSurfaceDetail
-                        && SurfaceSmoother.isWetShorelineEdge(
-                                dimension, heightSnapshot, worldX, worldY, intHeight);
-                final boolean riverContourBridge = riverShoreDetail
-                        && SurfaceSmoother.hasWetRoundedContourNeighbour(
-                                dimension, heightSnapshot, worldX, worldY, intHeight);
-                if ((surfaceSmoothing == Dimension.SurfaceSmoothing.SLABS_AND_STAIRS || riverSurfaceDetail)
-                        && ! preserveSnowSupport) {
-                    Material smoothed = SurfaceSmoother.smoothSurfaceMaterial(
-                            dimension, heightSnapshot, worldX, worldY, intHeight, material);
-                    if (riverShoreDetail && smoothed != null) {
-                        // Preserve the already validated granite geometry exactly;
-                        // only change its visual family. Recomputing from mud bricks
-                        // here could turn a required rounded-contour stair back into
-                        // a slab and recreate the underwater ledge.
-                        smoothed = SurfaceSmoother.retextureSurface(smoothed,
-                                SurfaceSmoother.getFamily(Material.get("minecraft:mud_bricks")));
-                        if (!riverContourBridge && "minecraft:mud_bricks".equals(smoothed.name)) {
-                            smoothed = Material.get("minecraft:mud_brick_slab").withProperty(TYPE, "bottom");
-                        }
+                final boolean riverWaterlineDetail = !underWater && !floodWithLava
+                        && tile.getBitLayerValue(RiverWaterlineDetail.INSTANCE, xInTile, yInTile);
+                if (riverWaterlineDetail) {
+                    final int riverW = adjacentRiverWater(dimension, heightSnapshot, worldX, worldY);
+                    final Material waterline = riverW >= intHeight
+                            ? SurfaceSmoother.dryWaterlineMaterial(dimension, heightSnapshot, worldX, worldY,
+                                    intHeight, material, riverW)
+                            : null;
+                    if (waterline != null) {
+                        surfaceMaterial = waterline;
                     }
+                } else if ((surfaceSmoothing == Dimension.SurfaceSmoothing.SLABS_AND_STAIRS || riverSurfaceDetail)
+                        && ! preserveSnowSupport) {
+                    Material smoothed = riverSurfaceDetail
+                            ? SurfaceSmoother.riverSurfaceMaterial(dimension, heightSnapshot, worldX, worldY, intHeight, material)
+                            : SurfaceSmoother.smoothSurfaceMaterial(dimension, heightSnapshot, worldX, worldY, intHeight, material);
                     if (smoothed != null) {
                         // Fluid fills the surface cell when waterLevel >= intHeight (includes sea-level
                         // shoreline). Waterlog stairs/slabs there — underWater alone (>) left dry tops.
@@ -439,6 +436,22 @@ public class WorldPainterChunkFactory implements ChunkFactory {
                 && (! tile.getBitLayerValue(FloodWithLava.INSTANCE, x, y))
                 && (! tile.getBitLayerValue(Frost.INSTANCE, x, y))
                 && (tile.getIntHeight(x, y) < height);
+    }
+
+    /** Highest open wet water level among cardinal neighbours (river reference W). */
+    private static int adjacentRiverWater(Dimension dimension, ChunkHeightSnapshot snapshot, int worldX, int worldY) {
+        int best = Integer.MIN_VALUE;
+        final int[][] dirs = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+        for (int[] d : dirs) {
+            final int x = worldX + d[0], y = worldY + d[1];
+            final int h = snapshot != null ? snapshot.getIntHeightAt(x, y, dimension.getIntHeightAt(x, y))
+                    : dimension.getIntHeightAt(x, y);
+            final int w = dimension.getWaterLevelAt(x, y);
+            if (w > h && !dimension.getBitLayerValueAt(FloodWithLava.INSTANCE, x, y)) {
+                best = Math.max(best, w);
+            }
+        }
+        return best;
     }
 
     private boolean shouldApplyCoverSteep(int intHeight, int waterLevel) {

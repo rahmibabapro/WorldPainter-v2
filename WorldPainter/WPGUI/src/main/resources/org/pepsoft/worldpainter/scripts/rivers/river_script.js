@@ -2092,6 +2092,11 @@ function carveShallowNamedPaths(paths, sourcePositions, automatic, requestedCoun
 	// Named presets fit a shallow wet channel into the terrain. Never grade or
 	// fill a broad shoulder to force an unsuitable route through a hillside.
 	plan.enableTerrainPreservation();
+	// Interior dirt correction is part of the river geometry, not a user option.
+	plan.setLowerInteriorDirt(true);
+	if (typeof plan.setWaterlineBankDetail === 'function') {
+		plan.setWaterlineBankDetail(params['waterlineBankDetail'] == null ? true : !!params['waterlineBankDetail']);
+	}
 	var Router = Java.type('org.pepsoft.worldpainter.tools.scripts.ShallowRiverRouter');
 	var namedAvoid = createNamedAvoidPredicate();
 	var router = new Router(dimension, plan, riverPreset.startWidth, riverPreset.endWidth, riverPreset.maxDepth,
@@ -2154,6 +2159,10 @@ function carveShallowNamedPaths(paths, sourcePositions, automatic, requestedCoun
 				plan = new Carver(dimension, riverPreset.startWidth, fallbackWidth, riverPreset.maxDepth,
 					bankSmoothing, shallowGraniteDetail, shallowGraniteSeed, typeof progress === 'undefined' ? null : progress);
 				plan.enableTerrainPreservation();
+				plan.setLowerInteriorDirt(true);
+				if (typeof plan.setWaterlineBankDetail === 'function') {
+					plan.setWaterlineBankDetail(params['waterlineBankDetail'] == null ? true : !!params['waterlineBankDetail']);
+				}
 				router = new Router(dimension, plan, riverPreset.startWidth, fallbackWidth, riverPreset.maxDepth,
 					bankSmoothing, shallowGraniteSeed, typeof progress === 'undefined' ? null : progress, namedAvoid);
 				router.enableMountainCourseSelection();

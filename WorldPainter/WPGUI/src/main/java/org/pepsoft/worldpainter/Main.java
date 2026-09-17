@@ -520,6 +520,7 @@ public class Main {
             final App app = App.getInstance();
             app.setVisible(true);
             UiDiagnostics.start(app);
+            org.pepsoft.worldpainter.mcp.WorldPainterBridgeServer.start(app);
             // Swing quirk:
             if (myConfig.isMaximised() && (System.getProperty("org.pepsoft.worldpainter.size") == null)) {
                 app.setExtendedState(Frame.MAXIMIZED_BOTH);

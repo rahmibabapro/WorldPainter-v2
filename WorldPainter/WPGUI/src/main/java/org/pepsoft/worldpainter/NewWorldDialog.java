@@ -311,39 +311,20 @@ public class NewWorldDialog extends WorldPainterDialog {
         if ((! platform.capabilities.contains(NAME_BASED)) && (platform != JAVA_MCREGION)) {
             world.setExtendedBlockIds(checkBoxExtendedBlockIds.isSelected());
         }
+        final Point terrainCentre;
         if (tiles != null) {
-            int lowestX = Integer.MAX_VALUE, highestX = Integer.MIN_VALUE;
-            int lowestY = Integer.MAX_VALUE, highestY = Integer.MIN_VALUE;
-            for (Point tileCoords: tiles) {
-                if (tileCoords.x < lowestX) {
-                    lowestX = tileCoords.x;
-                }
-                if (tileCoords.x > highestX) {
-                    highestX = tileCoords.x;
-                }
-                if (tileCoords.y < lowestY) {
-                    lowestY = tileCoords.y;
-                }
-                if (tileCoords.y > highestY) {
-                    highestY = tileCoords.y;
-                }
-            }
-            final int middleX = Math.round((lowestX + highestX) / 2f);
-            final int middleY = Math.round((lowestY + highestY) / 2f);
-            Point mostCenteredTileCoords = null;
-            float mostCenteredTileDistance = Float.MAX_VALUE;
-            for (Point tileCoords: tiles) {
-                float distance = (float) Math.sqrt((tileCoords.x - middleX) * (tileCoords.x - middleX) + (tileCoords.y - middleY) * (tileCoords.y - middleY));
-                if (distance < mostCenteredTileDistance) {
-                    mostCenteredTileCoords = tileCoords;
-                    mostCenteredTileDistance = distance;
-                }
-            }
-            if (mostCenteredTileCoords != null) {
-                world.setSpawnPoint(new Point(mostCenteredTileCoords.x * TILE_SIZE + TILE_SIZE / 2, mostCenteredTileCoords.y * TILE_SIZE + TILE_SIZE / 2));
-                if (dimension.getAnchor().dim == DIM_NORMAL) {
-                    dimension.setLastViewPosition(world.getSpawnPoint());
-                }
+            terrainCentre=centreOfTileExtent(tiles);
+        } else if (checkBoxCircular.isSelected()) {
+            terrainCentre=new Point(0,0);
+        } else {
+            int width=(Integer)spinnerWidth.getValue()/TILE_SIZE;
+            int height=(Integer)spinnerLength.getValue()/TILE_SIZE;
+            terrainCentre=centreOfRectangularTileExtent(-width/2,-height/2,width,height);
+        }
+        if (terrainCentre != null) {
+            world.setSpawnPoint(terrainCentre);
+            if (dimension.getAnchor().dim == DIM_NORMAL) {
+                dimension.setLastViewPosition(terrainCentre);
             }
         }
 
@@ -357,6 +338,45 @@ public class NewWorldDialog extends WorldPainterDialog {
         }
 
         return world;
+    }
+
+    /**
+     * Returns the nearest present block to the geometric centre of a tile set.
+     * In particular an even, rectangular -3..2 tile extent is centred on block
+     * zero, not on the centre (64,64) of an arbitrarily selected middle tile.
+     */
+    static Point centreOfTileExtent(Collection<Point> tiles) {
+        if (tiles == null || tiles.isEmpty()) return null;
+        int lowestX=Integer.MAX_VALUE,highestX=Integer.MIN_VALUE;
+        int lowestY=Integer.MAX_VALUE,highestY=Integer.MIN_VALUE;
+        for(Point tile:tiles) {
+            lowestX=Math.min(lowestX,tile.x);highestX=Math.max(highestX,tile.x);
+            lowestY=Math.min(lowestY,tile.y);highestY=Math.max(highestY,tile.y);
+        }
+        Point extentCentre=centreOfTileBounds(lowestX,lowestY,highestX,highestY);
+        int centreX=extentCentre.x,centreY=extentCentre.y;
+        Point best=null;long bestDistance=Long.MAX_VALUE;
+        for(Point tile:tiles) {
+            int minX=tile.x*TILE_SIZE,minY=tile.y*TILE_SIZE;
+            int x=Math.max(minX,Math.min(minX+TILE_SIZE-1,centreX));
+            int y=Math.max(minY,Math.min(minY+TILE_SIZE-1,centreY));
+            long dx=(long)x-centreX,dy=(long)y-centreY,distance=dx*dx+dy*dy;
+            if(distance<bestDistance||(distance==bestDistance&&(best==null||x<best.x||(x==best.x&&y<best.y)))) {
+                best=new Point(x,y);bestDistance=distance;
+            }
+        }
+        return best;
+    }
+
+    static Point centreOfRectangularTileExtent(int startX,int startY,int width,int height) {
+        if(width<1||height<1)throw new IllegalArgumentException("Tile extent must not be empty");
+        return centreOfTileBounds(startX,startY,startX+width-1,startY+height-1);
+    }
+
+    private static Point centreOfTileBounds(int lowestX,int lowestY,int highestX,int highestY) {
+        int centreX=(int)Math.round((lowestX*(double)TILE_SIZE+((long)highestX+1)*TILE_SIZE-1)/2.0);
+        int centreY=(int)Math.round((lowestY*(double)TILE_SIZE+((long)highestY+1)*TILE_SIZE-1)/2.0);
+        return new Point(centreX,centreY);
     }
     
     public Dimension getSelectedDimension(World2 world, final ProgressReceiver progressReceiver) throws ProgressReceiver.OperationCancelled {

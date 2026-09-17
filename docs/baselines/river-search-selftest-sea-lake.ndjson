@@ -1,0 +1,3 @@
+{"status":"FOUND","found":1,"requested":1,"forced":false,"seaLevel":62,"overviewStep":8,"candidates":1,"rejected":0,"elapsedMillis":34,"lakeCells":0,"reason":"mountain valley reached western sea"}
+{"status":"FOUND","found":1,"requested":1,"forced":false,"seaLevel":62,"overviewStep":8,"candidates":36,"rejected":146,"elapsedMillis":1182,"lakeCells":3249,"reason":"closed basin formed contained lake"}
+{"status":"NO_FEASIBLE_OUTLET","found":0,"requested":1,"forced":false,"seaLevel":62,"overviewStep":8,"candidates":0,"rejected":0,"elapsedMillis":12,"lakeCells":0,"reason":"ReadOnly basin stays empty"}

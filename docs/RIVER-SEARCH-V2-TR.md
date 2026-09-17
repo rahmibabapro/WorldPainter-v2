@@ -27,6 +27,38 @@
 
 ## Henüz tamamlanmadı
 
+### 2026-09-07 güvenlik devamı
+
+- Önizleme rasterizasyonuna ve geometri çizimine iptal kontrolleri eklendi;
+  arama bittikten sonra önizleme hazırlanırken de iptal çalışır.
+- İptal edilen önizleme sonuçları uygulamaya açılmaz; kullanıcıya dünya
+  değiştirilmediği açıklanır.
+- Kaçınılan şeridin plan hücrelerine girmemesi ve eksik tile üzerinden rota
+  köprüsü kurulmaması regresyon testlerine eklendi.
+- Java 21 odak testleri: RiverSearchSessionTest + RiverSearchDialogTest,
+  toplam 16 test başarılı. Bu aşamada tam test matrisi yeniden çalıştırılmadı.
+- Değişiklikler yalnız kaynakta; eski script adaptörü hâlâ bekliyor.
+  Önceki test EXE'si ve masaüstü kurulumu bu değişiklikleri henüz içermez.
+
+### Kalan işler
+
+### 2026-09-07 yönlü kesit aşaması
+
+- Kaynak adaylarında akış yönüne dik kesit puanı kullanılıyor. Boyuna dağ
+  eğimi artık bu puanda kıyı engeli gibi toplanmıyor.
+- İnce aramanın adım maliyeti aynı yönlü kesiti kullanıyor; yukarı tırmanma
+  cezası ayrı kaldı. Kesitin yalnız uçları değil iç hücreleri de kontrol ediliyor.
+- Sığ kazı, en az ıslak genişlik ve tam ayak izi kontrolleri değiştirilmedi.
+  Çıkış sınırındaki mevcut muhafazakâr kontrol bu aşamada korunmuştur.
+- Beklenmeyen IllegalArgumentException artık uygun çıkış yok sonucuna
+  dönüştürülmüyor; arayüz gerçek arama hatası olarak gösteriyor. Boş dünya
+  ayrıca ele alınıyor.
+- Bu aşama aday sınırını veya kıyı smooth algoritmasını değiştirmez.
+  Gerçek dağdan-denize rota başarısı ve Minecraft akış testleri hâlâ gereklidir.
+- Doğrulama: Java 21 ile tüm Maven modülleri başarılı; 8K opt-in testi dahil.
+  Yönlü kesit, beklenmeyen hata, arama ve önizleme odak grubunda 24 test geçti.
+  Bu aşamadaki kaynak değişiklikleri henüz paketlenmedi veya kurulmadı.
+
 - Eski otomatik JavaScript girişinin yeni önizleme oturumuna adaptörü.
 - Gerçek kıvrımlı dağ–ova–deniz, kapalı havza, kopuk tile ve birleşim için
   genişletilmiş uçtan uca kabul matrisi; kesite dik minimum genişlik ölçümü.

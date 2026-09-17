@@ -12,19 +12,28 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 
 /** Automatic river search is read-only until Apply; no temporary world layer is used. */
 final class RiverSearchDialog extends WorldPainterDialog {
     RiverSearchDialog(App app,Dimension dimension,RiverPreset preset,int count,boolean smooth) {
+        this(app,dimension,preset,count,smooth,true,62);
+    }
+    RiverSearchDialog(App app,Dimension dimension,RiverPreset preset,int count,boolean smooth,int seaLevel) {
+        this(app,dimension,preset,count,smooth,true,seaLevel);
+    }
+    RiverSearchDialog(App app,Dimension dimension,RiverPreset preset,int count,boolean smooth,
+                      boolean waterlineBankDetail,int seaLevel) {
         super(app);this.app=app;this.dimension=dimension;
         settings=new RiverSearchSession.Settings(count,preset.sourceWidth,preset.maximumWidth,preset.depth,
-                smooth,dimension.getSeed(),RiverSearchSession.DEFAULT_BUDGET_MILLIS);
+                smooth,dimension.getSeed(),RiverSearchSession.DEFAULT_BUDGET_MILLIS,seaLevel,waterlineBankDetail);
         setTitle("Nehir — Rota ara ve önizle");
         preview.setPreferredSize(new java.awt.Dimension(640,480));
         preview.setOpaque(true);preview.setBackground(new Color(35,38,42));
         status.setEditable(false);status.setLineWrap(true);status.setWrapStyleWord(true);
-        status.setText("Dengeli arama: en fazla 120 saniye. Önizleme dünyayı değiştirmez.\n"
-                + "Turuncu: planlanan yatak; mavi: merkez hattı. Uygula öncesinde sonucu kontrol et.");
+        status.setText("Dengeli arama: en fazla 120 saniye, "+seaGoalLabel(seaLevel)+". Önizleme dünyayı değiştirmez.\n"
+                + "Turuncu: yatak; kahverengi: dirt −1; yeşil: üst kıyı; mavi: merkez/göl.");
         JPanel controls=new JPanel(new FlowLayout(FlowLayout.RIGHT));
         controls.add(search);controls.add(apply);controls.add(cancel);
         JPanel bottom=new JPanel(new BorderLayout(5,5));
@@ -51,7 +60,7 @@ final class RiverSearchDialog extends WorldPainterDialog {
             private BufferedImage image;
             @Override protected RiverSearchResult doInBackground(){
                 RiverSearchResult result=session.search();
-                if(result.canApply()&&!cancelled.get())image=renderPreview(dimension,result);
+                if(result.canApply()&&!cancelled.get())image=renderPreview(dimension,result,cancelled::get);
                 return result;
             }
             @Override protected void done(){
@@ -60,8 +69,11 @@ final class RiverSearchDialog extends WorldPainterDialog {
                     RiverSearchResult result=get();
                     if(image!=null)preview.setIcon(new ImageIcon(image));
                     apply.setEnabled(result.canApply()&&!session.isStale()&&!cancelled.get());
-                    status.setText(statusText(result)+(session.isStale()?"\nDünya değişti; yeniden arayın.":""));
-                }catch(Exception failure){status.setText("Arama tamamlanamadı: "+message(failure));}
+                    status.setText(statusText(result)+"\n"+session.dirtBedSummary()+"\n"+session.waterlineBankSummary()
+                            +(session.isStale()?"\nDünya değişti; yeniden arayın.":""));
+                }catch(Exception failure){status.setText(cancelled.get()
+                        ?"Arama/önizleme iptal edildi. Dünya değiştirilmedi."
+                        :"Arama tamamlanamadı: "+message(failure));}
                 if(closeAfterWork)dispose();
             }
         }.execute();
@@ -93,19 +105,34 @@ final class RiverSearchDialog extends WorldPainterDialog {
         };
         return state+"\nBulunan: "+result.courses().size()+" / "+result.requested()
                 +"; süre: "+result.diagnostics().elapsedMillis()/1000+" sn; özet: "+result.diagnostics().overviewStep()
-                +" blok.\n"+(result.canApply()?"Önizlemeyi kontrol edip Uygula'ya basabilirsiniz. ":"")
+                +" blok; "+seaGoalLabel(result.diagnostics().seaLevel())
+                +"; göl hücre="+result.diagnostics().lakeCells()+".\n"
+                +(result.canApply()?"Önizlemeyi kontrol edip Uygula'ya basabilirsiniz. ":"")
+                +(result.diagnostics().forced()||(result.diagnostics().reason()!=null&&result.diagnostics().reason().contains("Zorunlu koridor"))
+                ?"İnce zorunlu koridor kullanıldı. ":"")
                 +(result.status()==RiverSearchResult.Status.FOUND?"":result.diagnostics().reason());
+    }
+    static String seaGoalLabel(int seaLevel) {
+        return seaLevel<=0?"hedef: mevcut su (Y=0 yok sayıldı)":("deniz Y="+seaLevel);
     }
     private static String message(Exception e){Throwable cause=e;while(cause.getCause()!=null)cause=cause.getCause();return String.valueOf(cause.getMessage());}
 
     static BufferedImage renderPreview(Dimension dimension,RiverSearchResult result) {
+        return renderPreview(dimension,result,()->false);
+    }
+    static BufferedImage renderPreview(Dimension dimension,RiverSearchResult result,BooleanSupplier cancelled) {
+        checkPreviewCancelled(cancelled);
         int minX=Integer.MAX_VALUE,minY=Integer.MAX_VALUE,maxX=Integer.MIN_VALUE,maxY=Integer.MIN_VALUE;
-        for(var cell:result.cells()){minX=Math.min(minX,cell.x());minY=Math.min(minY,cell.y());maxX=Math.max(maxX,cell.x());maxY=Math.max(maxY,cell.y());}
+        int visited=0;
+        for(var cell:result.cells()){
+            if((visited++&1023)==0)checkPreviewCancelled(cancelled);
+            minX=Math.min(minX,cell.x());minY=Math.min(minY,cell.y());maxX=Math.max(maxX,cell.x());maxY=Math.max(maxY,cell.y());}
         BufferedImage image=new BufferedImage(640,480,BufferedImage.TYPE_INT_RGB);
         if(result.cells().isEmpty())return image;
         double scale=Math.min(600.0/Math.max(1,(long)maxX-minX+33),440.0/Math.max(1,(long)maxY-minY+33));
         double originX=minX-16,originY=minY-16;
         for(int py=0;py<480;py++)for(int px=0;px<640;px++) {
+            if(px==0)checkPreviewCancelled(cancelled);
             int x=(int)Math.floor(originX+px/scale),y=(int)Math.floor(originY+py/scale);
             int colour=0x25282c;
             if(dimension.isTilePresent(x>>7,y>>7)) {
@@ -117,15 +144,44 @@ final class RiverSearchDialog extends WorldPainterDialog {
         }
         Graphics2D g=image.createGraphics();
         try {
-            g.setColor(new Color(235,153,44));
             int size=Math.max(1,(int)Math.ceil(scale));
-            for(var cell:result.cells())g.fillRect((int)((cell.x()-originX)*scale),(int)((cell.y()-originY)*scale),size,size);
+            g.setColor(new Color(40,110,200));
+            for(var cell:result.cells()){
+                if((visited++&1023)==0)checkPreviewCancelled(cancelled);
+                if(cell.waterLevel()>Math.round(cell.originalHeight())&&cell.bedHeight()>=cell.originalHeight()-0.05f)
+                    g.fillRect((int)((cell.x()-originX)*scale),(int)((cell.y()-originY)*scale),size,size);
+            }
+            g.setColor(new Color(235,153,44));
+            for(var cell:result.cells()){
+                if((visited++&1023)==0)checkPreviewCancelled(cancelled);
+                if(cell.loweredDirt()) continue;
+                if(!(cell.waterLevel()>Math.round(cell.originalHeight())&&cell.bedHeight()>=cell.originalHeight()-0.05f))
+                    g.fillRect((int)((cell.x()-originX)*scale),(int)((cell.y()-originY)*scale),size,size);
+            }
+            // Lowered interior dirt — distinct from ordinary carve orange.
+            g.setColor(new Color(180,90,30));
+            for(var cell:result.cells()){
+                if((visited++&1023)==0)checkPreviewCancelled(cancelled);
+                if(cell.loweredDirt() && !cell.waterlineBank())
+                    g.fillRect((int)((cell.x()-originX)*scale),(int)((cell.y()-originY)*scale),size,size);
+            }
+            g.setColor(new Color(60,160,90));
+            for(var cell:result.cells()){
+                if((visited++&1023)==0)checkPreviewCancelled(cancelled);
+                if(cell.waterlineBank())
+                    g.fillRect((int)((cell.x()-originX)*scale),(int)((cell.y()-originY)*scale),size,size);
+            }
             g.setColor(new Color(40,170,255));
             for(var course:result.courses())for(int i=1;i<course.centreline().size();i++) {
+                if((i&1023)==1)checkPreviewCancelled(cancelled);
                 var a=course.centreline().get(i-1);var b=course.centreline().get(i);
                 g.drawLine((int)((a.x()-originX)*scale),(int)((a.y()-originY)*scale),(int)((b.x()-originX)*scale),(int)((b.y()-originY)*scale));
             }
         }finally{g.dispose();}return image;
+    }
+    private static void checkPreviewCancelled(BooleanSupplier cancelled) {
+        if(cancelled.getAsBoolean()||Thread.currentThread().isInterrupted())
+            throw new CancellationException("Önizleme iptal edildi");
     }
     private final App app;private final Dimension dimension;private final RiverSearchSession.Settings settings;
     private final AtomicBoolean cancelled=new AtomicBoolean();

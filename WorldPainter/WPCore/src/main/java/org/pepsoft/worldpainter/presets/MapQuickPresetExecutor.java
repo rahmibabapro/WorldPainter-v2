@@ -90,6 +90,9 @@ public final class MapQuickPresetExecutor {
                 for (int y = 0; y < TILE_SIZE; y++) {
                     if (!Float.isFinite(tile.getHeight(x, y))
                             || tile.getBitLayerValue(ReadOnly.INSTANCE, x, y)
+                            || tile.getBitLayerValue(org.pepsoft.worldpainter.layers.River.INSTANCE, x, y)
+                            || tile.getBitLayerValue(org.pepsoft.worldpainter.layers.RiverSurfaceDetail.INSTANCE, x, y)
+                            || tile.getBitLayerValue(org.pepsoft.worldpainter.layers.RiverWaterlineDetail.INSTANCE, x, y)
                             || tile.getBitLayerValue(Void.INSTANCE, x, y)
                             || tile.getBitLayerValue(NotPresent.INSTANCE, x, y)
                             || tile.getBitLayerValue(NotPresentBlock.INSTANCE, x, y)

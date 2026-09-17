@@ -205,6 +205,11 @@ if (!riverLayer) {
 
 print("Layer bulundu: " + riverLayerName);
 
+if (riverPreset != null) {
+    // Native preview owns its transaction AFTER this script has returned.
+    // Never reduce a painted branching network to one longest/highest path.
+    queueDrawnNetworkPreview(riverLayer);
+} else {
 // Find all points where the river layer is set
 var lineInput = collectRiverLine(dimension, riverLayer, 65536);
 var riverPoints = lineInput.points;
@@ -277,6 +282,18 @@ if (shallowGraniteDetail) {
 var elapsed = new Date().getTime() - startTime;
 print("Süre: " + elapsed + " ms");
 print("===========================================");
+} // Legacy preset 0 only; named presets always require native preview + Apply.
+
+function queueDrawnNetworkPreview(layer) {
+    if (String(layer.getDataSize()) !== 'BIT') throw new Error('Nehir ağı için BIT çizim katmanı seçin (River Path).');
+    print('Çizim ağı önizlemesi açılacak. Dünya değiştirilmedi; yalnız Uygula onayıyla yazılır.');
+    print('Genişlik: hazır ayarın kaynak sınırı ' + riverPreset.startWidth + ', üst sınır ' + riverPreset.endWidth + '.');
+    print('Ağ modu çizilmiş kolları kullanır; otomatik yan kol sayısı/rastgeleliği ve uzak waypoint birleştirme uygulanmaz.');
+    print('Su mevcut arazi ve alıcı suyla çözülür. Eski sabit su, granit oran/küme/derinlik ayarları kullanılmaz; yerel yüzey kuralları geçerlidir.');
+    Java.type('org.pepsoft.worldpainter.tools.DrawnRiverDialog').queueScriptPreview(app, dimension, layer,
+        riverPreset.startWidth, riverPreset.endWidth, riverPreset.maxDepth, bankSmoothing,
+        shallowGraniteDetail, shallowGraniteSeed);
+}
 
 // Main river processing function
 function checkRiverLineCancel() {
@@ -547,6 +564,11 @@ function carveShallowNamedLine(points) {
     // Explicit waypoints are not moved to another valley. Reject an unsuitable
     // route instead of excavating/filling the surrounding terrain to fit it.
     plan.enableTerrainPreservation();
+    // Interior dirt correction is part of the river geometry, not a user option.
+    plan.setLowerInteriorDirt(true);
+    if (typeof plan.setWaterlineBankDetail === 'function') {
+        plan.setWaterlineBankDetail(params['waterlineBankDetail'] == null ? true : !!params['waterlineBankDetail']);
+    }
     var xs = [], ys = [];
     for (var i = 0; i < points.length; i++) {
         if (typeof progress !== 'undefined' && progress != null) progress.checkForCancel();

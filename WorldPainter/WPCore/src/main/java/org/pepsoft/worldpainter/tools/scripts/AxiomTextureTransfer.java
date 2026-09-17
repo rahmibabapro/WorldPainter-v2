@@ -533,7 +533,13 @@ public final class AxiomTextureTransfer {
         private float slopeDegrees(int x, int y, float center) {
             final float dx = (height(x + 4, y, center) - height(x - 4, y, center)) / 8.0f;
             final float dy = (height(x, y + 4, center) - height(x, y - 4, center)) / 8.0f;
-            return (float) Math.toDegrees(Math.atan(Math.sqrt(dx * dx + dy * dy)));
+            // The broad slope describes the mountain, but may hide a local ledge.
+            // Snow uses the one-block gradient: never admit white terrain on a
+            // surface whose local gradient would subsequently reject its snow.
+            final float localDx = (height(x + 1, y, center) - height(x - 1, y, center)) / 2.0f;
+            final float localDy = (height(x, y + 1, center) - height(x, y - 1, center)) / 2.0f;
+            return (float) Math.toDegrees(Math.atan(Math.sqrt(Math.max(dx * dx + dy * dy,
+                    localDx * localDx + localDy * localDy))));
         }
         final Dimension dimension;
         final Tile[] tiles = new Tile[32];
@@ -544,6 +550,9 @@ public final class AxiomTextureTransfer {
         return tile != null && Float.isFinite(tile.getHeight(x, y))
                 && tile.getHeight(x, y) > tile.getWaterLevel(x, y) + 1.0f
                 && !tile.getBitLayerValue(ReadOnly.INSTANCE, x, y)
+                && !tile.getBitLayerValue(org.pepsoft.worldpainter.layers.River.INSTANCE, x, y)
+                && !tile.getBitLayerValue(org.pepsoft.worldpainter.layers.RiverSurfaceDetail.INSTANCE, x, y)
+                && !tile.getBitLayerValue(org.pepsoft.worldpainter.layers.RiverWaterlineDetail.INSTANCE, x, y)
                 && !tile.getBitLayerValue(FloodWithLava.INSTANCE, x, y)
                 && !tile.getBitLayerValue(Void.INSTANCE, x, y)
                 && !tile.getBitLayerValue(NotPresent.INSTANCE, x, y)

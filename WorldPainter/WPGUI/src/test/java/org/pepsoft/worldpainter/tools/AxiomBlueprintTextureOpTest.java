@@ -17,6 +17,48 @@ import org.pepsoft.worldpainter.tools.scripts.AxiomTextureProfile;
 import static org.junit.Assert.*;
 
 public class AxiomBlueprintTextureOpTest {
+    @Test public void roughSummitNeverLeavesWhiteTerrainWithoutSnow() throws Exception {
+        for(int y=0;y<128;y++)for(int x=0;x<128;x++)
+            dimension.setHeightAt(x,y,(float)(190+Math.sin(x*Math.PI/4)));
+        AxiomBlueprintTextureOp.applyProfiles(world,dimension,profile,null,false,null,System.nanoTime());
+        int white=0;
+        for(int y=8;y<120;y++)for(int x=8;x<120;x++) {
+            float h=dimension.getHeightAt(x,y);
+            var material=dimension.getTerrainAt(x,y).getMaterial(world.getPlatform(),0L,x,y,h,Math.round(h));
+            if(material.name.equals("minecraft:birch_wood")) {
+                white++;
+                assertTrue("Missing snow over white at "+x+","+y,dimension.getBitLayerValueAt(Frost.INSTANCE,x,y));
+                assertTrue(dimension.getLayerValueAt(SnowDepth.INSTANCE,x,y)>0);
+            }
+        }
+        assertTrue(white>0);
+    }
+    @Test public void exactSnowLineAndRejectedSlopeUseTheRealCombinedOperation() throws Exception {
+        for(int y=0;y<128;y++)for(int x=0;x<128;x++)
+            dimension.setHeightAt(x,y,x<32?149:x<64?150:
+                    (float)(160+(x-64)*Math.tan(Math.toRadians(31))));
+        AxiomBlueprintTextureOp.applyProfiles(world,dimension,profile,null,false,null,System.nanoTime());
+        boolean whiteAtBoundary=false;
+        for(int y=8;y<120;y++)for(int x=8;x<120;x++) {
+            if(x>=28&&x<36||x>=60&&x<72)continue;
+            float h=dimension.getHeightAt(x,y);
+            var material=dimension.getTerrainAt(x,y).getMaterial(world.getPlatform(),0L,x,y,h,Math.round(h));
+            if(x<28) {
+                assertNotEquals("minecraft:birch_wood",material.name);
+                assertFalse(dimension.getBitLayerValueAt(Frost.INSTANCE,x,y));
+                assertEquals(0,dimension.getLayerValueAt(SnowDepth.INSTANCE,x,y));
+            } else if(x<60&&material.name.equals("minecraft:birch_wood")) {
+                whiteAtBoundary=true;
+                assertTrue(dimension.getBitLayerValueAt(Frost.INSTANCE,x,y));
+                assertTrue(dimension.getLayerValueAt(SnowDepth.INSTANCE,x,y)>0);
+            } else if(x>=72) {
+                assertSame(Terrain.STONE,dimension.getTerrainAt(x,y));
+                assertFalse(dimension.getBitLayerValueAt(Frost.INSTANCE,x,y));
+                assertEquals(0,dimension.getLayerValueAt(SnowDepth.INSTANCE,x,y));
+            }
+        }
+        assertTrue("White terrain must be possible at exactly Y=150",whiteAtBoundary);
+    }
     @Before
     public void setUp() throws Exception {
         for (int i = 0; i < saved.length; i++) {

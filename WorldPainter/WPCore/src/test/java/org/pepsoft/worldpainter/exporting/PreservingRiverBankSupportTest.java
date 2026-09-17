@@ -67,8 +67,15 @@ public class PreservingRiverBankSupportTest {
                 final int nx = x + offset[0], ny = y + offset[1];
                 if (dimension.getWaterLevelAt(nx, ny) > dimension.getIntHeightAt(nx, ny)) continue;
                 sealed++;
-                assertEquals("No lateral air/slab gap at actual dry bank", MC_GRANITE,
-                        export.material(nx, water, ny).name);
+                final Material bank = export.material(nx, water, ny);
+                assertTrue("No lateral air gap at actual dry bank", bank.solid && !bank.empty);
+                if (SurfaceSmoother.isSmoothedSurfacePartial(bank)) {
+                    // Optional RiverWaterlineDetail: waterlogged bottom stair/slab at Y=W.
+                    assertTrue(Boolean.TRUE.equals(bank.getProperty(WATERLOGGED)));
+                    assertTrue(bank.name.contains("granite"));
+                } else {
+                    assertEquals("No lateral air/slab gap at actual dry bank", MC_GRANITE, bank.name);
+                }
                 assertEquals(original[ny * fixture.width + nx], cell(dimension, nx, ny));
             }
         }

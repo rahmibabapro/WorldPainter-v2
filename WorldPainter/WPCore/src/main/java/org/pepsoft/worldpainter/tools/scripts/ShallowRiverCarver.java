@@ -11,8 +11,10 @@ import org.pepsoft.worldpainter.layers.NotPresentBlock;
 import org.pepsoft.worldpainter.layers.ReadOnly;
 import org.pepsoft.worldpainter.layers.River;
 import org.pepsoft.worldpainter.layers.RiverSurfaceDetail;
+import org.pepsoft.worldpainter.layers.RiverWaterlineDetail;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -60,6 +62,8 @@ public final class ShallowRiverCarver {
         if (paths != 0 || applied) throw new IllegalStateException("Configure preservation before adding paths");
         terrainPreservation = true;
         terrainAdaptation = false;
+        // Preserve the shallow-channel safety contract. Route search may choose
+        // another valley, but it must not turn a saddle into a deep trench.
         maxCut = depth + 0.75;
         maxFill = 0;
     }
@@ -69,7 +73,94 @@ public final class ShallowRiverCarver {
     public double getMaximumCut() { return maxCut; }
     public double getMaximumFill() { return maxFill; }
 
+    /**
+     * Optional read-only planning heights (e.g. TerrainAdjustmentPlan). Cut/fill
+     * and bed targets use this surface; {@link #apply()} still writes against the
+     * live dimension after the caller has applied those deltas.
+     */
+    public void setPlanningHeightOverlay(ToFloatBiFunction<Integer, Integer> overlay) {
+        if (applied) throw new IllegalStateException("Plan already applied");
+        if (paths != 0) throw new IllegalStateException("Configure height overlay before adding paths");
+        planningHeightOverlay = overlay;
+        originals.clear();
+        dirtBedPlan = null;
+        waterlinePlan = null;
+    }
+
+    public void clearPlanningHeightOverlay() {
+        setPlanningHeightOverlay(null);
+    }
+
+    /**
+     * Mark a map-edge mouth. Only the terminal disk around this cell relaxes
+     * off-map bank sampling and shoreline containment; protected/old-river
+     * rejects are unchanged. May be called again for additional basins.
+     */
+    public void setEdgeOutlet(int x, int y) {
+        if (applied) throw new IllegalStateException("Cannot configure edge outlet after apply");
+        edgeOutlets.add(key(x, y));
+    }
+
+    public void clearEdgeOutlet() {
+        if (applied) throw new IllegalStateException("Cannot clear edge outlet after apply");
+        edgeOutlets.clear();
+    }
+
+    public boolean hasEdgeOutlet() { return !edgeOutlets.isEmpty(); }
+
+    @FunctionalInterface
+    public interface ToFloatBiFunction<A, B> {
+        float applyAsFloat(A a, B b);
+    }
+
     /** Source-to-outlet order. A rejected route makes NO terrain changes. */
+    /** Per-reach widths in a shared plan; failed branches do not change accepted geometry. */
+    public boolean addJoiningPath(int[] xs, int[] ys, double sourceWidth, double outletWidth) {
+        if (xs == null || ys == null || xs.length < 2 || xs.length != ys.length) return reject("Geçersiz birleşim yolu.");
+        Proposal receiver = proposals.get(key(xs[xs.length - 1], ys[ys.length - 1]));
+        if (receiver == null || !receiver.waterline) return reject("Birleşim düğümünde doğrulanmış ana yatak yok.");
+        joiningWater = receiver.water;
+        final int joiningRoute=paths;
+        joinedReceivers.put(joiningRoute,receiver);
+        joiningWidths.put(joiningRoute,outletWidth);
+        boolean committed=false;
+        try {
+            boolean accepted = addPath(xs, ys, sourceWidth, outletWidth);
+            committed=accepted;
+            if (accepted) {
+                int radius = (int) Math.ceil(outletWidth);
+                int x = xs[xs.length - 1], y = ys[ys.length - 1];
+                for (int dy = -radius; dy <= radius; dy++) for (int dx = -radius; dx <= radius; dx++)
+                    junctionDirtExclusions.add(key(x + dx, y + dy));
+                dirtBedPlan = null;
+                waterlinePlan = null;
+            }
+            return accepted;
+        }
+        finally { joiningWater = null; if(!committed){joinedReceivers.remove(joiningRoute);joiningWidths.remove(joiningRoute);} }
+    }
+
+    public boolean addPath(int[] xs, int[] ys, double sourceWidth, double outletWidth) {
+        if (!Double.isFinite(sourceWidth) || !Double.isFinite(outletWidth)
+                || sourceWidth < 1 || outletWidth < sourceWidth || outletWidth > 64) {
+            throw new IllegalArgumentException("Invalid network reach widths");
+        }
+        double previousStart = startWidth, previousEnd = endWidth;
+        try {
+            startWidth = sourceWidth; endWidth = outletWidth;
+            return addPath(xs, ys);
+        } finally {
+            startWidth = previousStart; endWidth = previousEnd;
+        }
+    }
+
+    boolean addProfiledPath(int[] xs,int[] ys,double sourceWidth,double outletWidth,int[] water,boolean join) {
+        if(water==null||water.length<2)throw new IllegalArgumentException("Missing water profile");
+        fixedWaterProfile=water.clone();
+        try{return join?addJoiningPath(xs,ys,sourceWidth,outletWidth):addPath(xs,ys,sourceWidth,outletWidth);}
+        finally{fixedWaterProfile=null;}
+    }
+
     public boolean addPath(int[] xs, int[] ys) {
         if (applied) throw new IllegalStateException("Plan already applied");
         if (xs == null || ys == null || xs.length != ys.length || xs.length < 2) {
@@ -107,14 +198,24 @@ public final class ShallowRiverCarver {
                     && Math.abs(proposed.original - original.original) <= 0.5) smooth.set(i, new Point(x, y));
         }
         final List<Point> points = densify(smooth);
+        if(fixedWaterProfile!=null&&fixedWaterProfile.length!=points.size())return reject("Ortak su profili çizimle eşleşmiyor.");
         // The receiving water body's stored level is a boundary condition, not
         // another low terrain sample. Never lower an existing sea/lake to match
         // an upstream depression. A directly adjacent coast may close the path.
-        final OutletConnection outlet = connectNearbyOutlet(points);
+        // A graph junction is solved by the validated UNION below, not by requiring
+        // its entire tributary cross-section to exist before the tributary is added.
+        final OutletConnection outlet = joiningWater == null ? connectNearbyOutlet(points)
+                : new OutletConnection(joiningWater, null);
         if (outlet.rejection != null) return reject(outlet.rejection);
         final Integer outletLevel = outlet.waterLevel;
         final double[] grades = terrainAdaptation ? smoothGrades(points) : null;
         final double[] radii = new double[points.size()];
+        final double[] distanceToEnd = new double[points.size()];
+        if (joiningWater != null) for (int i = points.size() - 2; i >= 0; i--) {
+            check();
+            distanceToEnd[i] = distanceToEnd[i + 1] + Math.hypot(points.get(i + 1).x - points.get(i).x,
+                    points.get(i + 1).y - points.get(i).y);
+        }
         final int[] levels = new int[points.size()];
         int previousWater = Integer.MAX_VALUE;
         for (int i = 0; i < points.size(); i++) {
@@ -123,8 +224,9 @@ public final class ShallowRiverCarver {
             final Cell centre = sample((int) Math.round(p.x), (int) Math.round(p.y));
             if (centre == null || centre.protectedCell || centre.oldRiver) return reject("Yol korunan bir bölgeye giriyor.");
             final double t = i / (double) (points.size() - 1);
+            final double widthProgress = joiningWater == null ? t : clamp(1 - distanceToEnd[i] / (4 * endWidth));
             final double radius = Math.max(MIN_WET_RADIUS,
-                    (startWidth + smoothstep(t) * (endWidth - startWidth)) / 2);
+                    (startWidth + smoothstep(widthProgress) * (endWidth - startWidth)) / 2);
             radii[i] = radius;
             final Point a = points.get(Math.max(0, i - 1)), b = points.get(Math.min(points.size() - 1, i + 1));
             final double length = Math.max(0.001, Math.hypot(b.x - a.x, b.y - a.y));
@@ -133,27 +235,43 @@ public final class ShallowRiverCarver {
             // A whole cross-section has ONE water level. Contain it at both shores
             // instead of lowering every lateral cell to a different water level.
             for (int offset = -(int) Math.ceil(radius); offset <= Math.ceil(radius); offset++) {
-                final Cell bank = sample((int) Math.round(p.x + nx * offset), (int) Math.round(p.y + ny * offset));
-                if (bank == null || bank.protectedCell || bank.oldRiver) return reject("Nehir kesiti korunan/eksik arazi ile çakışıyor.");
+                final int bx = (int) Math.round(p.x + nx * offset), by = (int) Math.round(p.y + ny * offset);
+                final Cell bank = sample(bx, by);
+                if (bank == null) {
+                    // Off-map / missing tile: only allowed inside a marked edge-outlet disk.
+                    if (isInEdgeOutletDisk(bx, by) || isInEdgeOutletDisk(centre.x, centre.y)) continue;
+                    return reject("Nehir kesiti korunan/eksik arazi ile çakışıyor.");
+                }
+                if (bank.protectedCell || bank.oldRiver) return reject("Nehir kesiti korunan/eksik arazi ile çakışıyor.");
                 if (!bank.existingWater) upper = Math.min(upper, waterCeiling(bank));
             }
             if (terrainAdaptation && !centre.existingWater) upper = Math.min(upper, (int) Math.round(grades[i]));
-            final int water = outletLevel == null ? Math.min(previousWater, upper)
+            final int water = fixedWaterProfile!=null ? fixedWaterProfile[Math.min(i,fixedWaterProfile.length-1)]
+                    : outletLevel == null ? Math.min(previousWater, upper)
                     : Math.max(outletLevel, Math.min(previousWater, upper));
+            if(water>previousWater)return reject("Ortak su profili yukarı akıyor.");
             if (centre.existingWater && water != centre.originalWater) {
                 return reject("Yol farklı seviyeli mevcut suları birleştiriyor; göl/deniz seviyesi değiştirilmedi.");
             }
             // Never dig a canyon just to force a path over a downstream ridge.
             final double requiredDepth = terrainPreservation ? MIN_WET_DEPTH : depth;
-            if (!centre.existingWater && centre.original - (water - requiredDepth) > maxCut + 0.001) {
+            if (!centre.existingWater && RiverWaterProfile.exceedsCut(centre.original, water, requiredDepth, maxCut)) {
                 return reject("Bu rota sığ yatak için fazla yükseliyor veya yamaca çapraz: başka kaynak/nokta yolu seçin. ["
                         + "hücre=" + centre.x + "," + centre.y + "; arazi=" + centre.original
                         + "; su=" + water + "; örnek=" + i + "; gerekenKazı="
-                        + (centre.original - water + requiredDepth) + "]");
+                        + RiverWaterProfile.requiredCut(centre.original, water, requiredDepth) + "]");
             }
             if (water - depth < dimension.getMinHeight()) return reject("Yatak dünyanın alt sınırını aşıyor.");
             levels[i] = water;
             previousWater = water;
+        }
+        if (planningHeightOverlay != null && fixedWaterProfile==null) {
+            double[] chainage=new double[points.size()];
+            for(int i=1;i<points.size();i++)chainage[i]=chainage[i-1]+Math.hypot(points.get(i).x-points.get(i-1).x,points.get(i).y-points.get(i-1).y);
+            RiverWaterProfile.spreadDrops(levels,chainage,RiverWaterProfile.gradeStepSpacing(endWidth));
+        }
+        if (joiningWater != null && levels[levels.length - 1] != joiningWater) {
+            return reject("Yan kol ana yatağın birleşim su kotuna güvenle inemiyor.");
         }
         final Map<Long, Proposal> pending = new LinkedHashMap<>();
         final Map<Long, BlockedSample> blocked = new LinkedHashMap<>();
@@ -217,7 +335,7 @@ public final class ShallowRiverCarver {
                 final Proposal p = entry.getValue();
                 if (p.clippedEndpoint) entry.setValue(new Proposal(p.cell, p.cell.original,
                         p.cell.originalWater, p.lateral, false, false, p.distance, true,
-                        p.pathProgress, p.routeId, false));
+                        p.pathProgress, p.routeId, false, false));
             }
         } else pending.values().removeIf(Proposal::clippedEndpoint);
         for (BlockedSample sample : blocked.values()) {
@@ -231,6 +349,10 @@ public final class ShallowRiverCarver {
         final Map<Long, Proposal> combined = new LinkedHashMap<>(proposals);
         for (Map.Entry<Long, Proposal> entry : pending.entrySet()) {
             final Proposal p = entry.getValue(), old = combined.get(entry.getKey());
+            // A tributary must not overwrite the receiving reach's downstream
+            // steps with its terminal junction plane. Keep the validated trunk
+            // and validate directed one-block contacts below.
+            if(joiningWater!=null && old!=null && old.waterline && p.waterline && old.water!=p.water)continue;
             // A junction is a UNION of wet footprints. Dry shoulders/caps are
             // only geometry helpers and must never beat another route's real
             // wet core, even when their centreline distances tie exactly.
@@ -247,73 +369,115 @@ public final class ShallowRiverCarver {
             } else if (old == null || p.distance < old.distance) combined.put(entry.getKey(), p);
         }
         if (terrainAdaptation) containDryBanks(combined);
-        if (terrainPreservation) refinePreservingWaterSupport(combined, radii, levels, outletLevel);
+        if (terrainPreservation && fixedWaterProfile==null) refinePreservingWaterSupport(combined, radii, levels, outletLevel, points);
         // Validate final nearest-segment assignments, never an intermediate stamp
         // from an upstream segment which a closer downstream segment will replace.
+        if(!validatePlannedGeometry(combined,!networkAssembly,fixedWaterProfile!=null))return false;
+        proposals.clear();
+        proposals.putAll(combined);
+        dirtBedPlan = null;
+        waterlinePlan = null;
+        if (outletLevel != null) markMouthDirtGuard(points);
+        paths++;
+        return true;
+    }
+
+    void beginNetworkPlan() {
+        if(paths!=0||applied)throw new IllegalStateException("Network must begin before paths");
+        networkAssembly=true;networkValidated=false;
+    }
+
+    boolean finishNetworkPlan() {
+        networkAssembly=false;
+        networkValidated=validatePlannedGeometry(proposals,true,true);
+        return networkValidated;
+    }
+
+    private boolean validatePlannedGeometry(Map<Long,Proposal> combined,boolean complete,boolean profiled) {
         for (Proposal p : combined.values()) {
             check();
             if (p.wetCore && !p.waterline) {
-                return reject("En az 3 blok ıslak kanal bu rotada sığ kazı sınırına sığmıyor; vadiye yakın bir yol seçin.");
+                return reject("En az 3 blok ıslak kanal bu rotada sığ kazı sınırına sığmıyor; vadiye yakın bir yol seçin. ["
+                        + p.cell.x + "," + p.cell.y + "; arazi=" + p.cell.original + "; taban=" + p.height + "; su=" + p.water + "]");
             }
             if (terrainPreservation && p.wetCore && p.water - p.height < MIN_WET_DEPTH - 1.0 / 256.0) {
-                return reject("Sığ kanalın asgari su derinliği araziyi koruyan kazı sınırına sığmıyor; başka rota gerekli.");
+                return reject("Sığ kanalın asgari su derinliği araziyi koruyan kazı sınırına sığmıyor; başka rota gerekli. ["
+                        + p.cell.x + "," + p.cell.y + "; arazi=" + p.cell.original + "; taban=" + p.height + "; su=" + p.water + "]");
             }
-            if (p.waterline && touchesDifferentExistingWater(p)) {
+            if (complete && p.waterline && touchesDifferentExistingWater(p)) {
                 return reject("Nehir farklı seviyeli mevcut suya yandan temas ediyor; gömülü ağız veya taşma oluşturmamak için rota uygulanmadı.");
             }
-            if (p.waterline) {
+            if (complete && p.waterline) {
                 for (int[] offset : NEIGHBOURS) {
                     final Proposal neighbour = combined.get(key(p.cell.x + offset[0], p.cell.y + offset[1]));
                     if (neighbour != null && neighbour.waterline && neighbour.routeId != p.routeId
-                            && neighbour.water != p.water) {
-                        return reject("Nehirler birleşimde farklı su seviyelerine sahip; önceki rota değiştirilmedi.");
+                            && neighbour.water != p.water
+                            && !isDirectedDownstreamStep(p,neighbour) && !isDirectedDownstreamStep(neighbour,p)) {
+                        return reject("Nehirler birleşimde farklı su seviyelerine sahip; önceki rota değiştirilmedi. ["
+                                +p.cell.x+","+p.cell.y+" su="+p.water+" kol="+p.routeId+" -> "
+                                +neighbour.cell.x+","+neighbour.cell.y+" su="+neighbour.water+" kol="+neighbour.routeId+"]");
                     }
                 }
             }
             final boolean atOutletLevel = p.atOutletLevel;
-            if (p.waterline && p.water > Math.round(p.cell.original) && !atOutletLevel && !terrainAdaptation) {
+            if (p.waterline && p.water > Math.round(p.cell.original) && !atOutletLevel && !p.lake && !terrainAdaptation
+                    && (!profiled || p.water>dimension.getIntHeightAt(p.cell.x,p.cell.y))) {
                 return reject("Ortak su seviyesi bu kesitte arazinin üstünde kalıyor (" + p.cell.x + ", " + p.cell.y
                         + "; su=" + p.water + ", arazi=" + p.cell.original + "); rota uygulanmadı.");
             }
-            if (p.waterline && (atOutletLevel || terrainAdaptation || terrainPreservation)) {
+            if (p.waterline && (atOutletLevel || p.lake || terrainAdaptation || terrainPreservation)) {
                 // A shallow enclosed depression may safely back up to sea level;
                 // an open hillside may not. Check the final dry bank boundary,
                 // including the unmodified cells beyond the plan's footprint.
-                if (p.water - p.height > depth + 1.0 / 256.0) {
-                    return reject("Deniz/göl bağlantısı sığ yatak derinliğini aşıyor; farklı bir ağız seçin.");
+                if (!p.lake && p.water - p.height > depth + 1.0 / 256.0) {
+                    return reject("Deniz/göl bağlantısı sığ yatak derinliğini aşıyor; farklı bir ağız seçin. ["
+                            +p.cell.x+","+p.cell.y+"; su="+p.water+"; taban="+p.height+"; arazi="+p.cell.original+"]");
                 }
-                if (!hasContainingNeighbours(p, combined, (terrainAdaptation || terrainPreservation) && !atOutletLevel)) {
+                if (complete && !isInEdgeOutletDisk(p.cell.x, p.cell.y)
+                        && !hasContainingNeighbours(p, combined, (terrainAdaptation || terrainPreservation) && !atOutletLevel && !p.lake)) {
                     return reject("Deniz/göl seviyesini tutacak kıyı yok; taşma oluşturabilecek rota uygulanmadı. ["
                             + containmentDetail + "]");
                 }
             }
         }
-        proposals.clear();
-        proposals.putAll(combined);
-        paths++;
         return true;
+    }
+
+    /** Local mouth disk only — same water level elsewhere stays dirt-eligible. */
+    private void markMouthDirtGuard(List<Point> points) {
+        Point last = points.get(points.size() - 1);
+        int cx = (int) Math.round(last.x), cy = (int) Math.round(last.y);
+        int radius = (int) Math.ceil(Math.max(MIN_WET_RADIUS, endWidth * 0.60));
+        int r2 = radius * radius;
+        for (int dy = -radius; dy <= radius; dy++) for (int dx = -radius; dx <= radius; dx++) {
+            if (dx * dx + dy * dy <= r2) mouthDirtExclusions.add(key(cx + dx, cy + dy));
+        }
     }
 
     /** ScriptRunner owns the undo boundary; cancelled/failed application restores this plan's writes. */
     public Result apply() {
         if (applied) throw new IllegalStateException("Plan already applied");
+        if(networkAssembly||!networkValidated)throw new IllegalStateException("Ağ blok doğrulaması tamamlanmadı; dünya değiştirilmedi.");
         // Optimistic snapshot validation also prevents applying a stale preview.
         for (Cell cell : originals.values()) {
             check();
-            if (dimension.getHeightAt(cell.x, cell.y) != cell.original
+            if (Math.abs(dimension.getHeightAt(cell.x, cell.y) - cell.original) > 1e-3f
                     || dimension.getWaterLevelAt(cell.x, cell.y) != cell.originalWater
                     || dimension.getTerrainAt(cell.x, cell.y) != cell.originalTerrain
                     || dimension.getLayerValueAt(Biome.INSTANCE, cell.x, cell.y) != cell.originalBiome
                     || dimension.getBitLayerValueAt(RiverSurfaceDetail.INSTANCE, cell.x, cell.y) != cell.originalSurfaceDetail
+                    || dimension.getBitLayerValueAt(RiverWaterlineDetail.INSTANCE, cell.x, cell.y) != cell.originalWaterlineDetail
                     || protectedAt(cell.x, cell.y) != cell.protectedCell
                     || dimension.getBitLayerValueAt(River.INSTANCE, cell.x, cell.y) != cell.oldRiver) {
                 throw new IllegalStateException("Arazi planlamadan sonra değişti; nehir yeniden planlanmalı.");
             }
         }
+        prepareDirtBed();
         applied = true;
         long changed = 0, graniteCount = 0, raisedCells = 0;
         double maximumCut = 0, maximumFill = 0;
         final List<Cell> written = new ArrayList<>(proposals.size());
+        final List<long[]> waterlineWrites = new ArrayList<>();
         try {
             for (Proposal p : proposals.values()) {
                 check();
@@ -325,7 +489,7 @@ public final class ShallowRiverCarver {
                 if (Math.abs(c.original - p.height) < 0.02 && !p.waterline
                         && Math.round(c.original) == Math.round((float) p.height)) continue;
                 written.add(c);
-                dimension.setHeightAt(c.x, c.y, (float) p.height);
+                dimension.setHeightAt(c.x, c.y, correctedHeight(p));
                 maximumCut = Math.max(maximumCut, c.original - dimension.getHeightAt(c.x, c.y));
                 final double fill = dimension.getHeightAt(c.x, c.y) - c.original;
                 maximumFill = Math.max(maximumFill, fill);
@@ -358,6 +522,14 @@ public final class ShallowRiverCarver {
                 changed++;
                 if (progress != null && (changed & 1023) == 0) progress.setProgress(changed / (double) Math.max(1, proposals.size()));
             }
+            prepareWaterlinePlan();
+            for (long k : waterlinePlan.accepted()) {
+                check();
+                int x = (int) (k >> 32), y = (int) k;
+                boolean was = dimension.getBitLayerValueAt(RiverWaterlineDetail.INSTANCE, x, y);
+                waterlineWrites.add(new long[]{k, was ? 1 : 0});
+                dimension.setBitLayerValueAt(RiverWaterlineDetail.INSTANCE, x, y, true);
+            }
             if (progress != null) progress.setProgress(1);
         } catch (RuntimeException | Error failure) {
             // No cancellation checks during rollback. Restore only cells touched by
@@ -369,6 +541,15 @@ public final class ShallowRiverCarver {
                     dimension.setTerrainAt(c.x, c.y, c.originalTerrain);
                     dimension.setLayerValueAt(Biome.INSTANCE, c.x, c.y, c.originalBiome);
                     dimension.setBitLayerValueAt(RiverSurfaceDetail.INSTANCE, c.x, c.y, c.originalSurfaceDetail);
+                    dimension.setBitLayerValueAt(RiverWaterlineDetail.INSTANCE, c.x, c.y, c.originalWaterlineDetail);
+                } catch (RuntimeException | Error rollbackFailure) {
+                    failure.addSuppressed(rollbackFailure);
+                }
+            }
+            for (long[] w : waterlineWrites) {
+                try {
+                    int x = (int) (w[0] >> 32), y = (int) w[0];
+                    dimension.setBitLayerValueAt(RiverWaterlineDetail.INSTANCE, x, y, w[1] != 0);
                 } catch (RuntimeException | Error rollbackFailure) {
                     failure.addSuppressed(rollbackFailure);
                 }
@@ -402,11 +583,21 @@ public final class ShallowRiverCarver {
             final long neighbourKey = key(proposal.cell.x + offset[0], proposal.cell.y + offset[1]);
             final Proposal neighbour = proposals.get(neighbourKey);
             if (neighbour != null) {
+                // Dry bank inside the plan (preserved height) supporting this water.
                 if (!neighbour.waterline && Math.round((float) neighbour.height) >= proposal.water) return true;
             } else {
                 final Cell original = originals.get(neighbourKey);
                 if (original != null && !original.protectedCell && !original.oldRiver && !original.existingWater
                         && Math.round(original.original) >= proposal.water) return true;
+                // Neighbour outside the carve footprint: still a supporting bank
+                // if the live dimension holds water at/below its surface.
+                if (original == null) {
+                    final float live = dimension.getHeightAt(proposal.cell.x + offset[0], proposal.cell.y + offset[1]);
+                    if (Float.isFinite(live) && Math.round(live) >= proposal.water
+                            && dimension.getWaterLevelAt(proposal.cell.x + offset[0], proposal.cell.y + offset[1]) < proposal.water
+                            && !dimension.getBitLayerValueAt(org.pepsoft.worldpainter.layers.ReadOnly.INSTANCE,
+                                    proposal.cell.x + offset[0], proposal.cell.y + offset[1])) return true;
+                }
             }
         }
         return false;
@@ -414,18 +605,238 @@ public final class ShallowRiverCarver {
 
     public String getLastRejection() { return lastRejection; }
     public int getAcceptedPaths() { return paths; }
+    public int getLakeCellCount() {
+        int n=0;
+        for(Proposal p:proposals.values()) if(p.lake && p.waterline) n++;
+        return n;
+    }
+
+    /**
+     * Raise water in a closed, banked depression without cutting a canyon.
+     * Terrain heights stay original. Existing seas/lakes are not lowered.
+     */
+    public boolean addLake(List<RiverSearchResult.Point> cells, int water) {
+        if (applied) throw new IllegalStateException("Plan already applied");
+        if (cells == null || cells.size() < 4) return reject("Göl en az birkaç kapalı hücre ister.");
+        if (water < dimension.getMinHeight() || water >= dimension.getMaxHeight()) {
+            return reject("Göl su kotu dünya sınırları dışında.");
+        }
+        final Map<Long, Proposal> combined = new LinkedHashMap<>(proposals);
+        int wet = 0;
+        for (RiverSearchResult.Point point : cells) {
+            check();
+            final Cell cell = sample(point.x(), point.y());
+            if (cell == null || cell.protectedCell || cell.oldRiver) {
+                return reject("Göl korunan/eksik arazi veya lav ile çakışıyor.");
+            }
+            if (cell.existingWater && cell.originalWater != water) {
+                return reject("Göl farklı seviyeli mevcut suya karışıyor; kot düşürülmedi.");
+            }
+            if (Math.round(cell.original) >= water) continue;
+            final long k = key(cell.x, cell.y);
+            final Proposal old = combined.get(k);
+            if (old != null && old.waterline && old.water != water && !old.lake) {
+                return reject("Göl mevcut nehir kotuyla çakışıyor.");
+            }
+            combined.put(k, new Proposal(cell, cell.original, water, 0, true, true, 0, false, 0, paths, true, true));
+            wet++;
+        }
+        if (wet < 4) return reject("Göl kıyı kotunun altında yeterince hücre yok.");
+        for (Proposal p : combined.values()) {
+            if (!p.lake) continue;
+            if (!hasContainingNeighbours(p, combined, false)) {
+                return reject("Göl kıyısı suyu tutmuyor; taşma oluşturulmadı. [" + containmentDetail + "]");
+            }
+        }
+        proposals.clear();
+        proposals.putAll(combined);
+        dirtBedPlan = null;
+        waterlinePlan = null;
+        lakeCells = wet;
+        if (paths == 0) paths++;
+        return true;
+    }
+    private int lakeCells;
 
     /** Detached geometry for a read-only preview; no mutable proposal escapes. */
     public List<PreviewCell> previewCells() {
+        prepareDirtBed();
+        prepareWaterlinePlan();
         final List<PreviewCell> cells = new ArrayList<>();
+        Set<Long> seen = new HashSet<>();
         for (Proposal p : proposals.values()) {
             if (terrainPreservation && !p.waterline) continue;
-            cells.add(new PreviewCell(p.cell.x, p.cell.y, p.cell.original, (float) p.height, p.water));
+            long k = key(p.cell.x, p.cell.y);
+            seen.add(k);
+            boolean lowered = dirtBedPlan.lowered().contains(k);
+            boolean waterline = waterlinePlan.accepted().contains(k);
+            cells.add(new PreviewCell(p.cell.x, p.cell.y, p.cell.original, correctedHeight(p), p.water,
+                    lowered, waterline));
+        }
+        for (long k : waterlinePlan.accepted()) {
+            if (!seen.add(k)) continue;
+            int x = (int) (k >> 32), y = (int) k;
+            float h = dimension.getHeightAt(x, y);
+            int w = waterlinePlan.proposals().get(k) != null ? waterlinePlan.proposals().get(k).water()
+                    : dimension.getWaterLevelAt(x, y);
+            cells.add(new PreviewCell(x, y, h, h, w, false, true));
         }
         return List.copyOf(cells);
     }
 
-    public record PreviewCell(int x, int y, float originalHeight, float bedHeight, int waterLevel) { }
+    public record PreviewCell(int x, int y, float originalHeight, float bedHeight, int waterLevel,
+                              boolean loweredDirt, boolean waterlineBank) {
+        public PreviewCell(int x, int y, float originalHeight, float bedHeight, int waterLevel) {
+            this(x, y, originalHeight, bedHeight, waterLevel, false, false);
+        }
+        public PreviewCell(int x, int y, float originalHeight, float bedHeight, int waterLevel, boolean loweredDirt) {
+            this(x, y, originalHeight, bedHeight, waterLevel, loweredDirt, false);
+        }
+    }
+
+    public void setLowerInteriorDirt(boolean enabled) {
+        if (applied) throw new IllegalStateException("Plan already applied");
+        lowerInteriorDirt=enabled; dirtBedPlan=null;
+    }
+    public void setWaterlineBankDetail(boolean enabled) {
+        if (applied) throw new IllegalStateException("Plan already applied");
+        waterlineBankDetail=enabled; waterlinePlan=null;
+    }
+    public boolean isWaterlineBankDetailEnabled() { return waterlineBankDetail; }
+    public int getLoweredDirtCells() {prepareDirtBed();return dirtBedPlan.lowered().size();}
+    public int getSkippedDirtRegions() {prepareDirtBed();return dirtBedPlan.skippedRegions();}
+    public int getCandidateDirtCells() {prepareDirtBed();return dirtBedPlan.candidateDirt();}
+    public int getWaterlineBankCells() {prepareWaterlinePlan();return waterlinePlan.accepted().size();}
+    public int getWaterlineRejected() {prepareWaterlinePlan();return waterlinePlan.rejected();}
+    public String dirtBedSummary() {
+        prepareDirtBed();
+        if (!lowerInteriorDirt || !terrainPreservation || !granite) {
+            return "Dirt tabanı: kapalı (koruma+granite gerekir).";
+        }
+        int lowered = dirtBedPlan.lowered().size();
+        int candidates = dirtBedPlan.candidateDirt();
+        int skipped = dirtBedPlan.skippedRegions();
+        if (lowered > 0) {
+            return "Dirt tabanı: "+candidates+" aday, "+lowered+" hücre indirilecek; "
+                    +skipped+" bölge korunacak. Ek derinlik: 1 blok.";
+        }
+        return "Dirt tabanı: 0 hücre indirildi ("+skipReasonLabel(dirtBedPlan.primarySkipReason())
+                +"); aday="+candidates+", korunmuş bölge="+skipped+".";
+    }
+    public String waterlineBankSummary() {
+        prepareWaterlinePlan();
+        if (!waterlineBankDetail || !terrainPreservation) {
+            return "Üst kıyı yumuşatma: kapalı.";
+        }
+        int n = waterlinePlan.accepted().size();
+        int rejected = waterlinePlan.rejected();
+        if (n > 0) {
+            return "Üst kıyı: "+n+" hücre yumuşatılacak; "+rejected+" nokta tam bırakıldı.";
+        }
+        return "Üst kıyı: 0 hücre ("+waterlineSkipLabel(waterlinePlan.primarySkipReason())
+                +"); reddedilen="+rejected+".";
+    }
+    private static String skipReasonLabel(RiverDirtBedPlan.SkipReason reason) {
+        return switch (reason == null ? RiverDirtBedPlan.SkipReason.NO_DIRT : reason) {
+            case NONE -> "indirildi";
+            case NO_DIRT -> "dirt yok";
+            case WORLD_FLOOR -> "dünya alt sınırı";
+            case NO_SUPPORT -> "destek yok";
+            case GEOMETRY_FAILED -> "geometri doğrulaması başarısız";
+            case PROTECTED -> "bağlantı bölgesi";
+        };
+    }
+    private static String waterlineSkipLabel(RiverWaterlinePlan.SkipReason reason) {
+        return switch (reason == null ? RiverWaterlinePlan.SkipReason.NO_CANDIDATE : reason) {
+            case NONE -> "uygulandı";
+            case NO_CANDIDATE -> "aday yok";
+            case GUARD -> "ağız/birleşim koruması";
+            case PROTECTED -> "korunan alan";
+            case HIGH_WALL -> "yüksek duvar";
+            case LEAK_RISK -> "kaçak riski";
+            case UNSUPPORTED_MATERIAL -> "desteklenmeyen malzeme";
+            case GEOMETRY -> "geometri uygun değil";
+        };
+    }
+    private float correctedHeight(Proposal p) {
+        return (float)p.height-(dirtBedPlan.lowered().contains(key(p.cell.x,p.cell.y))?1:0);
+    }
+    private void prepareDirtBed() {
+        if(dirtBedPlan!=null)return;
+        if(!lowerInteriorDirt||!terrainPreservation||!granite) {
+            dirtBedPlan=RiverDirtBedPlan.Result.empty(RiverDirtBedPlan.SkipReason.NO_DIRT);return;
+        }
+        Map<Long,RiverDirtBedPlan.Cell> cells=new LinkedHashMap<>();
+        for(var entry:proposals.entrySet()) {
+            check(); Proposal p=entry.getValue();
+            if(!p.waterline)continue;
+            boolean shore=wetShoreline(p);
+            boolean graniteDetail=!shore&&(wetRoundedTransition(p)
+                    ||patch(p.cell.x,p.cell.y)<(p.lateral>.50?.85:.28));
+            boolean link=p.clippedEndpoint||p.cell.existingWater||p.cell.protectedCell||p.cell.oldRiver
+                    ||junctionDirtExclusions.contains(entry.getKey())
+                    ||mouthDirtExclusions.contains(entry.getKey());
+            RiverDirtBedPlan.Role role;
+            if(link) role=RiverDirtBedPlan.Role.PROTECTED_LINK;
+            else if(shore) role=RiverDirtBedPlan.Role.WET_SHORE;
+            else if(graniteDetail) role=RiverDirtBedPlan.Role.INTERIOR_GRANITE;
+            else if(p.wetCore) role=RiverDirtBedPlan.Role.INTERIOR_DIRT;
+            else role=RiverDirtBedPlan.Role.PROTECTED_LINK;
+            boolean dirt=role==RiverDirtBedPlan.Role.INTERIOR_DIRT;
+            boolean detail=role==RiverDirtBedPlan.Role.INTERIOR_GRANITE||role==RiverDirtBedPlan.Role.WET_SHORE;
+            // atOutletLevel stays for water-profile safety; it does NOT exempt dirt.
+            boolean eligible=dirt;
+            cells.put(entry.getKey(),new RiverDirtBedPlan.Cell(p.cell.x,p.cell.y,(float)p.height,p.water,
+                    dirt,detail,eligible,p.routeId,role));
+        }
+        dirtBedPlan=RiverDirtBedPlan.create(dimension,cells,this::check);
+    }
+
+    private void prepareWaterlinePlan() {
+        if (waterlinePlan != null) return;
+        if (!waterlineBankDetail || !terrainPreservation) {
+            waterlinePlan = RiverWaterlinePlan.Result.empty(RiverWaterlinePlan.SkipReason.NO_CANDIDATE);
+            return;
+        }
+        prepareDirtBed();
+        List<RiverWaterlinePlan.WetSeed> seeds = new ArrayList<>();
+        for (Proposal p : proposals.values()) {
+            check();
+            if (!p.waterline || !p.wetCore) continue;
+            seeds.add(new RiverWaterlinePlan.WetSeed(p.cell.x, p.cell.y, p.water,
+                    p.wetCore, p.clippedEndpoint, p.lake));
+        }
+        Set<Long> guards = new HashSet<>();
+        guards.addAll(mouthDirtExclusions);
+        guards.addAll(junctionDirtExclusions);
+        waterlinePlan = RiverWaterlinePlan.create(plannedWaterlineColumns(), dimension, seeds, guards, null, this::check);
+    }
+
+    /** Planned wet bed + live dry banks so preview matches apply without writing the world. */
+    private SurfaceSmoother.WaterlineColumns plannedWaterlineColumns() {
+        final SurfaceSmoother.WaterlineColumns live = SurfaceSmoother.columnsOf(dimension, null);
+        return new SurfaceSmoother.WaterlineColumns() {
+            @Override public float height(int x, int y) {
+                Proposal p = proposals.get(key(x, y));
+                if (p != null && p.waterline) return correctedHeight(p);
+                return live.height(x, y);
+            }
+            @Override public int water(int x, int y) {
+                Proposal p = proposals.get(key(x, y));
+                if (p != null && p.waterline) return p.water;
+                return live.water(x, y);
+            }
+            @Override public boolean tilePresent(int x, int y) { return live.tilePresent(x, y); }
+            @Override public boolean blocked(int x, int y) { return live.blocked(x, y); }
+        };
+    }
+
+    private boolean lowerInteriorDirt;
+    private boolean waterlineBankDetail = true;
+    private final Set<Long> junctionDirtExclusions = new HashSet<>();
+    private final Set<Long> mouthDirtExclusions = new HashSet<>();
+    private RiverDirtBedPlan.Result dirtBedPlan;
+    private RiverWaterlinePlan.Result waterlinePlan;
 
     /** Compare optional route refinements without applying either plan. */
     int plannedWaterLevelAt(int x, int y) {
@@ -459,11 +870,28 @@ public final class ShallowRiverCarver {
     private boolean reject(String reason) { rejectedPaths++; lastRejection = reason; return false; }
     private void check() { if (progress != null) progress.checkForCancel(); }
 
+    private boolean isInEdgeOutletDisk(int x, int y) {
+        if (edgeOutlets.isEmpty()) return false;
+        double r = Math.max(MIN_WET_RADIUS, endWidth * 0.60) + 1.0;
+        double r2 = r * r;
+        for (long k : edgeOutlets) {
+            int ox = (int) (k >> 32), oy = (int) k;
+            double dx = x - ox, dy = y - oy;
+            if (dx * dx + dy * dy <= r2) return true;
+        }
+        return false;
+    }
+
     private OutletConnection connectNearbyOutlet(List<Point> points) {
         final Point last = points.get(points.size() - 1), before = points.get(points.size() - 2);
         final Cell end = sample((int) Math.round(last.x), (int) Math.round(last.y));
         final double length = Math.hypot(last.x - before.x, last.y - before.y);
         if (end == null || length == 0) return new OutletConnection(null, null);
+        if (isInEdgeOutletDisk(end.x, end.y)) {
+            int edgeWater = Math.max(dimension.getMinHeight(),
+                    (int) Math.floor(end.original - depth));
+            return new OutletConnection(edgeWater, null);
+        }
         // Repeating a fully accepted route is idempotent, not a request to
         // extend that route's dry terminal cap into a new receiving waterbody.
         if (!end.existingWater && isInsideAcceptedWater(points)) return new OutletConnection(null, null);
@@ -604,7 +1032,13 @@ public final class ShallowRiverCarver {
         // water level and can make an otherwise safe valley exceed maxCut.
         // Final wet-depth and ORIGINAL dry-bank containment checks still apply;
         // dry banks remain untouched and their boundary voxels stay full on export.
-        return terrainPreservation ? Math.round(cell.original)
+        // Detached earthworks are already designed against the pre-grading
+        // longitudinal profile. Re-deriving that profile from excavated cells
+        // lowers it again where neighbouring cross-sections overlap.
+        // Geometry and containment below still validate the adjusted surface.
+        final float reference = planningHeightOverlay == null ? cell.original
+                : dimension.getHeightAt(cell.x, cell.y);
+        return terrainPreservation ? RiverWaterProfile.dryWaterCeiling(reference)
                 : Math.round((float) (cell.original + maxFill));
     }
 
@@ -613,14 +1047,8 @@ public final class ShallowRiverCarver {
         final double wetRadius = Math.max(MIN_WET_RADIUS, localRadius * 0.60);
         final double lateral = distance / localRadius;
         final double targetBeforeLimits;
-        if (distance <= wetRadius) {
-            // Keep at least three actual wet columns after voxel rounding.
-            final double bedDepth = depth - (depth - MIN_WET_DEPTH) * wetProfile(distance / wetRadius);
-            targetBeforeLimits = water - bedDepth;
-        } else if (lateral <= 1) {
-            final double bedDepth = MIN_WET_DEPTH * (1 - wetProfile(
-                    (distance - wetRadius) / Math.max(0.001, localRadius - wetRadius)));
-            targetBeforeLimits = water - bedDepth;
+        if (lateral <= 1) {
+            targetBeforeLimits=water-RiverWaterProfile.sectionDepth(distance,localRadius,depth,terrainPreservation&&!smoothBanks);
         } else {
             final double blend = smoothstep((distance - localRadius) / shoulder);
             targetBeforeLimits = water + (cell.original - water) * blend;
@@ -628,11 +1056,17 @@ public final class ShallowRiverCarver {
         double target = Math.min(cell.original + maxFill, Math.max(targetBeforeLimits, cell.original - maxCut));
         target = Math.max(dimension.getMinHeight(), Math.ceil(target * 256.0) / 256.0);
         target = Math.min(dimension.getMaxHeight() - 1, target);
-        final boolean waterline = lateral <= 1 && water > Math.round((float) target);
+        final boolean intendedWet=water>Math.round((float)(Math.ceil(targetBeforeLimits*256)/256));
+        // A neighbouring branch's valley cut must not turn our planned DRY
+        // shoulder into accidental deep water. The shared plan owns its wet
+        // footprint; the completed network still checks every containing face.
+        final boolean waterline = lateral <= 1 && water > Math.round((float) target)
+                && (fixedWaterProfile==null||intendedWet);
         // Dry bank geometry/material/water are never changed in preserving mode.
         if (terrainPreservation && !waterline) target = cell.original;
         return new Proposal(cell, target, water, lateral, waterline, distance <= wetRadius,
-                distance, clippedEndpoint, pathProgress, paths, outletLevel != null && water == outletLevel);
+                distance, clippedEndpoint, pathProgress, paths,
+                joiningWater == null && outletLevel != null && water == outletLevel, false);
     }
 
     /**
@@ -645,7 +1079,9 @@ public final class ShallowRiverCarver {
      * insufficient wet width/depth, excavation budget or incompatible outlet.
      */
     private void refinePreservingWaterSupport(Map<Long, Proposal> pending, double[] radii,
-                                              int[] levels, Integer outletLevel) {
+                                              int[] levels, Integer outletLevel, List<Point> points) {
+        final double[] chainage=new double[points.size()];
+        for(int i=1;i<points.size();i++)chainage[i]=chainage[i-1]+Math.hypot(points.get(i).x-points.get(i-1).x,points.get(i).y-points.get(i-1).y);
         for (int pass = 0; pass < 4; pass++) {
             final int[] upper = levels.clone();
             boolean changed = false;
@@ -677,6 +1113,7 @@ public final class ShallowRiverCarver {
                 levels[i] = Math.min(previous, upper[i]);
                 previous = levels[i];
             }
+            if(planningHeightOverlay!=null)RiverWaterProfile.spreadDrops(levels,chainage,RiverWaterProfile.gradeStepSpacing(endWidth));
             for (Map.Entry<Long, Proposal> entry : pending.entrySet()) {
                 check();
                 final Proposal proposal = entry.getValue();
@@ -761,7 +1198,7 @@ public final class ShallowRiverCarver {
             final Proposal dry = pending.get(change.getKey());
             pending.put(change.getKey(), new Proposal(dry.cell, change.getValue(), dry.water,
                     dry.lateral, false, dry.wetCore, dry.distance, dry.clippedEndpoint, dry.pathProgress,
-                    dry.routeId, dry.atOutletLevel));
+                    dry.routeId, dry.atOutletLevel, dry.lake));
         }
         // Ordinary final containment still rejects an insufficient budget, a
         // protected/out-of-footprint bank or an incompatible existing waterbody.
@@ -792,9 +1229,7 @@ public final class ShallowRiverCarver {
                 // intended one-block descent, not an uncontained dry bank.
                 // Outlet water levels and lateral/unplanned holes stay strict.
                 if (allowDownstreamStep && neighbour.waterline
-                        && neighbour.water == proposal.water - 1
-                        && neighbour.routeId == proposal.routeId
-                        && neighbour.pathProgress > proposal.pathProgress + 1.0e-6) continue;
+                        && isDirectedDownstreamStep(proposal,neighbour)) continue;
             } else {
                 final Cell original = sample(x, y);
                 if (original != null && !original.protectedCell && !original.oldRiver
@@ -816,15 +1251,46 @@ public final class ShallowRiverCarver {
         final long key = key(x, y);
         Cell cell = originals.get(key);
         if (cell == null) {
-            final float height = dimension.getHeightAt(x, y);
-            if (!Float.isFinite(height)) return null;
+            float live = dimension.getHeightAt(x, y);
+            if (!Float.isFinite(live)) return null;
+            float height = live;
+            if (planningHeightOverlay != null) {
+                float planned = planningHeightOverlay.applyAsFloat(x, y);
+                if (Float.isFinite(planned)) height = planned;
+            }
             cell = new Cell(x, y, height, dimension.getWaterLevelAt(x, y),
                     dimension.getTerrainAt(x, y), dimension.getLayerValueAt(Biome.INSTANCE, x, y),
                     protectedAt(x, y), dimension.getBitLayerValueAt(River.INSTANCE, x, y),
-                    dimension.getBitLayerValueAt(RiverSurfaceDetail.INSTANCE, x, y));
+                    dimension.getBitLayerValueAt(RiverSurfaceDetail.INSTANCE, x, y),
+                    dimension.getBitLayerValueAt(RiverWaterlineDetail.INSTANCE, x, y),
+                    dimension.getWaterLevelAt(x,y)>Math.round(live));
+            if (originals.size() >= planningCellLimit) throw new IllegalStateException("Çizim planı bellek hücre sınırına ulaştı; daha küçük bir ağ seçin. Dünya değiştirilmedi.");
             originals.put(key, cell);
         }
         return cell;
+    }
+
+    private boolean isDirectedDownstreamStep(Proposal high, Proposal low) {
+        if(low.water!=high.water-1)return false;
+        if(high.routeId==low.routeId)return low.pathProgress>high.pathProgress+1e-6;
+        Proposal receiver=joinedReceivers.get(high.routeId);
+        for(int i=0;receiver!=null&&i<=joinedReceivers.size();i++) {
+            if(receiver.routeId==low.routeId)return low.pathProgress>=receiver.pathProgress-1e-6;
+            receiver=joinedReceivers.get(receiver.routeId);
+        }
+        // Two incoming wet footprints may meet just before their shared node.
+        // Permit their one-block approach step only near that actual junction,
+        // never between unrelated rivers or into an unplanned/dry neighbour.
+        Proposal a=joinedReceivers.get(high.routeId),b=joinedReceivers.get(low.routeId);
+        double reach=2*Math.max(joiningWidths.getOrDefault(high.routeId,0d),joiningWidths.getOrDefault(low.routeId,0d));
+        for(int i=0;a!=null&&i<=joinedReceivers.size();i++,a=joinedReceivers.get(a.routeId)) {
+            for(Proposal q=b;q!=null;q=joinedReceivers.get(q.routeId)) {
+                if(a.cell.x==q.cell.x&&a.cell.y==q.cell.y&&a.water==q.water&&low.water>=a.water
+                        &&Math.hypot(high.cell.x-a.cell.x,high.cell.y-a.cell.y)<=reach
+                        &&Math.hypot(low.cell.x-a.cell.x,low.cell.y-a.cell.y)<=reach)return true;
+            }
+        }
+        return false;
     }
 
     private boolean protectedAt(int x, int y) {
@@ -872,37 +1338,53 @@ public final class ShallowRiverCarver {
     private record Point(double x, double y) {}
     private record Proposal(Cell cell, double height, int water, double lateral, boolean waterline,
                             boolean wetCore, double distance, boolean clippedEndpoint, double pathProgress,
-                            int routeId, boolean atOutletLevel) {}
+                            int routeId, boolean atOutletLevel, boolean lake) {}
     private record BlockedSample(double distance, boolean wetCore, boolean clippedEndpoint) {}
     private record OutletCandidate(Cell cell, int water, double distance, double forward) {}
     private record MouthTarget(Point point, double cost) {}
     private record OutletConnection(Integer waterLevel, String rejection) {}
     private static final class Cell {
         Cell(int x, int y, float original, int originalWater, Terrain originalTerrain, int originalBiome,
-             boolean protectedCell, boolean oldRiver, boolean originalSurfaceDetail) {
+             boolean protectedCell, boolean oldRiver, boolean originalSurfaceDetail, boolean originalWaterlineDetail,
+             boolean existingWater) {
             this.x = x; this.y = y; this.original = original; this.originalWater = originalWater;
             this.originalTerrain = originalTerrain;
             this.originalBiome = originalBiome;
             this.protectedCell = protectedCell || !Float.isFinite(original); this.oldRiver = oldRiver;
             this.originalSurfaceDetail = originalSurfaceDetail;
-            existingWater = originalWater > Math.round(original);
+            this.originalWaterlineDetail = originalWaterlineDetail;
+            this.existingWater = existingWater;
         }
         final int x, y, originalWater, originalBiome;
         final float original;
         final Terrain originalTerrain;
-        final boolean protectedCell, oldRiver, existingWater, originalSurfaceDetail;
+        final boolean protectedCell, oldRiver, existingWater, originalSurfaceDetail, originalWaterlineDetail;
     }
     private final Dimension dimension;
-    private final double startWidth, endWidth, depth;
+    private double startWidth, endWidth;
+    private final double depth;
     private double maxCut, maxFill;
     private boolean terrainAdaptation, terrainPreservation;
+    private ToFloatBiFunction<Integer, Integer> planningHeightOverlay;
+    private Integer joiningWater;
+    private final Set<Long> edgeOutlets = new HashSet<>();
+    private int[] fixedWaterProfile;
+    private boolean networkAssembly,networkValidated=true;
     private final boolean smoothBanks, granite;
     private final long seed;
     private final ScriptProgress progress;
     private final Map<Long, Cell> originals = new LinkedHashMap<>();
+    private int planningCellLimit = Integer.MAX_VALUE;
+    /** A hard detached-data bound; this is not a measurement of JVM heap usage. */
+    public void setPlanningCellLimit(int limit) {
+        if (limit < 1 || !originals.isEmpty()) throw new IllegalArgumentException("Configure limit before planning");
+        planningCellLimit = limit;
+    }
     private final Map<Long, Proposal> proposals = new LinkedHashMap<>();
+    private final Map<Integer, Proposal> joinedReceivers = new LinkedHashMap<>();
+    private final Map<Integer,Double> joiningWidths=new LinkedHashMap<>();
     private static final double MIN_WET_RADIUS = 1.5;
-    private static final double MIN_WET_DEPTH = 0.65;
+    private static final double MIN_WET_DEPTH = RiverWaterProfile.MIN_WET_DEPTH;
     private static final int GEOMETRY_MARGIN = 64, MAX_INPUT_POINTS = 65_536, MAX_DENSE_POINTS = 131_072;
     private static final int[][] NEIGHBOURS = { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } };
     private int paths, rejectedPaths;
