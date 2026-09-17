@@ -34,7 +34,7 @@ public class AxiomBlueprintTextureOpTest {
         assertTrue(white>0);
     }
     @Test public void exactSnowLineAndRejectedSlopeUseTheRealCombinedOperation() throws Exception {
-        // Large high plateau + low bench + steep face so dry p80 lands on the plateau (not vanilla 150).
+        // Large high plateau + low bench + steep face so dry p90 lands on the plateau (not vanilla 150).
         for(int y=0;y<128;y++)for(int x=0;x<128;x++)
             dimension.setHeightAt(x,y,x<40?90:x<100?130:
                     (float)(130+(x-100)*Math.tan(Math.toRadians(31))));

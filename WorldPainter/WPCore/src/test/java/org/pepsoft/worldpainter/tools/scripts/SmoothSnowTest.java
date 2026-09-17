@@ -46,7 +46,11 @@ public class SmoothSnowTest {
 
     @Test
     public void blueprintSnowStartsAt160SparselyAndDoesNotAddWhiteTerrain() throws Exception {
+        // Mild slope keeps cells above slopeStart so the sparse height ramp still applies;
+        // perfectly flat mid-band terrain is gated (no salt-and-pepper frost on plateaus).
         final Dimension low = snowDimension(159), line = snowDimension(160), repeat = snowDimension(160);
+        slopeDimension(line, 0.55f);
+        slopeDimension(repeat, 0.55f);
         assertEquals(0, SmoothSnow.applyBlueprintMask(low, 733L, null).snowCovered());
         final SmoothSnow.Result first = SmoothSnow.applyBlueprintMask(line, 733L, null);
         final SmoothSnow.Result second = SmoothSnow.applyBlueprintMask(repeat, 733L, null);
@@ -60,6 +64,21 @@ public class SmoothSnowTest {
                 assertTrue(line.getLayerValueAt(SnowDepth.INSTANCE, x, y) <= 1);
             }
         }
+    }
+
+    @Test
+    public void gentleFlatMidBandRejectsSparseSnow() {
+        // At the snow line on a calm plateau, coverage must be zero (no speckled Frost).
+        assertEquals(0.0f, SmoothSnow.coverage(160.0f, 0.0f, 1.0f, 170210L, 128, -64,
+                160.0f, 190.0f, 25.0f, 55.0f), 0.0f);
+        assertEquals(0.0f, SmoothSnow.coverage(168.0f, 5.0f, 1.0f, 170210L, 128, -64,
+                160.0f, 190.0f, 25.0f, 55.0f), 0.0f);
+        // Same height on a slope past slopeStart still receives the sparse transition.
+        assertTrue(SmoothSnow.coverage(160.0f, 30.0f, 1.0f, 170210L, 128, -64,
+                160.0f, 190.0f, 25.0f, 55.0f) > 0.0f);
+        // Near full snow, calm terrain is allowed again (gate opens with elevation).
+        assertTrue(SmoothSnow.coverage(185.0f, 0.0f, 1.0f, 170210L, 128, -64,
+                160.0f, 190.0f, 25.0f, 55.0f) > 0.0f);
     }
 
     @Test
@@ -97,6 +116,17 @@ public class SmoothSnowTest {
             dimension.addTile(tile);
         }
         return dimension;
+    }
+
+    /** Period-8 triangle so ±1 slope samples see ~grade without lifting mean height much. */
+    private static void slopeDimension(Dimension dimension, float grade) {
+        for (int y = 0; y < 256; y++) {
+            for (int x = 0; x < 128; x++) {
+                final int phase = Math.floorMod(x, 8);
+                final float offset = (phase <= 4 ? phase : (8 - phase)) * grade;
+                dimension.setHeightAt(x, y, dimension.getHeightAt(x, y) + offset);
+            }
+        }
     }
 
     @Test

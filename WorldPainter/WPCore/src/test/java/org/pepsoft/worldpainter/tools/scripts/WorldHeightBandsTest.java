@@ -21,13 +21,13 @@ public class WorldHeightBandsTest {
     public void percentileHelpers() {
         List<Float> values = new ArrayList<>();
         for (int i = 0; i <= 100; i++) values.add((float) i);
-        assertEquals(80f, WorldHeightBands.percentile(values, 0.80f), 0.01f);
+        assertEquals(90f, WorldHeightBands.percentile(values, 0.90f), 0.01f);
         assertEquals(95f, WorldHeightBands.percentile(values, 0.95f), 0.01f);
     }
 
     @Test
-    public void akendorfLikeReliefUsesP80P95NotVanilla160() {
-        // Flat 70 with a high ridge at 110 — snow must start below 160.
+    public void akendorfLikeReliefUsesP90P95NotVanilla160() {
+        // Flat 70 with a high ridge at 110 — snow must start below 160 on the ridge band.
         var factory = new HeightMapTileFactory(1L, new ConstantHeightMap(70f),
                 TestData.MIN_HEIGHT, TestData.MAX_HEIGHT, false,
                 SimpleTheme.createSingleTerrain(GRASS, TestData.MIN_HEIGHT, TestData.MAX_HEIGHT, 0));
@@ -40,8 +40,9 @@ public class WorldHeightBandsTest {
         }
         WorldHeightBands bands = WorldHeightBands.from(d, 8);
         assertTrue("snowLine should be below vanilla 160, got " + bands.snowLine(), bands.snowLine() < 160f);
+        assertTrue("snowLine should sit on the high ridge band, got " + bands.snowLine(), bands.snowLine() >= 100f);
         assertTrue(bands.fullSnow() > bands.snowLine());
-        assertTrue(bands.fullSnow() <= 110f + 0.01f);
+        assertTrue(bands.fullSnow() - bands.snowLine() >= WorldHeightBands.MIN_SNOW_SPAN - 0.01f);
         assertTrue(bands.sampleMax() >= 100f);
     }
 

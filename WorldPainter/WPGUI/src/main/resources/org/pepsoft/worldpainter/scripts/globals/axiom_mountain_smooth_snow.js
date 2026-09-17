@@ -1,11 +1,11 @@
 // script.name=Axiom Mountain Smooth Snow
-// script.description=Applies mountain snow to eligible terrain using this world's dry-land p80→p95 heights (or explicit overrides), with slope, aspect and weather variation.
+// script.description=Applies mountain snow to eligible terrain using this world's dry-land p90→p95 heights (or explicit overrides), with slope, aspect and weather variation.
 // script.param.snowTerrain.type=string
 // script.param.snowTerrain.description=Terrain used for near-complete summit snow. Use a configured Axiom Snow Ice custom terrain when available; Deep Snow is the safe default.
 // script.param.snowTerrain.displayName=Summit snow terrain
 // script.param.snowTerrain.default=Deep Snow
 // script.param.snowLineHeight.type=float
-// script.param.snowLineHeight.description=Height where sparse snow starts. Leave blank to use this world's dry-land 80th percentile.
+// script.param.snowLineHeight.description=Height where sparse snow starts. Leave blank to use this world's dry-land 90th percentile.
 // script.param.snowLineHeight.displayName=Snow line height (blank=auto)
 // script.param.snowLineHeight.optional=true
 // script.param.fullSnowHeight.type=float
