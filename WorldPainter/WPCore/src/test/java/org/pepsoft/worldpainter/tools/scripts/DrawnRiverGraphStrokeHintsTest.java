@@ -90,8 +90,8 @@ public class DrawnRiverGraphStrokeHintsTest {
     @Test
     public void seedContributionHelpers() {
         var mini = new DrawnRiverGraph.Pixel(1, 1);
-        var cont = new DrawnRiverGraph.Pixel(2, 2);
-        var path = new DrawnRiverGraph.Pixel(3, 3);
+        var cont = new DrawnRiverGraph.Pixel(100, 100);
+        var path = new DrawnRiverGraph.Pixel(50, 50);
         var hints = new DrawnRiverGraph.StrokeHints(Set.of(), Set.of(mini), Set.of(cont));
         assertEquals(1.0, DrawnRiverGraph.seedContribution(path, hints, 5, 12), 1e-9);
         assertEquals(Math.pow(1.0 / 5, 2), DrawnRiverGraph.seedContribution(mini, hints, 5, 12), 1e-9);
@@ -124,5 +124,79 @@ public class DrawnRiverGraphStrokeHintsTest {
             assertTrue(b.outlet().equals(new DrawnRiverGraph.Pixel(0, 0))
                     || b.outlet().equals(new DrawnRiverGraph.Pixel(40, 0)));
         }
+    }
+
+    @Test
+    public void carvedPathBeginsAtMarkedMiniEvenWhenLowerThanMouth() {
+        // Mini tip is LOWER than the far tip — without source preference auto-outlet would reverse.
+        var drawing = line(0, 0, 50, 0);
+        var mini = new DrawnRiverGraph.Pixel(0, 0);
+        var mouth = new DrawnRiverGraph.Pixel(50, 0);
+        ToDoubleFunction<DrawnRiverGraph.Pixel> height = p -> p.x() == 0 ? 10 : 80;
+        var hints = new DrawnRiverGraph.StrokeHints(Set.of(), Set.of(mini), Set.of());
+        var r = DrawnRiverGraph.build(drawing, height, p -> false, 3, 12, null, Set.of(),
+                DrawnRiverGraph.OutletPolicy.auto(), hints, () -> {});
+        assertEquals(1, r.basins().size());
+        var basin = r.basins().get(0);
+        assertEquals(mouth, basin.outlet());
+        assertFalse(basin.downstreamFirst().isEmpty());
+        var head = basin.downstreamFirst().get(0).pixels().get(0);
+        assertEquals("reach must originate at Mini start", mini, head);
+    }
+
+    @Test
+    public void carvedPathBeginsAtMarkedContinueTowardOutletPen() {
+        var drawing = line(5, 5, 55, 5);
+        var cont = new DrawnRiverGraph.Pixel(5, 5);
+        var outlet = new DrawnRiverGraph.Pixel(55, 5);
+        var hints = new DrawnRiverGraph.StrokeHints(Set.of(outlet), Set.of(), Set.of(cont));
+        // Flat DEM — direction must come from pens, not slope.
+        var r = DrawnRiverGraph.build(drawing, p -> 40, p -> false, 4, 16, null, Set.of(),
+                DrawnRiverGraph.OutletPolicy.auto(), hints, () -> {});
+        assertEquals(1, r.basins().size());
+        assertEquals(outlet, r.basins().get(0).outlet());
+        boolean found = false;
+        for (var reach : r.basins().get(0).downstreamFirst()) {
+            if (reach.pixels().get(0).equals(cont)) {
+                found = true;
+                assertEquals(outlet, reach.pixels().get(reach.pixels().size() - 1));
+            }
+        }
+        assertTrue("a reach must start at Continue tip", found);
+    }
+
+    @Test
+    public void nearbyMiniPaintStillCountsAsSourceTip() {
+        var drawing = line(0, 0, 30, 0);
+        var tip = new DrawnRiverGraph.Pixel(0, 0);
+        // User painted Mini one block off the thinned tip.
+        var paint = new DrawnRiverGraph.Pixel(0, 1);
+        var hints = new DrawnRiverGraph.StrokeHints(Set.of(new DrawnRiverGraph.Pixel(30, 0)),
+                Set.of(paint), Set.of());
+        assertTrue(DrawnRiverGraph.isPreferredSourceTip(tip, hints));
+        double seed = DrawnRiverGraph.seedContribution(tip, hints, 5, 12);
+        assertEquals(Math.pow(1.0 / 5, 2), seed, 1e-9);
+    }
+
+    @Test
+    public void yForkMiniArmsDrainTowardUnmarkedStem() {
+        Set<DrawnRiverGraph.Pixel> drawing = new HashSet<>();
+        drawing.addAll(line(50, 0, 50, 50));
+        drawing.addAll(line(50, 50, 10, 50));
+        drawing.addAll(line(50, 50, 90, 50));
+        var left = new DrawnRiverGraph.Pixel(10, 50);
+        var right = new DrawnRiverGraph.Pixel(90, 50);
+        var stem = new DrawnRiverGraph.Pixel(50, 0);
+        var hints = new DrawnRiverGraph.StrokeHints(Set.of(), Set.of(left, right), Set.of());
+        var r = DrawnRiverGraph.build(drawing, p -> 50, p -> false, 3, 12, null, Set.of(),
+                DrawnRiverGraph.OutletPolicy.auto(), hints, () -> {});
+        assertEquals(1, r.basins().size());
+        assertEquals(stem, r.basins().get(0).outlet());
+        Set<DrawnRiverGraph.Pixel> heads = new HashSet<>();
+        for (var reach : r.basins().get(0).downstreamFirst()) {
+            heads.add(reach.pixels().get(0));
+        }
+        assertTrue(heads.contains(left));
+        assertTrue(heads.contains(right));
     }
 }

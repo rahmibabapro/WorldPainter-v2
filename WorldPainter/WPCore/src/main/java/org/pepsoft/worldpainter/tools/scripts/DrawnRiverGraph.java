@@ -293,7 +293,7 @@ public final class DrawnRiverGraph {
 
     /**
      * Multi-sink BFS from the given outlets, then one {@link Basin} per outlet.
-     * Continuations at the map edge are treated as thick inflows (sources), not mouths.
+     * Continuations and Mini tips are inflows (user starts); BFS roots are mouths only.
      */
     private static void extractBasinsForOutlets(
             List<Pixel> component, Set<Pixel> pixels, Set<Edge> excluded,
@@ -415,7 +415,8 @@ public final class DrawnRiverGraph {
                     double seed = raw / 1000.0;
                     double width = Math.min(maximumWidth, sourceWidth * Math.sqrt(Math.max(seed, 1e-6)));
                     // Mini tips: force floor near MINI_WIDTH even when sourceWidth is larger.
-                    if (hints.miniPixels().contains(head) && !hints.continuationPixels().contains(head)) {
+                    if (nearPreferredSource(head, hints.miniPixels(), SOURCE_SNAP)
+                            && !nearPreferredSource(head, hints.continuationPixels(), SOURCE_SNAP)) {
                         width = Math.min(maximumWidth, Math.max(MINI_WIDTH, sourceWidth * Math.sqrt(seed)));
                     }
                     reaches.add(new Reach(line, width, Math.max(1, (int) Math.round(seed))));
@@ -444,14 +445,33 @@ public final class DrawnRiverGraph {
     /** Contribution seed relative to sourceWidth (width ≈ sourceWidth * sqrt(seed)). */
     static double seedContribution(Pixel leaf, StrokeHints hints, double sourceWidth, double maximumWidth) {
         if (sourceWidth <= 0) return 1;
-        if (hints.continuationPixels().contains(leaf)) {
+        if (nearPreferredSource(leaf, hints.continuationPixels(), SOURCE_SNAP)) {
             double base = Math.min(maximumWidth, Math.max(sourceWidth * 2.5, CONTINUATION_MIN_WIDTH));
             return Math.pow(base / sourceWidth, 2);
         }
-        if (hints.miniPixels().contains(leaf)) {
+        if (nearPreferredSource(leaf, hints.miniPixels(), SOURCE_SNAP)) {
             return Math.pow(MINI_WIDTH / sourceWidth, 2);
         }
         return 1.0;
+    }
+
+    /** Snap distance when matching Mini / Continue paint onto skeleton tips. */
+    static final int SOURCE_SNAP = 4;
+
+    /**
+     * Mini and Continue pens mark inflows (user-selected starts), never preferred mouths.
+     * Marks within {@link #SOURCE_SNAP} of a tip count — users often paint a short blob.
+     */
+    static boolean isPreferredSourceTip(Pixel tip, StrokeHints hints) {
+        if (tip == null || hints == null || hints.isEmpty()) return false;
+        return nearPreferredSource(tip, hints.miniPixels(), SOURCE_SNAP)
+                || nearPreferredSource(tip, hints.continuationPixels(), SOURCE_SNAP);
+    }
+
+    static boolean nearPreferredSource(Pixel tip, Set<Pixel> marks, int maxDist) {
+        if (tip == null || marks == null || marks.isEmpty()) return false;
+        if (marks.contains(tip)) return true;
+        return nearAny(marks, tip, maxDist);
     }
 
     private static boolean nearAny(Set<Pixel> set, Pixel p, int maxDist) {
@@ -519,14 +539,20 @@ public final class DrawnRiverGraph {
                                    Predicate<Pixel> edge, Drain drain, Rectangle bounds,
                                    StrokeHints hints) {
         StrokeHints h = hints == null ? StrokeHints.none() : hints;
-        return candidates.stream()
+        // User Mini/Continue tips are starts: never prefer them as mouths when another end exists.
+        List<Pixel> nonSource = new ArrayList<>();
+        for (Pixel p : candidates) {
+            if (!isPreferredSourceTip(p, h)) nonSource.add(p);
+        }
+        List<Pixel> pool = nonSource.isEmpty() ? candidates : nonSource;
+        return pool.stream()
                 .min(Comparator
                         .comparingDouble((Pixel p) -> {
                             double height = elev.applyAsDouble(p);
                             if (!Double.isFinite(height)) height = Double.POSITIVE_INFINITY;
                             double bonus = (edge.test(p) ? EDGE_BONUS : 0)
                                     + (drain == Drain.AUTO ? 0 : drain.projection(p, bounds) * DRAIN_BONUS_SCALE);
-                            // Continuation at map edge is an inflow, not a mouth.
+                            // Last-resort pool (all tips are Mini/Continue): still avoid edge Continue mouths.
                             double inflowPenalty = (h.continuationPixels().contains(p) && edge.test(p)) ? 1000 : 0;
                             return height - bonus + inflowPenalty;
                         })
